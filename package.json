@@ -1,0 +1,41 @@
+{
+  "name": "ai-web-agency",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.107.0",
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.110.0",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.22.0",
+    "next": "16.2.9",
+    "openai": "^6.45.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "jest": "^30.4.2",
+    "tailwindcss": "^4",
+    "ts-jest": "^29.4.11",
+    "typescript": "^5"
+  }
+}

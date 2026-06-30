@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}
+
+/* 提案書プレビュー用の最小限のMarkdown見た目 */
+.prose-mini h1 {
+  @apply text-xl font-bold mt-4 mb-2;
+}
+.prose-mini h2 {
+  @apply text-lg font-semibold mt-4 mb-1;
+}
+.prose-mini ul {
+  @apply list-disc pl-5 my-2;
+}
+.prose-mini p {
+  @apply my-2;
+}
+.prose-mini blockquote {
+  @apply border-l-4 border-gray-300 pl-3 text-gray-600 my-2;
+}

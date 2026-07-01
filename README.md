@@ -156,6 +156,13 @@ blog_post / faq / seo_content / copywriting（以降は近日対応）。
 
 営業ステータス（未対応→DM送信→電話→商談→**成約**）と連動し、成約後に本番生成を促す導線。
 
+## Neumos AI v1（別プロジェクト）
+
+`neumos-ai/` に、店舗のWeb集客コンテンツ生成AIエンジン本体「Neumos AI v1」を実装済み
+（独立した Next.js アプリ・別 `package.json`。将来的な単独リポジトリ切り出しを前提とした構成）。
+本MVPとの接続方法・API契約・`generatedContents` の形状差分の扱いは
+[`neumos-ai/README.md`](./neumos-ai/README.md) を参照。
+
 ## 今後の拡張ポイント
 
 - **公開自動化**: `content_generation_requests.published_url` / `generated_sites.published_url` を起点に GitHub+Vercel デプロイ、Cloudflareで独自ドメイン接続。

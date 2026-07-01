@@ -1,0 +1,232 @@
+# Neumos AI v1
+
+店舗情報・AI診断・営業提案内容を受け取り、**店舗向けのWeb集客コンテンツを自動生成する** AIエンジン。
+
+> Neumos AIは「HTMLを組み立てるだけのAI」ではない。
+> 強みを分析し、集客課題を整理し、ターゲット顧客を定義し、サイトコンセプトを固めた
+> **うえで** ページ構成・SEO・本文を生成する、マーケティング戦略エンジン。
+
+`ai-web-agency`（沖縄エリア店舗向け「AI集客支援サービス MVP」）とは別プロジェクトとして
+このディレクトリ配下に構築（独立した `package.json` / Next.js アプリ）。将来的に
+単独リポジトリへ切り出す前提の構成にしている。
+
+---
+
+## Neumos AI の思考パイプライン
+
+```
+StoreBrief（店舗情報・AI診断・営業提案）
+   │
+   ▼
+① 強み分析 (analyzeStrengths)
+② 集客課題整理 (analyzeChallenges)
+③ ターゲット顧客定義 (defineTargetPersona)
+④ 差別化ポイント (defineDifferentiators)
+   │  ─── ここまでを StrategyAnalysis としてまとめる ───
+   ▼
+⑤ サイトコンセプト作成 (buildConcept)
+⑥ ページ構成作成 (buildPageStructure)
+⑦ SEOキーワード反映 (buildSeo)
+⑧ 本文生成（Hero / Sections / CTA / FAQ / Instagram / GBP改善案）
+```
+
+- ①〜⑧はすべて `src/lib/engine/rule-based.ts` に**純関数**として実装。LLMキー未設定でも
+  この戦略パイプラインだけで完全なコンテンツが生成できる（AI集客支援MVPの
+  「LLMはオプション」という設計思想を踏襲）。
+- LLMキーが設定されている場合は `src/lib/engine/website.ts` がルールベースの
+  `StrategyAnalysis` を下敷きにLLMへ渡し、同じ思考ステップを踏んだうえで文章の質を
+  高める（`src/lib/engine/prompts.ts` のシステムプロンプトで思考順序を強制）。
+  LLM出力はZodスキーマ（`GeneratedWebsiteContentsSchema`）で検証し、壊れたJSONの場合は
+  自動的にルールベース結果へフォールバックする（例外を投げない）。
+
+## ディレクトリ構成
+
+```
+neumos-ai/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx                       # トップ（API概要・対応generationType一覧）
+│   │   ├── preview/[requestId]/page.tsx   # 生成結果プレビュー
+│   │   └── api/
+│   │       ├── generate/route.ts          # POST /api/generate（ネイティブ契約）
+│   │       ├── preview/[requestId]/raw/   # 単体HTML配信（プレビューのiframe元）
+│   │       └── v1/contents/               # AI集客支援MVP互換ブリッジ（後述）
+│   └── lib/
+│       ├── types.ts        # StoreBrief / GenerationType / GeneratedWebsiteContents 等の契約
+│       ├── validation.ts   # Zodスキーマ（入力検証・LLM出力検証）
+│       ├── catalog.ts      # generationType ラベル一元管理
+│       ├── generate.ts     # 生成〜保存の共通オーケストレーション
+│       ├── store.ts        # 生成結果のインメモリストア（本番は永続化に差し替え想定）
+│       ├── bridge.ts       # MVP互換の GeneratedContent[] へ変換
+│       ├── llm/client.ts   # プロバイダ非依存LLMクライアント（Anthropic優先/OpenAI切替可）
+│       ├── engine/
+│       │   ├── rule-based.ts  # マーケティング思考パイプライン（純関数・テスト済み）
+│       │   ├── prompts.ts     # LLM用プロンプト（思考順序を強制するsystem prompt）
+│       │   ├── website.ts     # generationType="website" のオーケストレーション
+│       │   └── index.ts       # generationType ディスパッチャ（拡張ポイント）
+│       └── preview/render.ts  # 生成物 → 単体HTMLドキュメント
+└── tests/                     # vitest（19件）
+```
+
+## セットアップ
+
+```bash
+cd neumos-ai
+npm install
+cp .env.example .env.local   # 任意。未設定でもルールベースで完全動作
+npm run dev                  # http://localhost:3000
+```
+
+```bash
+npm run typecheck
+npm run build
+npm run test        # vitest 19件
+```
+
+## API
+
+### `POST /api/generate`（v1のネイティブ契約）
+
+**入力**
+
+```json
+{
+  "generationType": "website",
+  "brief": {
+    "storeName": "沖縄そば処 花",
+    "industry": "沖縄そば店",
+    "area": "那覇市首里",
+    "targetCustomer": "地元客・観光客",
+    "mainProblem": "観光客への認知度が低くリピートも少ない",
+    "salesAngle": "自家製麺と昔ながらの出汁",
+    "websiteGoal": "来店予約と口コミ増加",
+    "siteConcept": "首里の路地にある昔ながらの沖縄そば店",
+    "recommendedPages": ["トップ", "メニュー", "アクセス", "お客様の声"],
+    "seoKeywords": ["那覇市 沖縄そば", "首里 そば"],
+    "tone": "あたたかい・懐かしい",
+    "offer": "初回来店で小鉢サービス"
+  }
+}
+```
+
+**出力**（`200`）
+
+```json
+{
+  "requestId": "…",
+  "status": "preview",
+  "previewUrl": "http://localhost:3000/preview/…",
+  "publishedUrl": null,
+  "generatedContents": {
+    "concept": "…",
+    "heroTitle": "…",
+    "heroSubtitle": "…",
+    "sections": [{ "id": "section-1", "heading": "…", "body": "…" }],
+    "cta": { "headline": "…", "body": "…", "buttonLabel": "…" },
+    "seoTitle": "…",
+    "metaDescription": "…",
+    "faq": [{ "question": "…", "answer": "…" }],
+    "instagramCaption": "…",
+    "googleBusinessImprovement": ["…"],
+    "strategy": { "strengths": ["…"], "challenges": ["…"], "targetPersona": "…", "differentiators": ["…"] }
+  }
+}
+```
+
+- `generationType` が `"website"` 以外（`landing_page` / `instagram_post` /
+  `google_business_improvement` / `blog_post` / `faq` / `seo_content` / `copywriting`）の場合、
+  入力検証は通過するが `501 Not Implemented` を返す（`implementedGenerationTypes` で実装済み一覧を返却）。
+  型・Zodスキーマ・カタログにはすでに全種別を定義済みのため、実装時は
+  `src/lib/engine/index.ts` の `switch` にハンドラを1つ追加するだけで拡張できる。
+- 生成結果は `requestId` をキーにサーバ側で保持され、`GET /preview/{requestId}` で確認できる。
+- 入力不正時は `400`、生成失敗時は `500` を返す。
+
+### `GET /preview/{requestId}`
+
+生成されたホームページ本文を実際のページとして確認できるプレビュー画面。
+単体HTML（`GET /api/preview/{requestId}/raw`）をiframe表示している。
+
+---
+
+## AI集客支援MVPとの接続方法
+
+AI集客支援MVP（`../`）は `src/lib/neumos/client.ts` で以下のREST契約を想定して実装済み：
+
+| 操作 | メソッド/パス | ボディ | レスポンス |
+|---|---|---|---|
+| 生成投入 | `POST {NEUMOS_API_URL}/v1/contents` | `{ generationType, brief }` | `{ requestId, status, previewUrl?, publishedUrl?, generatedContents? }` |
+| 状態取得 | `GET {NEUMOS_API_URL}/v1/contents/{requestId}` | — | 同上 |
+
+Neumos AI v1は、この契約に対応する**互換ブリッジ**を用意している：
+
+- `POST /api/v1/contents` — `POST /api/generate` と同じ生成処理を実行する。
+- `GET /api/v1/contents/{requestId}` — 生成結果の状態を返す（v1は同期生成のため常に `status: "preview"`）。
+
+### 接続手順
+
+1. Neumos AI v1をデプロイし、公開URL（例: `https://neumos-ai.example.com`）を控える。
+2. AI集客支援MVP側の環境変数に設定する。
+
+   ```bash
+   # ai-web-agency/.env.local
+   NEUMOS_API_URL=https://neumos-ai.example.com
+   NEUMOS_API_KEY=（任意の値。v1側では認証未実装のため検証はしないが、
+                    本番運用時はNeumos AI側にAPIキー検証を追加すること）
+   ```
+
+3. MVP側は `NEUMOS_API_URL` が設定されると、店舗詳細の「この店舗のホームページをAIで作成」
+   ボタンから `POST {NEUMOS_API_URL}/v1/contents` を叩き、`content_generation_requests` に
+   `requestId(=external_id)` / `status` / `previewUrl` / `publishedUrl` / `generatedContents` を保存する。
+   「生成状況を更新」ボタンで `GET {NEUMOS_API_URL}/v1/contents/{requestId}` をポーリングする。
+
+### `generatedContents` の形状差分について
+
+- **Neumos AI v1のネイティブ契約**（`/api/generate`）: 本README冒頭の通り、`concept` /
+  `heroTitle` / `sections` などの**構造化オブジェクト**を返す（マーケティング戦略の
+  中間成果物 `strategy` も含む）。
+- **MVP互換ブリッジ**（`/api/v1/contents`）: MVP側の型 `GeneratedContent[]`
+  （`{ type?, title?, url?, body?, meta? }` の緩い配列）に変換して返す
+  （`src/lib/bridge.ts` の `toLegacyGeneratedContents`）。これにより、MVP側の
+  「生成物一覧」表示コンポーネント（`neumos-panel.tsx`）は無改修でそのまま動作する。
+- 将来的にMVP側の型をNeumos AI v1のネイティブ契約（構造化オブジェクト）に合わせて
+  拡張する場合は、MVP側 `src/lib/types.ts` の `GeneratedContent` を更新し、
+  `/api/generate` を直接呼ぶよう `client.ts` を切り替えればよい。
+
+---
+
+## 生成種別（`generationType`）の拡張設計
+
+| 種別 | v1実装 | 説明 |
+|---|---|---|
+| `website` | ✅ | 店舗の公式サイト一式（Hero/セクション/CTA/FAQ/SEO） |
+| `landing_page` | 拡張予定 | キャンペーン/予約特化の1枚ページ |
+| `instagram_post` | 拡張予定 | 投稿キャプション・ハッシュタグ案（`instagramCaption` は既にwebsite生成に同梱） |
+| `google_business_improvement` | 拡張予定 | GBP説明文・カテゴリ・投稿の改善提案（同上、`googleBusinessImprovement` に同梱） |
+| `blog_post` | 拡張予定 | 集客用の記事コンテンツ |
+| `faq` | 拡張予定 | よくある質問の生成・拡充単体版 |
+| `seo_content` | 拡張予定 | 検索流入向けページ/文章 |
+| `copywriting` | 拡張予定 | 訴求コピー案の複数バリエーション |
+
+同じ `StoreBrief`（＝MVPの `NeumosBrief` からgenerationTypeを除いた核）から、
+`generationType` を変えるだけで別種別のコンテンツを生成できるように、
+戦略パイプライン（強み/課題/ターゲット/コンセプト）とコンテンツ生成を分離した設計にしている。
+新しい種別を実装する際は:
+
+1. `src/lib/types.ts` の `GeneratedContentsMap` に生成物の型を追加
+2. `src/lib/engine/<type>.ts` を実装（`rule-based`のstrategyを再利用可能）
+3. `src/lib/engine/index.ts` の `switch` にケースを追加
+4. `IMPLEMENTED_GENERATION_TYPES` に追加
+
+## 制約・今後の拡張ポイント
+
+- **プレビューの永続化**: `src/lib/store.ts` は本番のVercelサーバーレス環境では
+  インスタンスごとに独立するため、複数インスタンス間でプレビューが引き継がれない
+  制約がある。本番運用では Vercel KV / Supabase 等の永続ストアに差し替えること
+  （`store.ts` のインターフェースのみ差し替えれば良い設計）。
+- **公開自動化**: `publishedUrl` は現状常に `null`。静的ホスティングへのデプロイや
+  独自ドメイン接続は今後の拡張ポイント（`preview/render.ts` の出力はビルド非依存の
+  単体HTMLのため、そのまま静的配信可能）。
+- **認証**: `/api/v1/contents` は現状 `Authorization` ヘッダを検証しない。本番運用では
+  MVPの `INTERNAL_API_KEY` と同様の仕組みを追加すること。
+- **多言語対応**: `StoreBrief` に `language` を追加し、`prompts.ts` / `rule-based.ts` を
+  言語別に分岐させることで対応可能。

@@ -29,8 +29,25 @@ export function toLegacyGeneratedContents(
   const items: LegacyGeneratedContentItem[] = [
     { type: "concept", title: "サイトコンセプト", body: contents.concept },
     { type: "hero", title: contents.heroTitle, body: contents.heroSubtitle, url: previewUrl },
-    ...contents.sections.map((s) => ({ type: "section", title: s.heading, body: s.body })),
-    { type: "cta", title: contents.cta.headline, body: contents.cta.body },
+    ...contents.sections.map((s) => ({ type: s.kind, title: s.heading, body: s.body })),
+    {
+      type: "gallery",
+      title: "ギャラリー",
+      body: contents.gallery.map((g) => g.caption).join("\n"),
+      meta: { items: contents.gallery },
+    },
+    {
+      type: "access",
+      title: "アクセス",
+      body: `${contents.access.areaLabel} / ${contents.access.addressHint}`,
+      meta: { ...contents.access },
+    },
+    {
+      type: "contact",
+      title: contents.cta.headline,
+      body: `${contents.cta.body}\n${contents.contactMethods.join(" / ")}`,
+      meta: { cta: contents.cta, contactMethods: contents.contactMethods },
+    },
     {
       type: "seo",
       title: contents.seoTitle,

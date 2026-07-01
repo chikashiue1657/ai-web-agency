@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { generateWebsiteRuleBased, analyzeStrategy, buildPageStructure } from "@/lib/engine/rule-based";
+import {
+  generateWebsiteRuleBased,
+  analyzeStrategy,
+  buildPageStructure,
+  classifySectionKind,
+} from "@/lib/engine/rule-based";
 import type { StoreBrief } from "@/lib/types";
 
 const brief: StoreBrief = {
@@ -30,9 +35,15 @@ describe("rule-based marketing engine", () => {
     expect(pages.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("keeps recommendedPages as-is when sufficient", () => {
+  it("keeps recommendedPages untouched but still ensures about/service/feature kinds exist", () => {
     const pages = buildPageStructure(brief);
-    expect(pages).toEqual(brief.recommendedPages);
+    for (const page of brief.recommendedPages) {
+      expect(pages).toContain(page);
+    }
+    const kinds = new Set(pages.map(classifySectionKind));
+    expect(kinds.has("about")).toBe(true);
+    expect(kinds.has("service")).toBe(true);
+    expect(kinds.has("feature")).toBe(true);
   });
 
   it("produces a fully-populated GeneratedWebsiteContents without any LLM", () => {
@@ -47,6 +58,25 @@ describe("rule-based marketing engine", () => {
     expect(contents.instagramCaption).toContain(brief.storeName);
     expect(contents.googleBusinessImprovement.length).toBeGreaterThan(0);
     expect(contents.strategy.strengths.length).toBeGreaterThan(0);
+    expect(contents.gallery.length).toBeGreaterThan(0);
+    expect(contents.access.mapQuery).toContain(brief.storeName);
+    expect(contents.contactMethods.length).toBeGreaterThan(0);
+  });
+
+  it("always yields at least one section of each kind: about/service/feature (required by Website Renderer)", () => {
+    const contents = generateWebsiteRuleBased(brief);
+    const kinds = new Set(contents.sections.map((s) => s.kind));
+    expect(kinds.has("about")).toBe(true);
+    expect(kinds.has("service")).toBe(true);
+    expect(kinds.has("feature")).toBe(true);
+  });
+
+  it("still yields the three required kinds even with an empty recommendedPages list", () => {
+    const contents = generateWebsiteRuleBased({ ...brief, recommendedPages: [] });
+    const kinds = new Set(contents.sections.map((s) => s.kind));
+    expect(kinds.has("about")).toBe(true);
+    expect(kinds.has("service")).toBe(true);
+    expect(kinds.has("feature")).toBe(true);
   });
 
   it("picks a reservation-oriented CTA label when websiteGoal mentions 予約", () => {

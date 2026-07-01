@@ -8,15 +8,42 @@
  * `engine/website.ts` が文章の質を高める（`llm/client.ts`）。
  */
 import type {
+  AccessInfo,
   FaqItem,
+  GalleryItem,
   GeneratedWebsiteContents,
+  SectionKind,
   StoreBrief,
   StrategyAnalysis,
   WebsiteCta,
   WebsiteSection,
 } from "@/lib/types";
 
-const DEFAULT_PAGES = ["トップ", "お店の強み", "メニュー・サービス", "アクセス", "よくある質問", "お問い合わせ"];
+const DEFAULT_PAGES = ["トップ", "お店の強み", "メニュー・サービス", "選ばれる理由", "アクセス", "よくある質問", "お問い合わせ"];
+
+/** ページ名から Website Renderer が描画するコンポーネント種別を判定する。 */
+export function classifySectionKind(page: string): SectionKind {
+  if (/強み|特徴|about|こだわり|会社概要|店舗紹介/i.test(page)) return "about";
+  if (/メニュー|サービス|料金|プラン|コース/i.test(page)) return "service";
+  if (/選ばれる理由|差別化|feature|特長/i.test(page)) return "feature";
+  return "other";
+}
+
+const REQUIRED_KIND_DEFAULT_PAGE: Record<Extract<SectionKind, "about" | "service" | "feature">, string> = {
+  about: "お店の強み",
+  service: "メニュー・サービス",
+  feature: "選ばれる理由",
+};
+
+/** Website Renderer は About/Service/Feature を必ず描画するため、欠けていれば補う。 */
+function ensureRequiredKinds(pages: string[]): string[] {
+  const result = [...pages];
+  for (const kind of ["about", "service", "feature"] as const) {
+    const hasKind = result.some((p) => classifySectionKind(p) === kind);
+    if (!hasKind) result.push(REQUIRED_KIND_DEFAULT_PAGE[kind]);
+  }
+  return result;
+}
 
 export function analyzeStrengths(brief: StoreBrief): string[] {
   const strengths = [
@@ -53,12 +80,14 @@ export function buildConcept(brief: StoreBrief, strategy: StrategyAnalysis): str
 
 export function buildPageStructure(brief: StoreBrief): string[] {
   const pages = brief.recommendedPages.filter((p) => p.trim().length > 0);
-  if (pages.length >= 3) return pages;
-  const merged = [...pages];
-  for (const p of DEFAULT_PAGES) {
-    if (!merged.includes(p)) merged.push(p);
+  let merged = pages;
+  if (pages.length < 3) {
+    merged = [...pages];
+    for (const p of DEFAULT_PAGES) {
+      if (!merged.includes(p)) merged.push(p);
+    }
   }
-  return merged;
+  return ensureRequiredKinds(merged);
 }
 
 export function buildSeo(brief: StoreBrief): { seoTitle: string; metaDescription: string } {
@@ -77,31 +106,59 @@ export function buildHeroCopy(brief: StoreBrief, strategy: StrategyAnalysis): { 
   };
 }
 
+/**
+ * ページ構成のうち About/Service/Feature に分類されないもの（トップ/アクセス/FAQ/問い合わせ等）は
+ * それぞれ専用コンポーネント（Hero/Access/Faq/Contact）が描画するため、汎用セクションからは除外する。
+ */
 export function buildSections(brief: StoreBrief, strategy: StrategyAnalysis, pages: string[]): WebsiteSection[] {
-  return pages.map((page, i) => ({
-    id: `section-${i + 1}`,
-    heading: page,
-    body: sectionBody(page, brief, strategy),
+  return pages
+    .map((page, i) => ({ id: `section-${i + 1}`, kind: classifySectionKind(page), heading: page, body: "" }))
+    .filter((s) => s.kind !== "other")
+    .map((s) => ({ ...s, body: sectionBody(s.kind, brief, strategy) }));
+}
+
+function sectionBody(kind: SectionKind, brief: StoreBrief, strategy: StrategyAnalysis): string {
+  if (kind === "about") {
+    return strategy.strengths.map((s) => `・${s}`).join("\n");
+  }
+  if (kind === "service") {
+    return `${brief.offer}を中心に、${brief.targetCustomer}のニーズに合わせたメニュー・サービスをご用意しています。`;
+  }
+  if (kind === "feature") {
+    return strategy.differentiators.map((d) => `・${d}`).join("\n");
+  }
+  return `${brief.storeName}は${brief.area}で${brief.industry}を営んでおり、${brief.salesAngle}を大切にしています。${brief.mainProblem.replace(/。$/, "")}でお悩みの方もぜひご相談ください。`;
+}
+
+export function buildGallery(brief: StoreBrief): GalleryItem[] {
+  const captions = [
+    "店内の様子",
+    `人気の${brief.offer}`,
+    "スタッフの接客風景",
+    `${brief.industry}のこだわり`,
+    "外観・入口",
+    `${brief.area}からのアクセス風景`,
+  ];
+  return captions.map((caption, i) => ({
+    id: `gallery-${i + 1}`,
+    caption,
+    altText: `${brief.storeName}の${caption}`,
   }));
 }
 
-function sectionBody(page: string, brief: StoreBrief, strategy: StrategyAnalysis): string {
-  if (/強み|特徴|about|こだわり/i.test(page)) {
-    return strategy.strengths.map((s) => `・${s}`).join("\n");
-  }
-  if (/メニュー|サービス|料金|プラン/i.test(page)) {
-    return `${brief.offer}を中心に、${brief.targetCustomer}のニーズに合わせたメニュー・サービスをご用意しています。`;
-  }
-  if (/アクセス|地図|店舗情報/i.test(page)) {
-    return `${brief.area}エリアからのアクセス良好。${brief.storeName}へお気軽にお越しください。`;
-  }
-  if (/よくある質問|faq/i.test(page)) {
-    return `お客様からよくいただくご質問にお答えします。`;
-  }
-  if (/問い合わせ|contact|予約/i.test(page)) {
-    return `${brief.websiteGoal}に関するご相談・ご予約はこちらから承ります。`;
-  }
-  return `${brief.storeName}は${brief.area}で${brief.industry}を営んでおり、${brief.salesAngle}を大切にしています。${brief.mainProblem.replace(/。$/, "")}でお悩みの方もぜひご相談ください。`;
+export function buildAccess(brief: StoreBrief): AccessInfo {
+  return {
+    areaLabel: brief.area,
+    addressHint: `${brief.area}エリアにあり、${brief.targetCustomer}の方にもお越しいただきやすい立地です。詳しい道順はお問い合わせください。`,
+    mapQuery: `${brief.storeName} ${brief.area}`,
+  };
+}
+
+export function buildContactMethods(brief: StoreBrief): string[] {
+  const methods = ["お電話でのお問い合わせ"];
+  methods.push(/予約/.test(brief.websiteGoal) ? "オンライン予約フォーム" : "お問い合わせフォーム");
+  methods.push(`SNSでのご相談（${brief.salesAngle}について）`);
+  return methods;
 }
 
 export function buildCta(brief: StoreBrief): WebsiteCta {
@@ -164,6 +221,9 @@ export function generateWebsiteRuleBased(brief: StoreBrief): GeneratedWebsiteCon
     heroTitle,
     heroSubtitle,
     sections: buildSections(brief, strategy, pages),
+    gallery: buildGallery(brief),
+    access: buildAccess(brief),
+    contactMethods: buildContactMethods(brief),
     cta: buildCta(brief),
     seoTitle,
     metaDescription,

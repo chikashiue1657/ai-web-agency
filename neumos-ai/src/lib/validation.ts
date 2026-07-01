@@ -46,11 +46,27 @@ export const GeneratedWebsiteContentsSchema = z.object({
     .array(
       z.object({
         id: z.string().min(1),
+        kind: z.enum(["about", "service", "feature", "other"]),
         heading: z.string().min(1),
         body: z.string().min(1),
       })
     )
     .min(1),
+  gallery: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        caption: z.string().min(1),
+        altText: z.string().min(1),
+      })
+    )
+    .min(1),
+  access: z.object({
+    areaLabel: z.string().min(1),
+    addressHint: z.string().min(1),
+    mapQuery: z.string().min(1),
+  }),
+  contactMethods: z.array(z.string().min(1)).min(1),
   cta: z.object({
     headline: z.string().min(1),
     body: z.string().min(1),
@@ -74,4 +90,10 @@ export const GeneratedWebsiteContentsSchema = z.object({
     targetPersona: z.string().min(1),
     differentiators: z.array(z.string()),
   }),
-});
+}).refine(
+  (contents) => {
+    const kinds = new Set(contents.sections.map((s) => s.kind));
+    return kinds.has("about") && kinds.has("service") && kinds.has("feature");
+  },
+  { message: "sections must include at least one each of about/service/feature (required by Website Renderer)" }
+);

@@ -23,7 +23,12 @@ ${JSON.stringify(strategy, null, 2)}
   "concept": string,               // サイトコンセプト（1〜2文）
   "heroTitle": string,              // トップのキャッチコピー
   "heroSubtitle": string,           // キャッチコピーを補足する一文
-  "sections": [{ "id": string, "heading": string, "body": string }],  // recommendedPagesを踏まえた本文（3〜6セクション）
+  "sections": [{ "id": string, "kind": "about"|"service"|"feature", "heading": string, "body": string }],
+    // Website Rendererが About/Service/Feature の3コンポーネントとして描画するため、
+    // kind="about" / "service" / "feature" を最低1件ずつ、合計3〜6セクション含めること。
+  "gallery": [{ "id": string, "caption": string, "altText": string }], // 4〜6件。実写真は無い前提で、雰囲気が伝わる短いキャプションのみ
+  "access": { "areaLabel": string, "addressHint": string, "mapQuery": string }, // mapQueryは「店舗名 + エリア」等、地図検索に使える文字列
+  "contactMethods": string[], // 問い合わせ手段（電話/フォーム/SNS等）2〜3件
   "cta": { "headline": string, "body": string, "buttonLabel": string },
   "seoTitle": string,               // 60文字以内目安
   "metaDescription": string,        // 120文字以内目安

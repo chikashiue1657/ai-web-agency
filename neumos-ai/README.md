@@ -27,7 +27,7 @@ StoreBrief（店舗情報・AI診断・営業提案）
 ⑤ サイトコンセプト作成 (buildConcept)
 ⑥ ページ構成作成 (buildPageStructure)
 ⑦ SEOキーワード反映 (buildSeo)
-⑧ 本文生成（Hero / Sections / CTA / FAQ / Instagram / GBP改善案）
+⑧ 本文生成（Hero / About / Service / Feature / Gallery / Access / FAQ / Contact / Instagram / GBP改善案）
 ```
 
 - ①〜⑧はすべて `src/lib/engine/rule-based.ts` に**純関数**として実装。LLMキー未設定でも
@@ -39,6 +39,41 @@ StoreBrief（店舗情報・AI診断・営業提案）
   LLM出力はZodスキーマ（`GeneratedWebsiteContentsSchema`）で検証し、壊れたJSONの場合は
   自動的にルールベース結果へフォールバックする（例外を投げない）。
 
+## Website Renderer（実際に公開できるホームページの生成）
+
+`generatedContents` からNext.jsコンポーネントを組み立て、`/preview/[requestId]` に
+アクセスすると**実際に公開できる状態のレスポンシブなホームページ**がそのまま表示される
+（`src/components/website/`）。
+
+| コンポーネント | 内容 |
+|---|---|
+| `Header` | 店舗名 + セクションへのアンカーナビ（モバイルはハンバーガーメニュー、クライアントコンポーネント） |
+| `Hero` | キャッチコピー・エリア/業種バッジ・CTAボタン |
+| `About` | サイトコンセプト + 強み（`sections`のうち`kind:"about"`） |
+| `Service` | メニュー・サービス紹介カード（`kind:"service"`） |
+| `Feature` | 選ばれる理由を番号付きカードで表示（`kind:"feature"`） |
+| `Gallery` | 実写真が無い前提のデザイン性プレースホルダー（グラデーション+キャプション） |
+| `Faq` | `<details>`によるアコーディオン（JS無しでも動作） |
+| `Access` | エリア・行き方 + Google Maps埋め込み（APIキー不要の`output=embed`） |
+| `Contact` | CTA + 問い合わせ手段一覧 |
+| `Footer` | 店舗名・エリア・トップへ戻るリンク |
+
+`WebsiteRenderer`（`src/components/website/WebsiteRenderer.tsx`）がこれらを1つに合成する。
+すべてTailwindでモバイルファースト・レスポンシブ対応（`sm:`/`md:`/`lg:`ブレークポイント）。
+
+- **About/Service/Featureは必ず生成される**: `src/lib/engine/rule-based.ts` の
+  `ensureRequiredKinds()` が、`recommendedPages`にそれらに該当するページが無い場合でも
+  デフォルトページ（お店の強み/メニュー・サービス/選ばれる理由）を自動的に補う。
+  LLM生成時も `GeneratedWebsiteContentsSchema` が `sections` に
+  `about`/`service`/`feature` を最低1件ずつ含むことを検証し、欠けていればルールベースに
+  フォールバックするため、Website Rendererが空セクションを描画することはない。
+- **Gallery**: 実写真が無い前提のため`caption`/`altText`のみを生成し、グラデーション+
+  カメラアイコンのプレースホルダーで表現（実写真に差し替え可能な設計）。
+- **Access**: `AccessInfo.mapQuery`（店舗名+エリア）を使い、APIキー不要の
+  `https://www.google.com/maps?q=...&output=embed` でマップを埋め込む。
+- 静的HTML書き出し版（`src/lib/preview/render.ts` → `GET /api/preview/{requestId}/raw`）も
+  同じセクション構成に追従しており、Next.js非依存で単体HTMLとして配布・移植できる。
+
 ## ディレクトリ構成
 
 ```
@@ -46,11 +81,16 @@ neumos-ai/
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                       # トップ（API概要・対応generationType一覧）
-│   │   ├── preview/[requestId]/page.tsx   # 生成結果プレビュー
+│   │   ├── preview/[requestId]/page.tsx   # 生成結果プレビュー（Website Rendererをそのまま表示）
 │   │   └── api/
 │   │       ├── generate/route.ts          # POST /api/generate（ネイティブ契約）
-│   │       ├── preview/[requestId]/raw/   # 単体HTML配信（プレビューのiframe元）
+│   │       ├── preview/[requestId]/raw/   # 単体HTML書き出し（静的エクスポート用）
 │   │       └── v1/contents/               # AI集客支援MVP互換ブリッジ（後述）
+│   ├── components/website/                # Website Renderer本体
+│   │   ├── Header.tsx / Hero.tsx / About.tsx / Service.tsx / Feature.tsx
+│   │   ├── Gallery.tsx / Faq.tsx / Access.tsx / Contact.tsx / Footer.tsx
+│   │   ├── WebsiteRenderer.tsx            # 上記9+1コンポーネントを合成
+│   │   └── utils.ts                       # 本文の箇条書きパース等
 │   └── lib/
 │       ├── types.ts        # StoreBrief / GenerationType / GeneratedWebsiteContents 等の契約
 │       ├── validation.ts   # Zodスキーマ（入力検証・LLM出力検証）
@@ -65,7 +105,7 @@ neumos-ai/
 │       │   ├── website.ts     # generationType="website" のオーケストレーション
 │       │   └── index.ts       # generationType ディスパッチャ（拡張ポイント）
 │       └── preview/render.ts  # 生成物 → 単体HTMLドキュメント
-└── tests/                     # vitest（19件）
+└── tests/                     # vitest（23件、コンポーネントの描画テスト含む）
 ```
 
 ## セットアップ
@@ -121,7 +161,10 @@ npm run test        # vitest 19件
     "concept": "…",
     "heroTitle": "…",
     "heroSubtitle": "…",
-    "sections": [{ "id": "section-1", "heading": "…", "body": "…" }],
+    "sections": [{ "id": "section-1", "kind": "about", "heading": "…", "body": "…" }],
+    "gallery": [{ "id": "gallery-1", "caption": "…", "altText": "…" }],
+    "access": { "areaLabel": "…", "addressHint": "…", "mapQuery": "…" },
+    "contactMethods": ["…"],
     "cta": { "headline": "…", "body": "…", "buttonLabel": "…" },
     "seoTitle": "…",
     "metaDescription": "…",
@@ -143,8 +186,9 @@ npm run test        # vitest 19件
 
 ### `GET /preview/{requestId}`
 
-生成されたホームページ本文を実際のページとして確認できるプレビュー画面。
-単体HTML（`GET /api/preview/{requestId}/raw`）をiframe表示している。
+Website Rendererが組み立てた**実際に公開できる状態のレスポンシブなホームページ**をそのまま
+表示するプレビュー画面（Next.jsコンポーネントとして直接レンダリング。iframeではない）。
+単体HTML書き出し版は `GET /api/preview/{requestId}/raw` から確認できる。
 
 ---
 

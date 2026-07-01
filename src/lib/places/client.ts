@@ -66,7 +66,9 @@ export async function searchTextPlaces(
   query: string,
   opts: PlacesSearchOptions = {}
 ): Promise<PlacesNewResult[]> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  // env値の前後空白/改行を除去。Vercel等で貼り付け時に末尾改行が混入すると
+  // Googleが "API key not valid" を返す（改行だとfetchがヘッダ例外を出す）ため防御的にtrim。
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
   if (!apiKey) {
     throw new ServiceError(
       "places_not_configured",

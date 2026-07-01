@@ -13,6 +13,9 @@ import type {
   LeadStatus,
   ActivityEventType,
   SiteDocument,
+  SiteGenerationRequest,
+  SiteGenerationBrief,
+  SiteGenRequestStatus,
 } from "@/lib/types";
 
 /** 一覧表示用：店舗＋リード概要 */
@@ -43,6 +46,7 @@ export interface StoreDetail {
   proposals: Proposal[];
   sites: GeneratedSite[];
   activity: ActivityLog[];
+  siteRequests: SiteGenerationRequest[]; // ノイモスAI本番サイト生成の記録
 }
 
 /** ダッシュボード集計 */
@@ -83,6 +87,16 @@ export interface SaveSiteInput {
   generated_json: SiteDocument;
 }
 
+export interface CreateSiteRequestInput {
+  store_id: string;
+  provider: string;
+  status: SiteGenRequestStatus;
+  brief: SiteGenerationBrief;
+  external_id?: string | null;
+  preview_url?: string | null;
+  error?: string | null;
+}
+
 /** 取り込み結果サマリ */
 export interface UpsertResult {
   inserted: number;
@@ -110,6 +124,11 @@ export interface Repository {
   saveSite(input: SaveSiteInput): Promise<GeneratedSite>;
   getSiteBySlug(slug: string): Promise<GeneratedSite | null>;
   listSlugs(): Promise<string[]>;
+  // site generation requests（ノイモスAI連携: 受注→生成→公開の記録）
+  createSiteGenerationRequest(
+    input: CreateSiteRequestInput
+  ): Promise<SiteGenerationRequest>;
+  listSiteGenerationRequests(storeId: string): Promise<SiteGenerationRequest[]>;
   // activity
   logActivity(
     storeId: string | null,

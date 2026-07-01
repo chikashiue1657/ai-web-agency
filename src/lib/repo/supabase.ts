@@ -12,6 +12,7 @@ import type {
   NormalizedStore,
   LeadStatus,
   ActivityEventType,
+  SiteGenerationRequest,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
 import { isContactStatus } from "@/lib/status";
@@ -26,6 +27,7 @@ import type {
   SaveProposalInput,
   SaveSiteInput,
   UpsertResult,
+  CreateSiteRequestInput,
 } from "./types";
 
 const MATCH_THRESHOLD = 0.82;
@@ -105,12 +107,13 @@ class SupabaseRepository implements Repository {
   async getStoreDetail(id: string): Promise<StoreDetail | null> {
     const store = await this.getStore(id);
     if (!store) return null;
-    const [{ data: lead }, { data: proposals }, { data: sites }, { data: activity }] =
+    const [{ data: lead }, { data: proposals }, { data: sites }, { data: activity }, { data: siteRequests }] =
       await Promise.all([
         db().from("leads").select("*").eq("store_id", id).maybeSingle(),
         db().from("proposals").select("*").eq("store_id", id).order("created_at", { ascending: false }),
         db().from("generated_sites").select("*").eq("store_id", id).order("created_at", { ascending: false }),
         db().from("activity_logs").select("*").eq("store_id", id).order("created_at", { ascending: false }),
+        db().from("site_generation_requests").select("*").eq("store_id", id).order("created_at", { ascending: false }),
       ]);
     return {
       store,
@@ -118,6 +121,7 @@ class SupabaseRepository implements Repository {
       proposals: (proposals as Proposal[]) ?? [],
       sites: (sites as GeneratedSite[]) ?? [],
       activity: (activity as ActivityLog[]) ?? [],
+      siteRequests: (siteRequests as SiteGenerationRequest[]) ?? [],
     };
   }
 
@@ -260,6 +264,36 @@ class SupabaseRepository implements Repository {
     const { data, error } = await db().from("generated_sites").select("slug");
     if (error) throw error;
     return (data ?? []).map((r: { slug: string }) => r.slug);
+  }
+
+  async createSiteGenerationRequest(
+    input: CreateSiteRequestInput
+  ): Promise<SiteGenerationRequest> {
+    const { data, error } = await db()
+      .from("site_generation_requests")
+      .insert({
+        store_id: input.store_id,
+        provider: input.provider,
+        status: input.status,
+        brief: input.brief,
+        external_id: input.external_id ?? null,
+        preview_url: input.preview_url ?? null,
+        error: input.error ?? null,
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as SiteGenerationRequest;
+  }
+
+  async listSiteGenerationRequests(storeId: string): Promise<SiteGenerationRequest[]> {
+    const { data, error } = await db()
+      .from("site_generation_requests")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data as SiteGenerationRequest[]) ?? [];
   }
 
   async logActivity(

@@ -101,9 +101,31 @@ npm run build      # 本番ビルド
 - **提案書**: 実データのみ断定、欠損は「（仮説）」明示。業種別に文脈差分。
 - **仮サイト**: JSON schema（Zod）ベース、業種別テーマ分岐、口コミ由来訴求、SEO生成、写真不足フォールバック、`isHypothesis`で仮説部分を明示。
 
+## ノイモスAI連携（ホームページ自動生成）— 営業支援→受注→生成→公開
+
+本ツールは営業支援で終わらず、**HP自動生成AI「ノイモスAI」への受け渡し口**を備えています。
+生成エンジンを疎結合に保つため、以下の3層で設計しています。
+
+1. **受け渡し契約 `SiteGenerationBrief`**（`src/lib/types.ts`）
+   店舗情報・業種・強み・改善点・期待効果・ターゲット・優先度・推奨構成・テーマ・SEO・
+   写真参照・仮説（要確認）・提案書Markdown を1つの構造に集約。`schemaVersion` でバージョン管理。
+   実データと仮説を分離し捏造を防ぐ。
+2. **ブリーフ組み立て `buildSiteGenerationBrief()`**（`src/lib/neumos/brief.ts`, 純関数・テスト済み）
+   店舗＋優先度＋提案書からブリーフを決定的に生成。
+3. **アダプタ `submitSiteGeneration()`**（`src/lib/neumos/client.ts`）
+   `NEUMOS_API_URL` / `NEUMOS_API_KEY` があれば本接続、無ければ `not_configured`（下書き）。
+   **ここだけ差し替えれば本接続完了**。UI/業務ロジックは無改修。
+
+**フロー**: 店舗詳細ページの「この店舗のホームページをAIで作成」ボタン →
+`requestSiteGeneration()` がブリーフを組み立て → ノイモスAIへ投入（未接続なら
+`site_generation_requests` に下書き保存）→ 状態を `draft→requested→queued→generating→preview→published`
+で追跡。未接続時も**実際に渡すブリーフJSONをUIで確認**できる。
+
+営業ステータス（未対応→DM送信→電話→商談→**成約**）と連動し、成約後に本番生成を促す導線。
+
 ## 今後の拡張ポイント
 
-- **公開自動化**: `generated_sites.status/published_url` を起点に GitHub+Vercel デプロイ、Cloudflareで独自ドメイン接続。
+- **公開自動化**: `site_generation_requests.published_url` / `generated_sites.published_url` を起点に GitHub+Vercel デプロイ、Cloudflareで独自ドメイン接続。
 - **CMS化**: サイトは `generated_json`(SiteDocument schema) で保持済み → Sanity等への移行が容易。
 - **保守AI / 差分監視**: `activity_logs` を基盤に月次保守、Instagram/Googleマップ差分監視を追加。
 - **マルチテナント / 認証**: `tenant_id` 予約済み。Supabase Auth + RLS（schema.sqlに雛形）。`checkApiKey` を本認証へ差し替え。

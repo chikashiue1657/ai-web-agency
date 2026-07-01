@@ -14,6 +14,7 @@ import type {
   NormalizedStore,
   LeadStatus,
   ActivityEventType,
+  SiteGenerationRequest,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
 import { DEFAULT_LEAD_STATUS, isContactStatus } from "@/lib/status";
@@ -34,6 +35,7 @@ import type {
   SaveProposalInput,
   SaveSiteInput,
   UpsertResult,
+  CreateSiteRequestInput,
 } from "./types";
 
 /** 近似一致のしきい値（name+address 連結） */
@@ -44,6 +46,7 @@ class MemoryRepository implements Repository {
   private leads: Lead[] = structuredClone(seedLeads);
   private proposals: Proposal[] = structuredClone(seedProposals);
   private sites: GeneratedSite[] = structuredClone(seedSites);
+  private siteRequests: SiteGenerationRequest[] = [];
   private logs: ActivityLog[] = structuredClone(seedActivityLogs);
 
   async listStores(filters: StoreListFilters = {}): Promise<StoreWithLead[]> {
@@ -120,6 +123,9 @@ class MemoryRepository implements Repository {
         .sort((a, b) => b.created_at.localeCompare(a.created_at)),
       activity: this.logs
         .filter((l) => l.store_id === id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+      siteRequests: this.siteRequests
+        .filter((r) => r.store_id === id)
         .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     };
   }
@@ -258,6 +264,33 @@ class MemoryRepository implements Repository {
 
   async listSlugs(): Promise<string[]> {
     return this.sites.map((s) => s.slug);
+  }
+
+  async createSiteGenerationRequest(
+    input: CreateSiteRequestInput
+  ): Promise<SiteGenerationRequest> {
+    const ts = new Date().toISOString();
+    const req: SiteGenerationRequest = {
+      id: randomUUID(),
+      store_id: input.store_id,
+      provider: input.provider,
+      status: input.status,
+      brief: input.brief,
+      external_id: input.external_id ?? null,
+      preview_url: input.preview_url ?? null,
+      published_url: null,
+      error: input.error ?? null,
+      created_at: ts,
+      updated_at: ts,
+    };
+    this.siteRequests.push(req);
+    return req;
+  }
+
+  async listSiteGenerationRequests(storeId: string): Promise<SiteGenerationRequest[]> {
+    return this.siteRequests
+      .filter((r) => r.store_id === storeId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
 
   async logActivity(

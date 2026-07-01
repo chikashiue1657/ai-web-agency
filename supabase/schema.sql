@@ -129,6 +129,31 @@ create trigger trg_generated_sites_updated_at before update on generated_sites
   for each row execute function set_updated_at();
 
 -- ============================================================
+-- site_generation_requests: 本番サイト生成リクエスト（ノイモスAI連携）
+--   営業支援 → 受注 → 生成 → 公開 の記録。brief(契約)を保持する。
+-- ============================================================
+create table if not exists site_generation_requests (
+  id            uuid primary key default gen_random_uuid(),
+  store_id      uuid not null references stores(id) on delete cascade,
+  provider      text not null default 'neumos',      -- 生成エンジン
+  status        text not null default 'draft',        -- draft|requested|queued|generating|preview|published|failed
+  brief         jsonb,                                -- SiteGenerationBrief（ノイモスAIへの受け渡し契約）
+  external_id   text,                                 -- ノイモスAI側ジョブID
+  preview_url   text,
+  published_url text,
+  error         text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists site_gen_requests_store_idx on site_generation_requests (store_id);
+create index if not exists site_gen_requests_status_idx on site_generation_requests (status);
+
+drop trigger if exists trg_site_gen_requests_updated_at on site_generation_requests;
+create trigger trg_site_gen_requests_updated_at before update on site_generation_requests
+  for each row execute function set_updated_at();
+
+-- ============================================================
 -- activity_logs: 活動履歴（取り込み/判定/生成/営業メモ等）
 -- ============================================================
 create table if not exists activity_logs (

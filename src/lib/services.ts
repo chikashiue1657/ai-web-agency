@@ -22,6 +22,9 @@ import {
   type OutreachInput,
 } from "@/lib/outreach";
 import { refineOutreachWithLlm } from "@/lib/outreach/llm";
+import { buildSiteGenerationBrief } from "@/lib/neumos/brief";
+import { submitSiteGeneration } from "@/lib/neumos/client";
+import type { SiteGenRequestStatus, SiteGenerationRequest } from "@/lib/types";
 
 // ------------------------------------------------------------
 // 取り込み（正規化 + upsert + ログ）
@@ -277,6 +280,59 @@ export async function generateOutreach(
 
   await repo.logActivity(storeId, "outreach.generated", { channel });
   return text;
+}
+
+// ------------------------------------------------------------
+// ノイモスAI連携: 本番サイト生成リクエスト
+//   店舗+優先度+提案書 → ブリーフ(契約)を組み立て → ノイモスAIへ投入(未接続なら下書き保存)。
+//   営業支援 → 受注 → 生成 → 公開 のうち「生成」の入口。
+// ------------------------------------------------------------
+export interface SiteGenerationRequestResult {
+  request: SiteGenerationRequest;
+  connected: boolean; // ノイモスAIに接続済みか（未接続なら下書き）
+}
+
+export async function requestSiteGeneration(
+  storeId: string
+): Promise<SiteGenerationRequestResult> {
+  const repo = getRepo();
+  const detail = await repo.getStoreDetail(storeId);
+  if (!detail) throw new ServiceError("store_not_found", `store ${storeId} not found`, 404);
+  const { store, lead, proposals } = detail;
+
+  // 1) 受け渡し契約(ブリーフ)を組み立て
+  const brief = buildSiteGenerationBrief({
+    store,
+    lead,
+    proposal: proposals[0] ?? null,
+  });
+
+  // 2) ノイモスAIへ投入（未接続なら not_configured）
+  const submit = await submitSiteGeneration(brief);
+  const connected = submit.status !== "not_configured";
+  const status: SiteGenRequestStatus = connected
+    ? (submit.status as SiteGenRequestStatus)
+    : "draft";
+
+  // 3) リクエストを永続化（brief込みで監査・再送可能に）
+  const request = await repo.createSiteGenerationRequest({
+    store_id: storeId,
+    provider: "neumos",
+    status,
+    brief,
+    external_id: submit.externalId ?? null,
+    preview_url: submit.previewUrl ?? null,
+    error: submit.error ?? null,
+  });
+
+  await repo.logActivity(storeId, "site.generation_requested", {
+    provider: "neumos",
+    status,
+    connected,
+  });
+  logger.info("site generation requested", { store_id: storeId, status, connected });
+
+  return { request, connected };
 }
 
 // API層で扱いやすいHTTPステータス付き業務エラーは errors.ts に定義。

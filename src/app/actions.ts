@@ -13,9 +13,10 @@ import {
   updateStatus,
   searchAndIngestPlaces,
   generateOutreach,
+  requestSiteGeneration,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
-import type { LeadStatus } from "@/lib/types";
+import type { LeadStatus, SiteGenerationRequest } from "@/lib/types";
 import type { OutreachChannel } from "@/lib/outreach";
 
 /**
@@ -106,6 +107,28 @@ export async function generateOutreachAction(
   } catch (err) {
     const message =
       err instanceof ServiceError ? err.message : "文面生成に失敗しました";
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * ノイモスAIへ本番サイト生成を依頼（未接続なら下書き保存）。
+ * - 生成した受け渡しブリーフを返し、UIで内容を確認できるようにする。
+ */
+export type SiteGenerationActionResult =
+  | { ok: true; connected: boolean; request: SiteGenerationRequest }
+  | { ok: false; error: string };
+
+export async function requestSiteGenerationAction(
+  storeId: string
+): Promise<SiteGenerationActionResult> {
+  try {
+    const { request, connected } = await requestSiteGeneration(storeId);
+    revalidatePath(`/stores/${storeId}`);
+    return { ok: true, connected, request };
+  } catch (err) {
+    const message =
+      err instanceof ServiceError ? err.message : "サイト生成依頼に失敗しました";
     return { ok: false, error: message };
   }
 }

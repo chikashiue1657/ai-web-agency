@@ -20,6 +20,7 @@ import { extractPhotoNames, photoProxyUrl } from "@/lib/places/photos";
 import { ActionsPanel } from "./actions-panel";
 import { StatusFunnel } from "./status-funnel";
 import { OutreachPanel } from "./outreach-panel";
+import { NeumosPanel } from "./neumos-panel";
 import { saveNotesAction } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -32,14 +33,16 @@ const EVENT_LABEL: Record<string, string> = {
   "lead.note_updated": "営業メモ更新",
   "lead.status_updated": "ステータス更新",
   "outreach.generated": "営業文面生成",
+  "site.generation_requested": "HP生成依頼（ノイモスAI）",
 };
 
 export default async function StoreDetailPage({ params }: { params: { id: string } }) {
   const detail = await getRepo().getStoreDetail(params.id);
   if (!detail) notFound();
-  const { store, lead, proposals, sites, activity } = detail;
+  const { store, lead, proposals, sites, activity, siteRequests } = detail;
   const latestProposal = proposals[0] ?? null;
   const latestSite = sites[0] ?? null;
+  const latestSiteRequest = siteRequests[0] ?? null;
 
   // Google Map（キー不要の埋め込み）: 店名＋住所で位置を表示
   const mapQuery = [store.name, store.address].filter(Boolean).join(" ");
@@ -273,6 +276,15 @@ export default async function StoreDetailPage({ params }: { params: { id: string
           )}
         </Section>
       </div>
+
+      {/* ノイモスAI連携（HP自動生成）: 営業支援→受注→生成→公開 */}
+      <Section title="ホームページ生成（ノイモスAI連携）">
+        <NeumosPanel
+          storeId={store.id}
+          isWon={lead?.status === "won"}
+          latestRequest={latestSiteRequest}
+        />
+      </Section>
 
       {/* 取得元データ */}
       <Section title="取得元データ（raw payload）">

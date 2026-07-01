@@ -125,6 +125,86 @@ export interface GeneratedSite {
 }
 
 // ------------------------------------------------------------
+// ノイモスAI連携（ホームページ自動生成AI）
+//   営業支援 → 受注 → 本番サイト生成 → 公開 の受け渡し契約。
+//   ここを安定させることで、生成エンジン(ノイモスAI)を疎結合に差し替え可能にする。
+// ------------------------------------------------------------
+
+/**
+ * サイト生成ブリーフ（ノイモスAIへ渡す入力データ契約）。
+ * - 店舗情報・提案内容・業種・強み・ターゲット等を1つの構造に集約。
+ * - schemaVersion でバージョン管理し、後方互換を保つ。
+ * - 実データと仮説を分離（assumptions に仮説を明示）。捏造を防ぐ。
+ */
+export interface SiteGenerationBrief {
+  schemaVersion: string; // 例: "1.0"
+  store: {
+    storeId: string;
+    name: string;
+    category: StoreCategory | string; // 正規化カテゴリ
+    categoryLabel: string; // 日本語表示名
+    area: string | null;
+    address: string | null;
+    phone: string | null;
+    openingHours: string[] | null;
+  };
+  online: {
+    hasWebsite: boolean;
+    websiteUrl: string | null;
+    instagramUrl: string | null;
+    facebookUrl: string | null;
+  };
+  metrics: {
+    rating: number | null;
+    reviewCount: number;
+    photoCount: number;
+    photoRefs: string[]; // Places写真リソース名（あれば）
+  };
+  /** 提案・分析から抽出した訴求素材 */
+  strengths: string[]; // 強み
+  improvements: string[]; // 改善点（機会損失）
+  expectedEffects: string[]; // 期待効果（仮説）
+  target: string; // 想定顧客層
+  salesAngle: string | null; // 営業切り口
+  priority: { rank: PriorityRank; score: number } | null;
+  suggestedSections: string[]; // 推奨ページ構成
+  theme: { suggestedType: string; brandColorHint: string }; // 業種別テーマ提案
+  seo: { titleHint: string; descriptionHint: string };
+  reviewSummary: string | null;
+  assumptions: string[]; // 仮説（要確認事項）
+  /** 生成AIが参照できるよう、生成済み提案書Markdownを同梱（任意） */
+  sourceProposalMarkdown: string | null;
+}
+
+/** 本番サイト生成パイプラインの状態 */
+export type SiteGenRequestStatus =
+  | "draft" // ブリーフ作成のみ（ノイモスAI未接続/受注前）
+  | "requested" // ノイモスAIへ送信済み
+  | "queued" // 生成待ち
+  | "generating" // 生成中
+  | "preview" // プレビュー可能
+  | "published" // 公開済み
+  | "failed"; // 失敗
+
+/**
+ * サイト生成リクエスト（受注→生成→公開の記録）。
+ * - brief を保持し、ノイモスAI側の外部ID/公開URLを追跡する。
+ */
+export interface SiteGenerationRequest {
+  id: string;
+  store_id: string;
+  provider: string; // "neumos" 等
+  status: SiteGenRequestStatus;
+  brief: SiteGenerationBrief | null;
+  external_id: string | null; // ノイモスAI側ジョブID
+  preview_url: string | null;
+  published_url: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ------------------------------------------------------------
 // activity_logs
 // ------------------------------------------------------------
 export type ActivityEventType =
@@ -134,7 +214,8 @@ export type ActivityEventType =
   | "site.generated"
   | "lead.note_updated"
   | "lead.status_updated"
-  | "outreach.generated";
+  | "outreach.generated"
+  | "site.generation_requested";
 
 export interface ActivityLog {
   id: string;

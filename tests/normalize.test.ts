@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeGooglePlace,
+  normalizePlacesNew,
   normalizeApify,
   normalizeCsvRow,
   decideHasWebsite,
@@ -37,6 +38,48 @@ describe("normalizeGooglePlace", () => {
     const n = normalizeGooglePlace({
       name: "X",
       url: "https://maps.google.com/?cid=1",
+    });
+    expect(n.has_website).toBe(false);
+    expect(n.website_url).toBeNull();
+  });
+});
+
+describe("normalizePlacesNew", () => {
+  it("Places API (New) 形式を正規化する", () => {
+    const n = normalizePlacesNew({
+      id: "ChIJ_new_001",
+      displayName: { text: "海カフェ" },
+      types: ["cafe", "food"],
+      primaryType: "cafe",
+      formattedAddress: "日本、沖縄県沖縄市中央1-2-3",
+      nationalPhoneNumber: "098-111-2222",
+      internationalPhoneNumber: "+81 98-111-2222",
+      rating: 4.4,
+      userRatingCount: 88,
+      websiteUri: "https://umi-cafe.example.com",
+      googleMapsUri: "https://maps.google.com/?cid=123",
+      regularOpeningHours: { weekdayDescriptions: ["月曜日: 9時00分～18時00分"] },
+      photos: [{ name: "places/x/photos/a" }, { name: "places/x/photos/b" }],
+    });
+    expect(n.place_id).toBe("ChIJ_new_001");
+    expect(n.name).toBe("海カフェ");
+    expect(n.category).toBe("cafe");
+    expect(n.address).toBe("日本、沖縄県沖縄市中央1-2-3");
+    expect(n.phone).toBe("098-111-2222");
+    expect(n.rating).toBe(4.4);
+    expect(n.review_count).toBe(88);
+    expect(n.photo_count).toBe(2);
+    expect(n.website_url).toBe("https://umi-cafe.example.com");
+    expect(n.has_website).toBe(true);
+    expect(n.area).toBe("沖縄市");
+    expect(n.source).toBe("google_places");
+  });
+
+  it("websiteUri無し・googleMapsUriのみでは has_website=false", () => {
+    const n = normalizePlacesNew({
+      id: "ChIJ_new_002",
+      displayName: { text: "X" },
+      googleMapsUri: "https://maps.google.com/?cid=1",
     });
     expect(n.has_website).toBe(false);
     expect(n.website_url).toBeNull();

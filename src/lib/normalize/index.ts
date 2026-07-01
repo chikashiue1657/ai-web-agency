@@ -111,6 +111,47 @@ export function normalizeGooglePlace(input: GooglePlaceInput): NormalizedStore {
 }
 
 // ------------------------------------------------------------
+// Google Places API (New) 形式 (places:searchText / place details)
+//   旧APIとフィールド名が異なる（id / displayName.text / userRatingCount 等）。
+// ------------------------------------------------------------
+export interface PlacesNewInput {
+  id?: string;
+  displayName?: { text?: string };
+  types?: string[];
+  primaryType?: string;
+  primaryTypeDisplayName?: { text?: string };
+  formattedAddress?: string;
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  rating?: number;
+  userRatingCount?: number;
+  websiteUri?: string;
+  googleMapsUri?: string;
+  regularOpeningHours?: { weekdayDescriptions?: string[] };
+  photos?: unknown[];
+  [key: string]: unknown;
+}
+
+export function normalizePlacesNew(input: PlacesNewInput): NormalizedStore {
+  return assemble({
+    place_id: input.id ?? null,
+    name: input.displayName?.text ?? null,
+    // 業種は primaryType(英語) を優先。無ければ types[0] や表示名で補完。
+    category: input.primaryType ?? input.types?.[0] ?? input.primaryTypeDisplayName?.text,
+    address: input.formattedAddress ?? null,
+    phone: input.nationalPhoneNumber ?? input.internationalPhoneNumber ?? null,
+    opening_hours: input.regularOpeningHours?.weekdayDescriptions ?? null,
+    rating: input.rating,
+    review_count: input.userRatingCount,
+    photo_count: Array.isArray(input.photos) ? input.photos.length : 0,
+    // websiteUri は公式HP候補。googleMapsUri はSNS/公式判定に通す（HP扱いにはならない）。
+    urlCandidates: [input.websiteUri, input.googleMapsUri],
+    source: "google_places",
+    raw: input as Record<string, unknown>,
+  });
+}
+
+// ------------------------------------------------------------
 // Apify (Google Maps Scraper等) 形式
 //   フィールド名がプロジェクトにより揺れるため広めに拾う。
 // ------------------------------------------------------------

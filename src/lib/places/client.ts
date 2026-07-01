@@ -92,11 +92,21 @@ export async function searchTextPlaces(
 
   if (!res.ok) {
     const detail = await res.text();
-    logger.warn("places.searchText failed", { status: res.status, detail: detail.slice(0, 300) });
+    logger.warn("places.searchText failed", { status: res.status, detail: detail.slice(0, 500) });
+    // Googleのエラーは {"error":{"code","message","status"}} 形式。
+    // 実際のメッセージ（例: "API key not valid" / "requests ... are blocked"）を
+    // そのまま伝えると原因切り分けが容易になる。
+    let googleMessage = "";
+    try {
+      const parsed = JSON.parse(detail) as { error?: { message?: string; status?: string } };
+      googleMessage = parsed.error?.message ?? "";
+    } catch {
+      /* JSONでない場合は無視 */
+    }
     throw new ServiceError(
       "places_api_error",
-      `Google Places API エラー (${res.status})`,
-      res.status === 403 || res.status === 401 ? 502 : 502
+      `Google Places API エラー (${res.status})${googleMessage ? `: ${googleMessage}` : ""}`,
+      502
     );
   }
 

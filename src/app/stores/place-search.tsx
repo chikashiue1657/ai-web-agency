@@ -1,12 +1,15 @@
 "use client";
 /**
  * 店舗取得フォーム（Google Places API New）。
- * - キーワード入力（例：沖縄市 カフェ）→「店舗取得」でAPIを呼び、storesへ保存。
+ * - キーワード入力（例：沖縄市 カフェ）→「店舗取得」で server action を実行し storesへ保存。
+ * - server action 経由にすることで、内部APIキー(INTERNAL_API_KEY)ゲートの影響を受けない
+ *   （ブラウザfetchでは x-api-key ヘッダを付けられず 401 "invalid api key" になっていた）。
  * - 保存後は router.refresh() で一覧サーバコンポーネントを再取得（自動更新）。
  * - 既存の管理画面デザイン（Tailwind, brandカラー）に合わせる。
  */
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { searchPlacesAction } from "@/app/actions";
 
 type Result = {
   found: number;
@@ -31,21 +34,12 @@ export function PlaceSearch() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("/api/places/search", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query: q }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setError(json?.error?.message ?? "取得に失敗しました");
+      const res = await searchPlacesAction(q);
+      if (!res.ok) {
+        setError(res.error);
         return;
       }
-      setResult({
-        found: json.data.found,
-        inserted: json.data.inserted,
-        updated: json.data.updated,
-      });
+      setResult({ found: res.found, inserted: res.inserted, updated: res.updated });
       // 一覧を再取得（サーバコンポーネントの再レンダリング）
       startTransition(() => router.refresh());
     } catch {

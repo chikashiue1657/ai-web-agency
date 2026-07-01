@@ -13,12 +13,12 @@
  *  - Webhook/ポーリングで status を更新（queued→generating→preview→published）。
  *  - 公開は GitHub+Vercel / Cloudflare 側の自動化と組み合わせる。
  */
-import type { ContentGenerationBrief, SiteGenRequestStatus } from "@/lib/types";
+import type { NeumosBrief, ContentGenStatus } from "@/lib/types";
 import { logger } from "@/lib/logger";
 
 export interface NeumosSubmitResult {
-  /** not_configured = 未接続（受注前のブリーフ確認用途を含む） */
-  status: SiteGenRequestStatus | "not_configured";
+  /** not_configured = 未接続（ブリーフのJSONプレビュー用途を含む） */
+  status: ContentGenStatus | "not_configured";
   externalId?: string;
   previewUrl?: string;
   error?: string;
@@ -34,7 +34,7 @@ export function isNeumosConfigured(): boolean {
  * - 接続時は brief を POST（実エンドポイント仕様確定後にレスポンスマッピングを調整）。
  */
 export async function submitContentGeneration(
-  brief: ContentGenerationBrief
+  brief: NeumosBrief
 ): Promise<NeumosSubmitResult> {
   if (!isNeumosConfigured()) {
     return { status: "not_configured" };
@@ -63,7 +63,7 @@ export async function submitContentGeneration(
     // 想定レスポンス: { id, status, previewUrl }（本仕様確定時に調整）
     const json = (await res.json()) as {
       id?: string;
-      status?: SiteGenRequestStatus;
+      status?: ContentGenStatus;
       previewUrl?: string;
     };
     return {

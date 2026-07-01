@@ -21,6 +21,7 @@ import { ActionsPanel } from "./actions-panel";
 import { StatusFunnel } from "./status-funnel";
 import { OutreachPanel } from "./outreach-panel";
 import { NeumosPanel } from "./neumos-panel";
+import { DiagnosisPanel } from "./diagnosis-panel";
 import { saveNotesAction } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -33,16 +34,17 @@ const EVENT_LABEL: Record<string, string> = {
   "lead.note_updated": "営業メモ更新",
   "lead.status_updated": "ステータス更新",
   "outreach.generated": "営業文面生成",
-  "site.generation_requested": "HP生成依頼（ノイモスAI）",
+  "strategy.diagnosed": "AI診断",
+  "content.generation_requested": "コンテンツ生成依頼（ノイモスAI）",
 };
 
 export default async function StoreDetailPage({ params }: { params: { id: string } }) {
   const detail = await getRepo().getStoreDetail(params.id);
   if (!detail) notFound();
-  const { store, lead, proposals, sites, activity, siteRequests } = detail;
+  const { store, lead, proposals, sites, activity, strategy, contentRequests } = detail;
   const latestProposal = proposals[0] ?? null;
   const latestSite = sites[0] ?? null;
-  const latestSiteRequest = siteRequests[0] ?? null;
+  const latestContentRequest = contentRequests[0] ?? null;
 
   // Google Map（キー不要の埋め込み）: 店名＋住所で位置を表示
   const mapQuery = [store.name, store.address].filter(Boolean).join(" ");
@@ -208,6 +210,11 @@ export default async function StoreDetailPage({ params }: { params: { id: string
         )}
       </Section>
 
+      {/* AI診断（Thinking Engine） */}
+      <Section title="AI診断（Thinking Engine）">
+        <DiagnosisPanel storeId={store.id} initialStrategy={strategy} />
+      </Section>
+
       {/* 営業管理（ステータス・ファネル + メモ） */}
       <Section title="営業管理">
         <div className="space-y-4">
@@ -282,7 +289,7 @@ export default async function StoreDetailPage({ params }: { params: { id: string
         <NeumosPanel
           storeId={store.id}
           isWon={lead?.status === "won"}
-          latestRequest={latestSiteRequest}
+          latestRequest={latestContentRequest}
         />
       </Section>
 

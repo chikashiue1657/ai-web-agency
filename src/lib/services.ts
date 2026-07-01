@@ -22,12 +22,15 @@ import {
   type OutreachInput,
 } from "@/lib/outreach";
 import { refineOutreachWithLlm } from "@/lib/outreach/llm";
-import { buildContentGenerationBrief } from "@/lib/neumos/brief";
+import { diagnoseStore } from "@/lib/neumos/strategy";
+import { enrichStrategyWithLlm } from "@/lib/neumos/strategy-llm";
+import { buildNeumosBrief } from "@/lib/neumos/neumos-brief";
 import { submitContentGeneration } from "@/lib/neumos/client";
 import type {
-  SiteGenRequestStatus,
-  SiteGenerationRequest,
+  ContentGenStatus,
+  ContentGenerationRequest,
   GenerationType,
+  StoreStrategy,
 } from "@/lib/types";
 
 // ------------------------------------------------------------
@@ -287,42 +290,72 @@ export async function generateOutreach(
 }
 
 // ------------------------------------------------------------
-// ノイモスAI連携: コンテンツ生成リクエスト
-//   店舗+優先度+提案書 → ブリーフ(契約)を組み立て → ノイモスAIへ投入(未接続なら下書き保存)。
-//   generationType で website / blog / instagram 等を選択（まず website を実装）。
-//   営業支援 → 受注 → 生成 → 公開 のうち「生成」の入口。
+// Thinking Engine: 店舗診断（StoreStrategy を生成・保存）
+//   店舗+優先度+提案書 → 強み/弱み/課題/ターゲット/受注確率/営業切り口/提案 を診断。
+//   ルールベース → 任意でLLM補正 → store_strategies に保存（store と 1:1 upsert）。
 // ------------------------------------------------------------
-export interface SiteGenerationRequestResult {
-  request: SiteGenerationRequest;
-  connected: boolean; // ノイモスAIに接続済みか（未接続なら下書き）
-}
-
-export async function requestContentGeneration(
+export async function runStoreDiagnosis(
   storeId: string,
-  generationType: GenerationType = "website"
-): Promise<SiteGenerationRequestResult> {
+  opts?: { useLlm?: boolean }
+): Promise<StoreStrategy> {
   const repo = getRepo();
   const detail = await repo.getStoreDetail(storeId);
   if (!detail) throw new ServiceError("store_not_found", `store ${storeId} not found`, 404);
   const { store, lead, proposals } = detail;
 
-  // 1) 受け渡し契約(ブリーフ)を組み立て（generationTypeを付与）
-  const brief = buildContentGenerationBrief({
-    store,
-    lead,
-    proposal: proposals[0] ?? null,
-    generationType,
-  });
+  let strategy = diagnoseStore({ store, lead, proposal: proposals[0] ?? null });
+  if (opts?.useLlm !== false) {
+    strategy = await enrichStrategyWithLlm(strategy, { reviewSummary: null });
+  }
 
-  // 2) ノイモスAIへ投入（未接続なら not_configured）
+  // id/timestamp を除いて保存（DB採番）
+  const { id: _id, created_at: _c, updated_at: _u, ...saveInput } = strategy;
+  const saved = await repo.saveStoreStrategy(saveInput);
+
+  await repo.logActivity(storeId, "strategy.diagnosed", {
+    confidence: saved.confidenceScore,
+    method: saved.method,
+  });
+  logger.info("store diagnosed", { store_id: storeId, confidence: saved.confidenceScore });
+  return saved;
+}
+
+// ------------------------------------------------------------
+// ノイモスAI連携: コンテンツ生成リクエスト
+//   StoreStrategy → NeumosBrief(契約) を組み立て → ノイモスAIへ投入(未設定なら下書き)。
+//   generationType で website / blog / instagram 等を選択（まず website を実装）。
+//   営業支援 → 受注 → 生成 → 公開 のうち「生成」の入口。
+//   ※ ノイモスAI本体は未実装。NEUMOS_API_URL/KEY 設定時のみ外部送信、未設定はJSONプレビュー。
+// ------------------------------------------------------------
+export interface ContentGenerationRequestResult {
+  request: ContentGenerationRequest;
+  connected: boolean; // ノイモスAIに接続済みか（未接続なら下書き=JSONプレビュー）
+}
+
+export async function requestContentGeneration(
+  storeId: string,
+  generationType: GenerationType = "website"
+): Promise<ContentGenerationRequestResult> {
+  const repo = getRepo();
+
+  // 1) 戦略を用意（無ければ診断して保存）→ 常に最新の受け渡し核を使う
+  let strategy = await repo.getStoreStrategy(storeId);
+  if (!strategy) {
+    strategy = await runStoreDiagnosis(storeId);
+  }
+
+  // 2) NeumosBrief を組み立て（generationType を付与）
+  const brief = buildNeumosBrief(strategy, generationType);
+
+  // 3) ノイモスAIへ投入（未接続なら not_configured=下書き）
   const submit = await submitContentGeneration(brief);
   const connected = submit.status !== "not_configured";
-  const status: SiteGenRequestStatus = connected
-    ? (submit.status as SiteGenRequestStatus)
+  const status: ContentGenStatus = connected
+    ? (submit.status as ContentGenStatus)
     : "draft";
 
-  // 3) リクエストを永続化（brief込みで監査・再送可能に）
-  const request = await repo.createSiteGenerationRequest({
+  // 4) リクエストを永続化（NeumosBrief込みで監査・再送可能に）
+  const request = await repo.createContentGenerationRequest({
     store_id: storeId,
     provider: "neumos",
     generation_type: generationType,
@@ -333,7 +366,7 @@ export async function requestContentGeneration(
     error: submit.error ?? null,
   });
 
-  await repo.logActivity(storeId, "site.generation_requested", {
+  await repo.logActivity(storeId, "content.generation_requested", {
     provider: "neumos",
     generation_type: generationType,
     status,
@@ -348,9 +381,6 @@ export async function requestContentGeneration(
 
   return { request, connected };
 }
-
-/** @deprecated 旧名。requestContentGeneration を使用。 */
-export const requestSiteGeneration = requestContentGeneration;
 
 // API層で扱いやすいHTTPステータス付き業務エラーは errors.ts に定義。
 // 既存の import パス互換（@/lib/services から使う箇所）のため再エクスポートする。

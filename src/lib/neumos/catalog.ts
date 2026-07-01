@@ -39,7 +39,7 @@ export const GENERATION_TYPES: GenerationTypeMeta[] = [
     enabled: false,
   },
   {
-    type: "gbp_improvement",
+    type: "google_business_improvement",
     label: "Googleビジネスプロフィール改善案",
     description: "説明文・カテゴリ・写真・投稿の改善提案",
     enabled: false,
@@ -51,15 +51,15 @@ export const GENERATION_TYPES: GenerationTypeMeta[] = [
     enabled: false,
   },
   {
-    type: "catchcopy",
-    label: "キャッチコピー",
-    description: "店舗の訴求コピー案（複数バリエーション）",
-    enabled: false,
-  },
-  {
     type: "seo_content",
     label: "SEOコンテンツ",
     description: "検索流入向けのページ/文章（キーワード設計込み）",
+    enabled: false,
+  },
+  {
+    type: "copywriting",
+    label: "キャッチコピー",
+    description: "店舗の訴求コピー案（複数バリエーション）",
     enabled: false,
   },
 ];

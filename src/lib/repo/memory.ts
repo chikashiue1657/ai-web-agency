@@ -14,7 +14,8 @@ import type {
   NormalizedStore,
   LeadStatus,
   ActivityEventType,
-  SiteGenerationRequest,
+  ContentGenerationRequest,
+  StoreStrategy,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
 import { DEFAULT_LEAD_STATUS, isContactStatus } from "@/lib/status";
@@ -35,7 +36,8 @@ import type {
   SaveProposalInput,
   SaveSiteInput,
   UpsertResult,
-  CreateSiteRequestInput,
+  CreateContentRequestInput,
+  SaveStrategyInput,
 } from "./types";
 
 /** 近似一致のしきい値（name+address 連結） */
@@ -46,7 +48,8 @@ class MemoryRepository implements Repository {
   private leads: Lead[] = structuredClone(seedLeads);
   private proposals: Proposal[] = structuredClone(seedProposals);
   private sites: GeneratedSite[] = structuredClone(seedSites);
-  private siteRequests: SiteGenerationRequest[] = [];
+  private strategies: StoreStrategy[] = [];
+  private contentRequests: ContentGenerationRequest[] = [];
   private logs: ActivityLog[] = structuredClone(seedActivityLogs);
 
   async listStores(filters: StoreListFilters = {}): Promise<StoreWithLead[]> {
@@ -124,7 +127,8 @@ class MemoryRepository implements Repository {
       activity: this.logs
         .filter((l) => l.store_id === id)
         .sort((a, b) => b.created_at.localeCompare(a.created_at)),
-      siteRequests: this.siteRequests
+      strategy: this.strategies.find((s) => s.storeId === id) ?? null,
+      contentRequests: this.contentRequests
         .filter((r) => r.store_id === id)
         .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     };
@@ -266,11 +270,32 @@ class MemoryRepository implements Repository {
     return this.sites.map((s) => s.slug);
   }
 
-  async createSiteGenerationRequest(
-    input: CreateSiteRequestInput
-  ): Promise<SiteGenerationRequest> {
+  async saveStoreStrategy(input: SaveStrategyInput): Promise<StoreStrategy> {
     const ts = new Date().toISOString();
-    const req: SiteGenerationRequest = {
+    const existing = this.strategies.find((s) => s.storeId === input.storeId);
+    if (existing) {
+      Object.assign(existing, input, { updated_at: ts });
+      return existing;
+    }
+    const strategy: StoreStrategy = {
+      ...input,
+      id: randomUUID(),
+      created_at: ts,
+      updated_at: ts,
+    };
+    this.strategies.push(strategy);
+    return strategy;
+  }
+
+  async getStoreStrategy(storeId: string): Promise<StoreStrategy | null> {
+    return this.strategies.find((s) => s.storeId === storeId) ?? null;
+  }
+
+  async createContentGenerationRequest(
+    input: CreateContentRequestInput
+  ): Promise<ContentGenerationRequest> {
+    const ts = new Date().toISOString();
+    const req: ContentGenerationRequest = {
       id: randomUUID(),
       store_id: input.store_id,
       provider: input.provider,
@@ -284,12 +309,12 @@ class MemoryRepository implements Repository {
       created_at: ts,
       updated_at: ts,
     };
-    this.siteRequests.push(req);
+    this.contentRequests.push(req);
     return req;
   }
 
-  async listSiteGenerationRequests(storeId: string): Promise<SiteGenerationRequest[]> {
-    return this.siteRequests
+  async listContentGenerationRequests(storeId: string): Promise<ContentGenerationRequest[]> {
+    return this.contentRequests
       .filter((r) => r.store_id === storeId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }

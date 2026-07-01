@@ -13,10 +13,11 @@ import type {
   LeadStatus,
   ActivityEventType,
   SiteDocument,
-  SiteGenerationRequest,
-  ContentGenerationBrief,
-  SiteGenRequestStatus,
+  ContentGenerationRequest,
+  NeumosBrief,
+  ContentGenStatus,
   GenerationType,
+  StoreStrategy,
 } from "@/lib/types";
 
 /** 一覧表示用：店舗＋リード概要 */
@@ -47,7 +48,8 @@ export interface StoreDetail {
   proposals: Proposal[];
   sites: GeneratedSite[];
   activity: ActivityLog[];
-  siteRequests: SiteGenerationRequest[]; // ノイモスAI本番サイト生成の記録
+  strategy: StoreStrategy | null; // Thinking Engine の診断結果（1:1）
+  contentRequests: ContentGenerationRequest[]; // ノイモスAIコンテンツ生成の記録
 }
 
 /** ダッシュボード集計 */
@@ -88,16 +90,22 @@ export interface SaveSiteInput {
   generated_json: SiteDocument;
 }
 
-export interface CreateSiteRequestInput {
+export interface CreateContentRequestInput {
   store_id: string;
   provider: string;
   generation_type: GenerationType;
-  status: SiteGenRequestStatus;
-  brief: ContentGenerationBrief;
+  status: ContentGenStatus;
+  brief: NeumosBrief;
   external_id?: string | null;
   preview_url?: string | null;
   error?: string | null;
 }
+
+/** StoreStrategy の保存入力（id/timestampはDB採番） */
+export type SaveStrategyInput = Omit<
+  StoreStrategy,
+  "id" | "created_at" | "updated_at"
+>;
 
 /** 取り込み結果サマリ */
 export interface UpsertResult {
@@ -126,11 +134,14 @@ export interface Repository {
   saveSite(input: SaveSiteInput): Promise<GeneratedSite>;
   getSiteBySlug(slug: string): Promise<GeneratedSite | null>;
   listSlugs(): Promise<string[]>;
-  // site generation requests（ノイモスAI連携: 受注→生成→公開の記録）
-  createSiteGenerationRequest(
-    input: CreateSiteRequestInput
-  ): Promise<SiteGenerationRequest>;
-  listSiteGenerationRequests(storeId: string): Promise<SiteGenerationRequest[]>;
+  // store strategies（Thinking Engine 診断結果, store と 1:1）
+  saveStoreStrategy(input: SaveStrategyInput): Promise<StoreStrategy>;
+  getStoreStrategy(storeId: string): Promise<StoreStrategy | null>;
+  // content generation requests（ノイモスAI連携: 受注→生成→公開の記録）
+  createContentGenerationRequest(
+    input: CreateContentRequestInput
+  ): Promise<ContentGenerationRequest>;
+  listContentGenerationRequests(storeId: string): Promise<ContentGenerationRequest[]>;
   // activity
   logActivity(
     storeId: string | null,

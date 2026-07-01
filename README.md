@@ -101,40 +101,49 @@ npm run build      # 本番ビルド
 - **提案書**: 実データのみ断定、欠損は「（仮説）」明示。業種別に文脈差分。
 - **仮サイト**: JSON schema（Zod）ベース、業種別テーマ分岐、口コミ由来訴求、SEO生成、写真不足フォールバック、`isHypothesis`で仮説部分を明示。
 
+## Thinking Engine（店舗診断）— StoreStrategy
+
+店舗情報から営業戦略をAIで診断する中核エンジン（`src/lib/neumos/strategy.ts`, 純関数・テスト済み）。
+ルールベース → 任意でLLM補正（`strategy-llm.ts`）。結果を **`StoreStrategy`**（`store_strategies` に 1:1 保存）へ集約:
+強み / 弱み / 集客課題 / HP必要性 / SNS改善 / Googleビジネス改善 / 競合差別化 /
+想定ターゲット / **受注確率(confidenceScore)** / 営業切り口 / おすすめ提案 / SEOキーワード /
+HP構成・コンセプト / 優先度の根拠 / ノイモス受け渡し核 `generationBrief`。
+店舗詳細の「AI診断」セクションで、なぜこの優先度か・改善余地・刺さる提案・HP構成を表示。
+
 ## ノイモスAI連携（店舗のWeb集客コンテンツ生成）— 営業支援→受注→生成→公開
 
 ノイモスAIは「HP生成」ではなく**Web集客コンテンツ生成AI**として設計。
-同じ店舗ブリーフから `generationType` を変えて複数種類のコンテンツを生成できます。
+`StoreStrategy` から **`NeumosBrief`**（外部JSON契約）を組み立て、`generationType` を変えて
+複数種類のコンテンツを生成できます（現段階はノイモスAI本体は未実装。Brief生成まで完成）。
 
-**対応予定の生成種別**（`GenerationType` / `src/lib/neumos/catalog.ts`）
-ホームページ ✅（実装済） / ランディングページ / ブログ記事 / Instagram投稿 /
-Googleビジネスプロフィール改善案 / FAQ / キャッチコピー / SEOコンテンツ（以降は近日対応）。
+**生成種別**（`GenerationType` / `src/lib/neumos/catalog.ts`）
+website ✅（実装済） / landing_page / instagram_post / google_business_improvement /
+blog_post / faq / seo_content / copywriting（以降は近日対応）。
 
-生成エンジンを疎結合に保つ3層設計:
+生成エンジンを疎結合に保つ設計:
 
-1. **受け渡し契約 `ContentGenerationBrief`**（`src/lib/types.ts`）
-   店舗情報・業種・強み・改善点・期待効果・ターゲット・優先度・推奨構成・テーマ・SEO・
-   写真参照・仮説（要確認）・提案書Markdown を集約した**種別非依存の共有コンテキスト**。
-   `generationType` で生成対象を選び、`typeOptions` に種別固有指定を持たせる（コアを汚さない）。
-   `schemaVersion` で後方互換管理。実データと仮説を分離し捏造を防ぐ。
-2. **ブリーフ組み立て `buildContentGenerationBrief()`**（`src/lib/neumos/brief.ts`, 純関数・テスト済み）
-   店舗＋優先度＋提案書からブリーフを決定的に生成。`generationType` は差し替え可能。
+1. **受け渡し契約 `NeumosBrief`**（`src/lib/types.ts`）
+   storeName / industry / area / targetCustomer / mainProblem / salesAngle /
+   websiteGoal / siteConcept / recommendedPages / seoKeywords / tone / offer / generationType。
+   `StoreStrategy.generationBrief`（種別非依存の核）に `generationType` を付与して生成。
+2. **ブリーフ組み立て `buildNeumosBrief(strategy, type)`**（`src/lib/neumos/neumos-brief.ts`, 純関数・テスト済み）
+   同じ `StoreStrategy` から `generationType` だけ変えて各種別のブリーフを作れる。
 3. **アダプタ `submitContentGeneration()`**（`src/lib/neumos/client.ts`）
-   `NEUMOS_API_URL` / `NEUMOS_API_KEY` があれば本接続、無ければ `not_configured`（下書き）。
+   `NEUMOS_API_URL` / `NEUMOS_API_KEY` があれば本接続、無ければ `not_configured`（下書き＝JSONプレビュー）。
    種別横断の共通エンドポイントに `brief.generationType` を渡して分岐する想定。
    **ここだけ差し替えれば本接続完了**。UI/業務ロジックは無改修。
 
 **フロー**: 店舗詳細ページの「この店舗のホームページをAIで作成」ボタン →
-`requestContentGeneration(storeId, "website")` がブリーフを組み立て → ノイモスAIへ投入
-（未接続なら `site_generation_requests` に `generation_type` 付きで下書き保存）→ 状態を
-`draft→requested→queued→generating→preview→published` で追跡。未接続時も**実際に渡す
-ブリーフJSONをUIで確認**できる。新しい種別は catalog の `enabled` を true にするだけで有効化。
+`requestContentGeneration(storeId, "website")` が（戦略が無ければ診断してから）`NeumosBrief`
+を組み立て → ノイモスAIへ投入（未設定なら `content_generation_requests` に下書き保存）→ 状態を
+`draft→requested→queued→generating→preview→published` で追跡。未設定時は**渡すNeumosBrief
+のJSONをUIで確認**できる。新しい種別は catalog の `enabled` を true にするだけで有効化。
 
 営業ステータス（未対応→DM送信→電話→商談→**成約**）と連動し、成約後に本番生成を促す導線。
 
 ## 今後の拡張ポイント
 
-- **公開自動化**: `site_generation_requests.published_url` / `generated_sites.published_url` を起点に GitHub+Vercel デプロイ、Cloudflareで独自ドメイン接続。
+- **公開自動化**: `content_generation_requests.published_url` / `generated_sites.published_url` を起点に GitHub+Vercel デプロイ、Cloudflareで独自ドメイン接続。
 - **CMS化**: サイトは `generated_json`(SiteDocument schema) で保持済み → Sanity等への移行が容易。
 - **保守AI / 差分監視**: `activity_logs` を基盤に月次保守、Instagram/Googleマップ差分監視を追加。
 - **マルチテナント / 認証**: `tenant_id` 予約済み。Supabase Auth + RLS（schema.sqlに雛形）。`checkApiKey` を本認証へ差し替え。

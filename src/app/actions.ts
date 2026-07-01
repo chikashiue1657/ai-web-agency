@@ -14,9 +14,15 @@ import {
   searchAndIngestPlaces,
   generateOutreach,
   requestContentGeneration,
+  runStoreDiagnosis,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
-import type { LeadStatus, SiteGenerationRequest, GenerationType } from "@/lib/types";
+import type {
+  LeadStatus,
+  ContentGenerationRequest,
+  GenerationType,
+  StoreStrategy,
+} from "@/lib/types";
 import type { OutreachChannel } from "@/lib/outreach";
 
 /**
@@ -115,14 +121,14 @@ export async function generateOutreachAction(
  * ノイモスAIへ本番サイト生成を依頼（未接続なら下書き保存）。
  * - 生成した受け渡しブリーフを返し、UIで内容を確認できるようにする。
  */
-export type SiteGenerationActionResult =
-  | { ok: true; connected: boolean; request: SiteGenerationRequest }
+export type ContentGenerationActionResult =
+  | { ok: true; connected: boolean; request: ContentGenerationRequest }
   | { ok: false; error: string };
 
 export async function requestContentGenerationAction(
   storeId: string,
   generationType: GenerationType = "website"
-): Promise<SiteGenerationActionResult> {
+): Promise<ContentGenerationActionResult> {
   try {
     const { request, connected } = await requestContentGeneration(storeId, generationType);
     revalidatePath(`/stores/${storeId}`);
@@ -130,6 +136,25 @@ export async function requestContentGenerationAction(
   } catch (err) {
     const message =
       err instanceof ServiceError ? err.message : "コンテンツ生成依頼に失敗しました";
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * AI診断を作成（Thinking Engine）。StoreStrategy を生成・保存する。
+ */
+export type DiagnosisActionResult =
+  | { ok: true; strategy: StoreStrategy }
+  | { ok: false; error: string };
+
+export async function runDiagnosisAction(storeId: string): Promise<DiagnosisActionResult> {
+  try {
+    const strategy = await runStoreDiagnosis(storeId, { useLlm: true });
+    revalidatePath(`/stores/${storeId}`);
+    return { ok: true, strategy };
+  } catch (err) {
+    const message =
+      err instanceof ServiceError ? err.message : "AI診断に失敗しました";
     return { ok: false, error: message };
   }
 }

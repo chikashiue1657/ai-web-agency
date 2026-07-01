@@ -10,7 +10,7 @@
  */
 import { useState, useTransition } from "react";
 import { requestContentGenerationAction } from "@/app/actions";
-import type { SiteGenerationRequest, GenerationType } from "@/lib/types";
+import type { ContentGenerationRequest, GenerationType } from "@/lib/types";
 import { GENERATION_TYPES, GENERATION_TYPE_LABEL } from "@/lib/neumos/catalog";
 
 const FLOW = ["営業支援", "受注", "生成", "公開"] as const;
@@ -22,13 +22,13 @@ export function NeumosPanel({
 }: {
   storeId: string;
   isWon: boolean;
-  latestRequest: SiteGenerationRequest | null;
+  latestRequest: ContentGenerationRequest | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [runningType, setRunningType] = useState<GenerationType | null>(null);
   const [result, setResult] = useState<{
     connected: boolean;
-    request: SiteGenerationRequest;
+    request: ContentGenerationRequest;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showBrief, setShowBrief] = useState(false);
@@ -168,8 +168,8 @@ export function NeumosPanel({
   );
 }
 
-function statusLabel(s: SiteGenerationRequest["status"]): string {
-  const map: Record<SiteGenerationRequest["status"], string> = {
+function statusLabel(s: ContentGenerationRequest["status"]): string {
+  const map: Record<ContentGenerationRequest["status"], string> = {
     draft: "下書き（未接続）",
     requested: "依頼済み",
     queued: "生成待ち",

@@ -132,76 +132,77 @@ export interface GeneratedSite {
 // ------------------------------------------------------------
 
 /**
- * 生成コンテンツ種別。
- * まず website（ホームページ）を実装し、以降を同じ Brief から拡張する。
+ * 生成コンテンツ種別（固定設計）。
+ * まず website を実装し、同じ NeumosBrief から他種別へ拡張する。
  */
 export type GenerationType =
   | "website" // ホームページ
   | "landing_page" // ランディングページ
-  | "blog_post" // ブログ記事
   | "instagram_post" // Instagram投稿
-  | "gbp_improvement" // Googleビジネスプロフィール改善案
+  | "google_business_improvement" // Googleビジネスプロフィール改善案
+  | "blog_post" // ブログ記事
   | "faq" // FAQ
-  | "catchcopy" // キャッチコピー
-  | "seo_content"; // SEOコンテンツ
+  | "seo_content" // SEOコンテンツ
+  | "copywriting"; // キャッチコピー/コピーライティング
 
 /**
- * コンテンツ生成ブリーフ（ノイモスAIへ渡す入力データ契約）。
- * - 店舗情報・提案内容・業種・強み・ターゲット等の“共有コンテキスト”を1つに集約。
- * - generationType で生成対象を選ぶ。同じ共有コンテキストから複数種別を生成可能。
- * - typeOptions に種別固有の指定（将来拡張）を持たせ、コア構造を汚さない。
- * - schemaVersion でバージョン管理し後方互換を保つ。
- * - 実データと仮説を分離（assumptions に仮説を明示）。捏造を防ぐ。
+ * ノイモスAIへ渡す最終ブリーフ（外部連携JSON契約・固定）。
+ * StoreStrategy から生成し、generationType を差し替えて複数種別に対応する。
  */
-export interface ContentGenerationBrief {
-  schemaVersion: string; // 例: "1.0"
-  /** 生成対象コンテンツ種別 */
+export interface NeumosBrief {
+  storeName: string;
+  industry: string; // 業種（日本語ラベル）
+  area: string;
+  targetCustomer: string;
+  mainProblem: string; // 最重要の集客課題
+  salesAngle: string;
+  websiteGoal: string; // サイトのゴール（予約/来店/問い合わせ等）
+  siteConcept: string; // サイトコンセプト
+  recommendedPages: string[];
+  seoKeywords: string[];
+  tone: string; // トーン&マナー
+  offer: string; // 提案オファー
   generationType: GenerationType;
-  store: {
-    storeId: string;
-    name: string;
-    category: StoreCategory | string; // 正規化カテゴリ
-    categoryLabel: string; // 日本語表示名
-    area: string | null;
-    address: string | null;
-    phone: string | null;
-    openingHours: string[] | null;
-  };
-  online: {
-    hasWebsite: boolean;
-    websiteUrl: string | null;
-    instagramUrl: string | null;
-    facebookUrl: string | null;
-  };
-  metrics: {
-    rating: number | null;
-    reviewCount: number;
-    photoCount: number;
-    photoRefs: string[]; // Places写真リソース名（あれば）
-  };
-  /** 提案・分析から抽出した訴求素材 */
-  strengths: string[]; // 強み
-  improvements: string[]; // 改善点（機会損失）
-  expectedEffects: string[]; // 期待効果（仮説）
-  target: string; // 想定顧客層
-  salesAngle: string | null; // 営業切り口
-  priority: { rank: PriorityRank; score: number } | null;
-  suggestedSections: string[]; // 推奨ページ構成
-  theme: { suggestedType: string; brandColorHint: string }; // 業種別テーマ提案
-  seo: { titleHint: string; descriptionHint: string };
-  reviewSummary: string | null;
-  assumptions: string[]; // 仮説（要確認事項）
-  /** 生成AIが参照できるよう、生成済み提案書Markdownを同梱（任意） */
-  sourceProposalMarkdown: string | null;
-  /** 種別固有の追加指定（将来拡張。例: blogのテーマ, LPのCVゴール, IG投稿数など） */
-  typeOptions?: Record<string, unknown>;
 }
 
-/** @deprecated 旧名。ContentGenerationBrief を使用（後方互換のため残置）。 */
-export type SiteGenerationBrief = ContentGenerationBrief;
+/** generationType を除いた再利用可能なブリーフ核（StoreStrategy が保持）。 */
+export type NeumosBriefBase = Omit<NeumosBrief, "generationType">;
+
+/**
+ * 店舗戦略（Thinking Engine の診断結果）。
+ * 店舗情報からAIで導く「強み/弱み/課題/ターゲット/受注確率/営業切り口/提案」等。
+ * 実データと仮説を分離し捏造を防ぐ（仮説は本文に「（仮説）」で明示）。
+ */
+export interface StoreStrategy {
+  id: string;
+  storeId: string;
+  // --- item2 で指定された中核フィールド ---
+  strengths: string[];
+  weaknesses: string[];
+  targetCustomer: string;
+  marketingProblems: string[];
+  recommendedOffer: string;
+  salesAngle: string;
+  websiteConcept: string;
+  seoKeywords: string[];
+  generationBrief: NeumosBriefBase; // ノイモスAIへの受け渡し核
+  confidenceScore: number; // 受注確率(0-100)
+  // --- 診断の追加項目（AI診断UI用） ---
+  websiteNecessity: string; // HPの必要性
+  snsImprovements: string[]; // SNS改善点
+  googleBusinessImprovements: string[]; // Googleビジネス改善点
+  differentiation: string; // 競合との差別化
+  recommendedPages: string[]; // おすすめHP構成
+  priorityRationale: string; // なぜA/B/Cか
+  websiteGoal: string;
+  tone: string;
+  method: "rule" | "rule+llm"; // 説明可能性: 生成方式
+  created_at: string;
+  updated_at: string;
+}
 
 /** 生成パイプラインの状態 */
-export type SiteGenRequestStatus =
+export type ContentGenStatus =
   | "draft" // ブリーフ作成のみ（ノイモスAI未接続/受注前）
   | "requested" // ノイモスAIへ送信済み
   | "queued" // 生成待ち
@@ -210,17 +211,20 @@ export type SiteGenRequestStatus =
   | "published" // 公開済み
   | "failed"; // 失敗
 
+/** @deprecated 旧名。ContentGenStatus を使用。 */
+export type SiteGenRequestStatus = ContentGenStatus;
+
 /**
  * コンテンツ生成リクエスト（受注→生成→公開の記録）。
- * - brief を保持し、ノイモスAI側の外部ID/公開URLを追跡する。
+ * - NeumosBrief を保持し、ノイモスAI側の外部ID/公開URLを追跡する。
  */
-export interface SiteGenerationRequest {
+export interface ContentGenerationRequest {
   id: string;
   store_id: string;
   provider: string; // "neumos" 等
-  generation_type: GenerationType; // 生成対象コンテンツ種別
-  status: SiteGenRequestStatus;
-  brief: ContentGenerationBrief | null;
+  generation_type: GenerationType;
+  status: ContentGenStatus;
+  brief: NeumosBrief | null;
   external_id: string | null; // ノイモスAI側ジョブID
   preview_url: string | null;
   published_url: string | null;
@@ -228,6 +232,9 @@ export interface SiteGenerationRequest {
   created_at: string;
   updated_at: string;
 }
+
+/** @deprecated 旧名。ContentGenerationRequest を使用。 */
+export type SiteGenerationRequest = ContentGenerationRequest;
 
 // ------------------------------------------------------------
 // activity_logs
@@ -240,7 +247,8 @@ export type ActivityEventType =
   | "lead.note_updated"
   | "lead.status_updated"
   | "outreach.generated"
-  | "site.generation_requested";
+  | "strategy.diagnosed"
+  | "content.generation_requested";
 
 export interface ActivityLog {
   id: string;

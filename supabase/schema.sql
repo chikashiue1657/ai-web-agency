@@ -129,17 +129,39 @@ create trigger trg_generated_sites_updated_at before update on generated_sites
   for each row execute function set_updated_at();
 
 -- ============================================================
--- site_generation_requests: コンテンツ生成リクエスト（ノイモスAI連携）
---   営業支援 → 受注 → 生成 → 公開 の記録。brief(契約)を保持する。
+-- store_strategies: Thinking Engine の店舗診断（store と 1:1）
+--   強み/弱み/課題/ターゲット/受注確率/営業切り口/おすすめ提案 等を保持。
+--   戦略本体は data(jsonb) に格納し、検索用に一部をカラム化する。
+-- ============================================================
+create table if not exists store_strategies (
+  id               uuid primary key default gen_random_uuid(),
+  store_id         uuid not null references stores(id) on delete cascade,
+  confidence_score integer,                              -- 受注確率(0-100)
+  sales_angle      text,                                 -- 営業切り口
+  data             jsonb not null,                       -- StoreStrategy 本体
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  unique (store_id)
+);
+
+create index if not exists store_strategies_store_idx on store_strategies (store_id);
+
+drop trigger if exists trg_store_strategies_updated_at on store_strategies;
+create trigger trg_store_strategies_updated_at before update on store_strategies
+  for each row execute function set_updated_at();
+
+-- ============================================================
+-- content_generation_requests: コンテンツ生成リクエスト（ノイモスAI連携）
+--   営業支援 → 受注 → 生成 → 公開 の記録。NeumosBrief(契約)を保持する。
 --   generation_type で website / blog / instagram 等を区別（同じbriefから複数種別）。
 -- ============================================================
-create table if not exists site_generation_requests (
+create table if not exists content_generation_requests (
   id              uuid primary key default gen_random_uuid(),
   store_id        uuid not null references stores(id) on delete cascade,
   provider        text not null default 'neumos',       -- 生成エンジン
-  generation_type text not null default 'website',      -- website|landing_page|blog_post|instagram_post|gbp_improvement|faq|catchcopy|seo_content
+  generation_type text not null default 'website',      -- website|landing_page|instagram_post|google_business_improvement|blog_post|faq|seo_content|copywriting
   status          text not null default 'draft',         -- draft|requested|queued|generating|preview|published|failed
-  brief           jsonb,                                 -- ContentGenerationBrief（ノイモスAIへの受け渡し契約）
+  brief           jsonb,                                 -- NeumosBrief（ノイモスAIへの受け渡し契約）
   external_id     text,                                  -- ノイモスAI側ジョブID
   preview_url     text,
   published_url   text,
@@ -148,12 +170,12 @@ create table if not exists site_generation_requests (
   updated_at      timestamptz not null default now()
 );
 
-create index if not exists site_gen_requests_store_idx on site_generation_requests (store_id);
-create index if not exists site_gen_requests_status_idx on site_generation_requests (status);
-create index if not exists site_gen_requests_type_idx on site_generation_requests (generation_type);
+create index if not exists content_gen_requests_store_idx on content_generation_requests (store_id);
+create index if not exists content_gen_requests_status_idx on content_generation_requests (status);
+create index if not exists content_gen_requests_type_idx on content_generation_requests (generation_type);
 
-drop trigger if exists trg_site_gen_requests_updated_at on site_generation_requests;
-create trigger trg_site_gen_requests_updated_at before update on site_generation_requests
+drop trigger if exists trg_content_gen_requests_updated_at on content_generation_requests;
+create trigger trg_content_gen_requests_updated_at before update on content_generation_requests
   for each row execute function set_updated_at();
 
 -- ============================================================

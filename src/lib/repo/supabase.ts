@@ -12,7 +12,8 @@ import type {
   NormalizedStore,
   LeadStatus,
   ActivityEventType,
-  SiteGenerationRequest,
+  ContentGenerationRequest,
+  StoreStrategy,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
 import { isContactStatus } from "@/lib/status";
@@ -27,10 +28,31 @@ import type {
   SaveProposalInput,
   SaveSiteInput,
   UpsertResult,
-  CreateSiteRequestInput,
+  CreateContentRequestInput,
+  SaveStrategyInput,
 } from "./types";
 
 const MATCH_THRESHOLD = 0.82;
+
+/** store_strategies の行形（戦略本体は data(jsonb) に格納） */
+interface StrategyRow {
+  id: string;
+  store_id: string;
+  data: Omit<StoreStrategy, "id" | "created_at" | "updated_at">;
+  created_at: string;
+  updated_at: string;
+}
+
+/** DB行 → StoreStrategy へ復元 */
+function rowToStrategy(row: StrategyRow): StoreStrategy {
+  return {
+    ...row.data,
+    id: row.id,
+    storeId: row.store_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
 
 function db() {
   const client = getSupabaseAdmin();
@@ -107,13 +129,14 @@ class SupabaseRepository implements Repository {
   async getStoreDetail(id: string): Promise<StoreDetail | null> {
     const store = await this.getStore(id);
     if (!store) return null;
-    const [{ data: lead }, { data: proposals }, { data: sites }, { data: activity }, { data: siteRequests }] =
+    const [{ data: lead }, { data: proposals }, { data: sites }, { data: activity }, { data: strategyRow }, { data: contentRequests }] =
       await Promise.all([
         db().from("leads").select("*").eq("store_id", id).maybeSingle(),
         db().from("proposals").select("*").eq("store_id", id).order("created_at", { ascending: false }),
         db().from("generated_sites").select("*").eq("store_id", id).order("created_at", { ascending: false }),
         db().from("activity_logs").select("*").eq("store_id", id).order("created_at", { ascending: false }),
-        db().from("site_generation_requests").select("*").eq("store_id", id).order("created_at", { ascending: false }),
+        db().from("store_strategies").select("*").eq("store_id", id).maybeSingle(),
+        db().from("content_generation_requests").select("*").eq("store_id", id).order("created_at", { ascending: false }),
       ]);
     return {
       store,
@@ -121,7 +144,8 @@ class SupabaseRepository implements Repository {
       proposals: (proposals as Proposal[]) ?? [],
       sites: (sites as GeneratedSite[]) ?? [],
       activity: (activity as ActivityLog[]) ?? [],
-      siteRequests: (siteRequests as SiteGenerationRequest[]) ?? [],
+      strategy: strategyRow ? rowToStrategy(strategyRow as StrategyRow) : null,
+      contentRequests: (contentRequests as ContentGenerationRequest[]) ?? [],
     };
   }
 
@@ -266,11 +290,40 @@ class SupabaseRepository implements Repository {
     return (data ?? []).map((r: { slug: string }) => r.slug);
   }
 
-  async createSiteGenerationRequest(
-    input: CreateSiteRequestInput
-  ): Promise<SiteGenerationRequest> {
+  async saveStoreStrategy(input: SaveStrategyInput): Promise<StoreStrategy> {
+    // 可搬性のため戦略本体は data(jsonb) に格納。検索用に一部をカラム化。
     const { data, error } = await db()
-      .from("site_generation_requests")
+      .from("store_strategies")
+      .upsert(
+        {
+          store_id: input.storeId,
+          confidence_score: input.confidenceScore,
+          sales_angle: input.salesAngle,
+          data: input,
+        },
+        { onConflict: "store_id" }
+      )
+      .select("*")
+      .single();
+    if (error) throw error;
+    return rowToStrategy(data as StrategyRow);
+  }
+
+  async getStoreStrategy(storeId: string): Promise<StoreStrategy | null> {
+    const { data, error } = await db()
+      .from("store_strategies")
+      .select("*")
+      .eq("store_id", storeId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? rowToStrategy(data as StrategyRow) : null;
+  }
+
+  async createContentGenerationRequest(
+    input: CreateContentRequestInput
+  ): Promise<ContentGenerationRequest> {
+    const { data, error } = await db()
+      .from("content_generation_requests")
       .insert({
         store_id: input.store_id,
         provider: input.provider,
@@ -284,17 +337,17 @@ class SupabaseRepository implements Repository {
       .select("*")
       .single();
     if (error) throw error;
-    return data as SiteGenerationRequest;
+    return data as ContentGenerationRequest;
   }
 
-  async listSiteGenerationRequests(storeId: string): Promise<SiteGenerationRequest[]> {
+  async listContentGenerationRequests(storeId: string): Promise<ContentGenerationRequest[]> {
     const { data, error } = await db()
-      .from("site_generation_requests")
+      .from("content_generation_requests")
       .select("*")
       .eq("store_id", storeId)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return (data as SiteGenerationRequest[]) ?? [];
+    return (data as ContentGenerationRequest[]) ?? [];
   }
 
   async logActivity(

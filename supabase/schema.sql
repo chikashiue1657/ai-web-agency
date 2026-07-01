@@ -161,13 +161,14 @@ create table if not exists content_generation_requests (
   provider        text not null default 'neumos',       -- 生成エンジン
   generation_type text not null default 'website',      -- website|landing_page|instagram_post|google_business_improvement|blog_post|faq|seo_content|copywriting
   status          text not null default 'draft',         -- draft|requested|queued|generating|preview|published|failed
-  brief           jsonb,                                 -- NeumosBrief（ノイモスAIへの受け渡し契約）
-  external_id     text,                                  -- ノイモスAI側ジョブID
-  preview_url     text,
-  published_url   text,
-  error           text,
-  created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  brief              jsonb,                              -- NeumosBrief（ノイモスAIへの受け渡し契約）
+  external_id        text,                               -- ノイモスAI側 requestId
+  preview_url        text,
+  published_url      text,
+  generated_contents jsonb,                              -- 生成物（ページ/セクション/コピー等）
+  error              text,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
 );
 
 create index if not exists content_gen_requests_store_idx on content_generation_requests (store_id);

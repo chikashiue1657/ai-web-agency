@@ -127,17 +127,32 @@ blog_post / faq / seo_content / copywriting（以降は近日対応）。
    websiteGoal / siteConcept / recommendedPages / seoKeywords / tone / offer / generationType。
    `StoreStrategy.generationBrief`（種別非依存の核）に `generationType` を付与して生成。
 2. **ブリーフ組み立て `buildNeumosBrief(strategy, type)`**（`src/lib/neumos/neumos-brief.ts`, 純関数・テスト済み）
-   同じ `StoreStrategy` から `generationType` だけ変えて各種別のブリーフを作れる。
-3. **アダプタ `submitContentGeneration()`**（`src/lib/neumos/client.ts`）
-   `NEUMOS_API_URL` / `NEUMOS_API_KEY` があれば本接続、無ければ `not_configured`（下書き＝JSONプレビュー）。
-   種別横断の共通エンドポイントに `brief.generationType` を渡して分岐する想定。
-   **ここだけ差し替えれば本接続完了**。UI/業務ロジックは無改修。
+3. **アダプタ `src/lib/neumos/client.ts`（実接続）**
 
-**フロー**: 店舗詳細ページの「この店舗のホームページをAIで作成」ボタン →
-`requestContentGeneration(storeId, "website")` が（戦略が無ければ診断してから）`NeumosBrief`
-を組み立て → ノイモスAIへ投入（未設定なら `content_generation_requests` に下書き保存）→ 状態を
-`draft→requested→queued→generating→preview→published` で追跡。未設定時は**渡すNeumosBrief
-のJSONをUIで確認**できる。新しい種別は catalog の `enabled` を true にするだけで有効化。
+### Neumos API 連携（実接続）
+
+`NEUMOS_API_URL` / `NEUMOS_API_KEY` が設定されていれば実APIへ送信、未設定なら
+`content_generation_requests` に**下書き保存**（NeumosBrief のJSONプレビュー）。想定REST契約:
+
+| 操作 | メソッド/パス | ボディ | レスポンス |
+|---|---|---|---|
+| 生成投入 | `POST {BASE}/v1/contents` | `{ generationType, brief }` | `{ requestId, status, previewUrl?, publishedUrl?, generatedContents? }` |
+| 状態取得 | `GET {BASE}/v1/contents/{requestId}` | — | `{ requestId, status, previewUrl?, publishedUrl?, generatedContents?, error? }` |
+
+- 認証: `Authorization: Bearer <NEUMOS_API_KEY>`。
+- `status` は `queued|generating|preview|published|failed` に正規化（別表記も吸収）。
+- 保存項目: `external_id(=requestId) / status / preview_url / published_url / generated_contents / error`。
+- 本仕様が確定したら `client.ts` の `mapResponse` / エンドポイントを調整するだけ（UI/業務ロジック無改修）。
+
+**フロー**: 「この店舗のホームページをAIで作成」→ `requestContentGeneration()` が
+（戦略が無ければ診断してから）`NeumosBrief` を組み立て → Neumos へ投入 → 記録を保存。
+店舗詳細の生成パネルで:
+
+- **生成状況**（Queued / Generating / Preview / Published / Failed）をバッジ表示
+- **「生成状況を更新」**で `GET /v1/contents/{requestId}` をポーリングし状態/URL/生成物を更新
+- **Preview** / **公開サイト** のURLへ遷移、**生成物一覧**を表示
+- **失敗時は「再生成」**（同種別で新規リクエスト＝履歴に残る）
+- **生成履歴一覧**（種別・状態・日時・URL）
 
 営業ステータス（未対応→DM送信→電話→商談→**成約**）と連動し、成約後に本番生成を促す導線。
 

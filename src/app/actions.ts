@@ -14,6 +14,7 @@ import {
   searchAndIngestPlaces,
   generateOutreach,
   requestContentGeneration,
+  refreshContentGenerationStatus,
   runStoreDiagnosis,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
@@ -136,6 +137,25 @@ export async function requestContentGenerationAction(
   } catch (err) {
     const message =
       err instanceof ServiceError ? err.message : "コンテンツ生成依頼に失敗しました";
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * 生成状況を更新（ノイモスAIへポーリング）。更新後のリクエストを返す。
+ */
+export async function refreshContentStatusAction(
+  storeId: string,
+  requestRowId: string
+): Promise<ContentGenerationActionResult> {
+  try {
+    const request = await refreshContentGenerationStatus(requestRowId);
+    if (!request) return { ok: false, error: "リクエストが見つかりません" };
+    revalidatePath(`/stores/${storeId}`);
+    return { ok: true, connected: !!request.external_id, request };
+  } catch (err) {
+    const message =
+      err instanceof ServiceError ? err.message : "状況更新に失敗しました";
     return { ok: false, error: message };
   }
 }

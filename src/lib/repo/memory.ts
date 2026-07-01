@@ -37,6 +37,7 @@ import type {
   SaveSiteInput,
   UpsertResult,
   CreateContentRequestInput,
+  UpdateContentRequestPatch,
   SaveStrategyInput,
 } from "./types";
 
@@ -304,7 +305,8 @@ class MemoryRepository implements Repository {
       brief: input.brief,
       external_id: input.external_id ?? null,
       preview_url: input.preview_url ?? null,
-      published_url: null,
+      published_url: input.published_url ?? null,
+      generated_contents: input.generated_contents ?? null,
       error: input.error ?? null,
       created_at: ts,
       updated_at: ts,
@@ -317,6 +319,27 @@ class MemoryRepository implements Repository {
     return this.contentRequests
       .filter((r) => r.store_id === storeId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  async getContentGenerationRequest(id: string): Promise<ContentGenerationRequest | null> {
+    return this.contentRequests.find((r) => r.id === id) ?? null;
+  }
+
+  async updateContentGenerationRequest(
+    id: string,
+    patch: UpdateContentRequestPatch
+  ): Promise<ContentGenerationRequest | null> {
+    const req = this.contentRequests.find((r) => r.id === id);
+    if (!req) return null;
+    if (patch.status !== undefined) req.status = patch.status;
+    if (patch.external_id !== undefined) req.external_id = patch.external_id;
+    if (patch.preview_url !== undefined) req.preview_url = patch.preview_url;
+    if (patch.published_url !== undefined) req.published_url = patch.published_url;
+    if (patch.generated_contents !== undefined)
+      req.generated_contents = patch.generated_contents;
+    if (patch.error !== undefined) req.error = patch.error;
+    req.updated_at = new Date().toISOString();
+    return req;
   }
 
   async logActivity(

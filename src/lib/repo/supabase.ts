@@ -29,6 +29,7 @@ import type {
   SaveSiteInput,
   UpsertResult,
   CreateContentRequestInput,
+  UpdateContentRequestPatch,
   SaveStrategyInput,
 } from "./types";
 
@@ -332,6 +333,8 @@ class SupabaseRepository implements Repository {
         brief: input.brief,
         external_id: input.external_id ?? null,
         preview_url: input.preview_url ?? null,
+        published_url: input.published_url ?? null,
+        generated_contents: input.generated_contents ?? null,
         error: input.error ?? null,
       })
       .select("*")
@@ -348,6 +351,30 @@ class SupabaseRepository implements Repository {
       .order("created_at", { ascending: false });
     if (error) throw error;
     return (data as ContentGenerationRequest[]) ?? [];
+  }
+
+  async getContentGenerationRequest(id: string): Promise<ContentGenerationRequest | null> {
+    const { data, error } = await db()
+      .from("content_generation_requests")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as ContentGenerationRequest) ?? null;
+  }
+
+  async updateContentGenerationRequest(
+    id: string,
+    patch: UpdateContentRequestPatch
+  ): Promise<ContentGenerationRequest | null> {
+    const { data, error } = await db()
+      .from("content_generation_requests")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    return (data as ContentGenerationRequest) ?? null;
   }
 
   async logActivity(

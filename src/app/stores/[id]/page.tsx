@@ -44,7 +44,6 @@ export default async function StoreDetailPage({ params }: { params: { id: string
   const { store, lead, proposals, sites, activity, strategy, contentRequests } = detail;
   const latestProposal = proposals[0] ?? null;
   const latestSite = sites[0] ?? null;
-  const latestContentRequest = contentRequests[0] ?? null;
 
   // Google Map（キー不要の埋め込み）: 店名＋住所で位置を表示
   const mapQuery = [store.name, store.address].filter(Boolean).join(" ");
@@ -289,7 +288,7 @@ export default async function StoreDetailPage({ params }: { params: { id: string
         <NeumosPanel
           storeId={store.id}
           isWon={lead?.status === "won"}
-          latestRequest={latestContentRequest}
+          requests={contentRequests}
         />
       </Section>
 

@@ -25,7 +25,10 @@ import { refineOutreachWithLlm } from "@/lib/outreach/llm";
 import { diagnoseStore } from "@/lib/neumos/strategy";
 import { enrichStrategyWithLlm } from "@/lib/neumos/strategy-llm";
 import { buildNeumosBrief } from "@/lib/neumos/neumos-brief";
-import { submitContentGeneration } from "@/lib/neumos/client";
+import {
+  submitContentGeneration,
+  getContentGenerationStatus,
+} from "@/lib/neumos/client";
 import type {
   ContentGenStatus,
   ContentGenerationRequest,
@@ -354,15 +357,17 @@ export async function requestContentGeneration(
     ? (submit.status as ContentGenStatus)
     : "draft";
 
-  // 4) リクエストを永続化（NeumosBrief込みで監査・再送可能に）
+  // 4) リクエストを永続化（NeumosBrief＋Neumosレスポンス込みで監査・再送可能に）
   const request = await repo.createContentGenerationRequest({
     store_id: storeId,
     provider: "neumos",
     generation_type: generationType,
     status,
     brief,
-    external_id: submit.externalId ?? null,
+    external_id: submit.requestId ?? null,
     preview_url: submit.previewUrl ?? null,
+    published_url: submit.publishedUrl ?? null,
+    generated_contents: submit.generatedContents ?? null,
     error: submit.error ?? null,
   });
 
@@ -380,6 +385,46 @@ export async function requestContentGeneration(
   });
 
   return { request, connected };
+}
+
+/**
+ * 生成状況を更新（ノイモスAIへポーリング）。
+ * - requestId(external_id) を使って最新状態を取得し、リクエストレコードを更新。
+ * - 未接続 / requestId 無し / 失敗時は現状のレコードをそのまま返す。
+ */
+export async function refreshContentGenerationStatus(
+  requestRowId: string
+): Promise<ContentGenerationRequest | null> {
+  const repo = getRepo();
+  const req = await repo.getContentGenerationRequest(requestRowId);
+  if (!req) throw new ServiceError("request_not_found", "リクエストが見つかりません", 404);
+  if (!req.external_id) return req; // 未接続/下書きはポーリング対象外
+
+  const result = await getContentGenerationStatus(req.external_id);
+  if (result.status === "not_configured") return req;
+
+  const updated = await repo.updateContentGenerationRequest(req.id, {
+    status: result.status,
+    preview_url: result.previewUrl ?? req.preview_url,
+    published_url: result.publishedUrl ?? req.published_url,
+    generated_contents: result.generatedContents ?? req.generated_contents,
+    error: result.error ?? null,
+  });
+  logger.info("content status refreshed", {
+    request_id: req.id,
+    status: result.status,
+  });
+  return updated;
+}
+
+/**
+ * 再生成（失敗時など）。同一店舗・種別で新しいリクエストを作成し履歴に残す。
+ */
+export async function retryContentGeneration(
+  storeId: string,
+  generationType: GenerationType = "website"
+): Promise<ContentGenerationRequestResult> {
+  return requestContentGeneration(storeId, generationType);
 }
 
 // API層で扱いやすいHTTPステータス付き業務エラーは errors.ts に定義。

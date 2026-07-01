@@ -215,8 +215,20 @@ export type ContentGenStatus =
 export type SiteGenRequestStatus = ContentGenStatus;
 
 /**
+ * ノイモスAIが生成した個々のコンテンツ（ページ/セクション/コピー等）。
+ * 種別により内容が異なるため緩く保持する。
+ */
+export interface GeneratedContent {
+  type?: string; // "page" | "section" | "copy" | "post" 等
+  title?: string;
+  url?: string; // 個別成果物のURL（あれば）
+  body?: string; // 本文/HTML/Markdown 等
+  meta?: Record<string, unknown>;
+}
+
+/**
  * コンテンツ生成リクエスト（受注→生成→公開の記録）。
- * - NeumosBrief を保持し、ノイモスAI側の外部ID/公開URLを追跡する。
+ * - NeumosBrief を保持し、ノイモスAI側の requestId(=external_id)/状態/URL/生成物を追跡する。
  */
 export interface ContentGenerationRequest {
   id: string;
@@ -225,9 +237,10 @@ export interface ContentGenerationRequest {
   generation_type: GenerationType;
   status: ContentGenStatus;
   brief: NeumosBrief | null;
-  external_id: string | null; // ノイモスAI側ジョブID
+  external_id: string | null; // ノイモスAI側 requestId
   preview_url: string | null;
   published_url: string | null;
+  generated_contents: GeneratedContent[] | null; // 生成物
   error: string | null;
   created_at: string;
   updated_at: string;

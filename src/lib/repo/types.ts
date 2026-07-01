@@ -18,6 +18,7 @@ import type {
   ContentGenStatus,
   GenerationType,
   StoreStrategy,
+  GeneratedContent,
 } from "@/lib/types";
 
 /** 一覧表示用：店舗＋リード概要 */
@@ -98,6 +99,18 @@ export interface CreateContentRequestInput {
   brief: NeumosBrief;
   external_id?: string | null;
   preview_url?: string | null;
+  published_url?: string | null;
+  generated_contents?: GeneratedContent[] | null;
+  error?: string | null;
+}
+
+/** 生成状況ポーリング等での部分更新 */
+export interface UpdateContentRequestPatch {
+  status?: ContentGenStatus;
+  external_id?: string | null;
+  preview_url?: string | null;
+  published_url?: string | null;
+  generated_contents?: GeneratedContent[] | null;
   error?: string | null;
 }
 
@@ -142,6 +155,11 @@ export interface Repository {
     input: CreateContentRequestInput
   ): Promise<ContentGenerationRequest>;
   listContentGenerationRequests(storeId: string): Promise<ContentGenerationRequest[]>;
+  getContentGenerationRequest(id: string): Promise<ContentGenerationRequest | null>;
+  updateContentGenerationRequest(
+    id: string,
+    patch: UpdateContentRequestPatch
+  ): Promise<ContentGenerationRequest | null>;
   // activity
   logActivity(
     storeId: string | null,

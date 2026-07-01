@@ -14,6 +14,7 @@ import type {
   ActivityEventType,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
+import { isContactStatus } from "@/lib/status";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type {
   Repository,
@@ -211,7 +212,7 @@ class SupabaseRepository implements Repository {
   ): Promise<Lead | null> {
     const patch: Record<string, unknown> = { status };
     if (contactMethod) patch.contact_method = contactMethod;
-    if (status === "contacted") patch.last_contacted_at = new Date().toISOString();
+    if (isContactStatus(status)) patch.last_contacted_at = new Date().toISOString();
     const { data, error } = await db()
       .from("leads")
       .update(patch)

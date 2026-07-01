@@ -10,14 +10,17 @@ export type PriorityRank = "A" | "B" | "C";
 /** 店舗データの取得元 */
 export type StoreSource = "google_places" | "apify" | "csv" | "manual";
 
-/** 営業ステータス */
+/**
+ * 営業ステータス（営業ファネル）。
+ * 未対応 → DM送信 → 電話 → 商談 → 成約 / 失注
+ */
 export type LeadStatus =
-  | "new"
-  | "contacted"
-  | "in_progress"
-  | "won"
-  | "lost"
-  | "on_hold";
+  | "todo" // 未対応
+  | "dm_sent" // DM送信
+  | "called" // 電話
+  | "negotiating" // 商談
+  | "won" // 成約
+  | "lost"; // 失注
 
 /** 仮サイトのステータス */
 export type SiteStatus = "draft" | "preview" | "published" | "archived";
@@ -130,7 +133,8 @@ export type ActivityEventType =
   | "proposal.generated"
   | "site.generated"
   | "lead.note_updated"
-  | "lead.status_updated";
+  | "lead.status_updated"
+  | "outreach.generated";
 
 export interface ActivityLog {
   id: string;

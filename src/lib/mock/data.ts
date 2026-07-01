@@ -120,7 +120,7 @@ export const seedLeads: Lead[] = [
     sales_angle:
       "HP新規制作による検索流入と予約導線の確立。具体的にはメニュー・口コミ訴求と予約/モバイルオーダー導線／訪日客向け多言語ページを提案。",
     risk_flags: [],
-    status: "new",
+    status: "todo",
     contact_method: null,
     last_contacted_at: null,
     notes: "Instagramのフォロワーが多そう。予約導線が弱いのが狙い目。",
@@ -141,7 +141,7 @@ export const seedLeads: Lead[] = [
     sales_angle:
       "HP新規制作による検索流入と予約導線の確立。具体的には施術メニュー・料金の明確化とネット予約導線を提案。",
     risk_flags: [],
-    status: "contacted",
+    status: "dm_sent",
     contact_method: "dm",
     last_contacted_at: "2026-06-20T01:00:00.000Z",
     notes: "InstagramのDMで初回接触済み。反応待ち。",

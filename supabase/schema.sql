@@ -72,7 +72,7 @@ create table if not exists leads (
   reasons          jsonb,                              -- string[]: 判定根拠（説明可能性）
   sales_angle      text,                               -- 営業切り口
   risk_flags       jsonb,                              -- string[]: 注意点
-  status           text default 'new',                 -- new|contacted|in_progress|won|lost|on_hold
+  status           text default 'todo',                -- 営業ファネル: todo|dm_sent|called|negotiating|won|lost
   contact_method   text,                               -- phone|email|visit|dm 等
   last_contacted_at timestamptz,
   notes            text,                               -- 営業メモ

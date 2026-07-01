@@ -136,6 +136,6 @@ export const NotesSchema = z.object({
 
 export const StatusSchema = z.object({
   store_id: z.string().min(1),
-  status: z.enum(["new", "contacted", "in_progress", "won", "lost", "on_hold"]),
+  status: z.enum(["todo", "dm_sent", "called", "negotiating", "won", "lost"]),
   contact_method: z.string().optional(),
 });

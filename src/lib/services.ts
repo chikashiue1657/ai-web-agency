@@ -16,6 +16,12 @@ import { logger } from "@/lib/logger";
 import { ServiceError } from "@/lib/errors";
 import { normalizePlacesNew } from "@/lib/normalize";
 import { searchTextPlaces, type PlacesSearchOptions } from "@/lib/places/client";
+import {
+  buildOutreach,
+  type OutreachChannel,
+  type OutreachInput,
+} from "@/lib/outreach";
+import { refineOutreachWithLlm } from "@/lib/outreach/llm";
 
 // ------------------------------------------------------------
 // 取り込み（正規化 + upsert + ログ）
@@ -242,6 +248,35 @@ export async function updateStatus(storeId: string, status: LeadStatus, contactM
   const lead = await repo.updateLeadStatus(storeId, status, contactMethod);
   await repo.logActivity(storeId, "lead.status_updated", { status });
   return lead;
+}
+
+// ------------------------------------------------------------
+// アウトリーチ文面生成（④メール ⑤DM ⑥電話トーク）
+//   純関数で下書き → 任意でLLM磨き → 活動ログ。文面はUIで表示/コピー。
+// ------------------------------------------------------------
+export async function generateOutreach(
+  storeId: string,
+  channel: OutreachChannel,
+  opts?: { useLlm?: boolean }
+): Promise<string> {
+  const repo = getRepo();
+  const detail = await repo.getStoreDetail(storeId);
+  if (!detail) throw new ServiceError("store_not_found", `store ${storeId} not found`, 404);
+  const { store, lead, proposals } = detail;
+
+  const input: OutreachInput = {
+    store,
+    sales_angle: lead?.sales_angle ?? null,
+    proposal_summary: proposals[0]?.summary ?? null,
+  };
+
+  let text = buildOutreach(channel, input);
+  if (opts?.useLlm !== false) {
+    text = await refineOutreachWithLlm(channel, text, store.name);
+  }
+
+  await repo.logActivity(storeId, "outreach.generated", { channel });
+  return text;
 }
 
 // API層で扱いやすいHTTPステータス付き業務エラーは errors.ts に定義。

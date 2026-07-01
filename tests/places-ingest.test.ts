@@ -49,7 +49,7 @@ describe("Places取得 → 保存 → 重複チェック → 優先度判定", (
     expect(["A", "B", "C"]).toContain(lead.priority_rank);
     expect(typeof lead.score).toBe("number");
     expect(lead.score! >= 0 && lead.score! <= 100).toBe(true);
-    expect(lead.status).toBe("new"); // 初期ステータス
+    expect(lead.status).toBe("todo"); // 初期ステータス（未対応）
     expect(result.reasons.length).toBeGreaterThan(0); // 説明可能
   });
 
@@ -60,12 +60,12 @@ describe("Places取得 → 保存 → 重複チェック → 優先度判定", (
     const storeId = stores[0].id;
 
     await scoreStore(storeId, { useLlm: false });
-    await repo.updateLeadStatus(storeId, "contacted", "phone");
+    await repo.updateLeadStatus(storeId, "called", "phone");
     await repo.updateLeadNotes(storeId, "初回接触済み");
 
     // 再判定
     const { lead } = await scoreStore(storeId, { useLlm: false });
-    expect(lead.status).toBe("contacted"); // ステータス保持
+    expect(lead.status).toBe("called"); // ステータス保持
     expect(lead.notes).toBe("初回接触済み"); // メモ保持
   });
 });

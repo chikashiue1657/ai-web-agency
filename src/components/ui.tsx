@@ -4,6 +4,7 @@
  */
 import Link from "next/link";
 import type { PriorityRank, LeadStatus } from "@/lib/types";
+import { LEAD_STATUS_LABEL, LEAD_STATUS_STYLE } from "@/lib/status";
 
 export function StatCard({
   label,
@@ -38,29 +39,11 @@ export function PriorityBadge({ rank }: { rank?: PriorityRank | null }) {
   );
 }
 
-const STATUS_LABEL: Record<LeadStatus, string> = {
-  new: "新規",
-  contacted: "接触済み",
-  in_progress: "商談中",
-  won: "受注",
-  lost: "失注",
-  on_hold: "保留",
-};
-
-const STATUS_STYLE: Record<LeadStatus, string> = {
-  new: "bg-blue-100 text-blue-700",
-  contacted: "bg-indigo-100 text-indigo-700",
-  in_progress: "bg-purple-100 text-purple-700",
-  won: "bg-green-100 text-green-700",
-  lost: "bg-gray-200 text-gray-600",
-  on_hold: "bg-yellow-100 text-yellow-700",
-};
-
 export function StatusBadge({ status }: { status?: LeadStatus | null }) {
   if (!status) return <span className="text-gray-300 text-xs">-</span>;
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs ${STATUS_STYLE[status]}`}>
-      {STATUS_LABEL[status]}
+    <span className={`inline-block px-2 py-0.5 rounded text-xs ${LEAD_STATUS_STYLE[status]}`}>
+      {LEAD_STATUS_LABEL[status]}
     </span>
   );
 }

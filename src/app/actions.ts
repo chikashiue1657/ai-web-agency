@@ -12,9 +12,11 @@ import {
   updateNotes,
   updateStatus,
   searchAndIngestPlaces,
+  generateOutreach,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
 import type { LeadStatus } from "@/lib/types";
+import type { OutreachChannel } from "@/lib/outreach";
 
 /**
  * 店舗取得（Google Places API New）を server action として実行。
@@ -72,8 +74,38 @@ export async function saveNotesAction(storeId: string, formData: FormData) {
 }
 
 export async function updateStatusAction(storeId: string, formData: FormData) {
-  const status = String(formData.get("status") ?? "new") as LeadStatus;
+  const status = String(formData.get("status") ?? "todo") as LeadStatus;
   const contactMethod = String(formData.get("contact_method") ?? "") || undefined;
   await updateStatus(storeId, status, contactMethod);
   revalidatePath(`/stores/${storeId}`);
+}
+
+/** ワンクリックでステータスを進める（営業管理のクイックボタン用）。 */
+export async function setStatusAction(storeId: string, status: LeadStatus) {
+  await updateStatus(storeId, status);
+  revalidatePath(`/stores/${storeId}`);
+  revalidatePath("/stores");
+}
+
+/**
+ * アウトリーチ文面生成（④メール ⑤DM ⑥電話トーク）。
+ * - 例外は投げず結果オブジェクトを返し、UIで表示・コピーしやすくする。
+ */
+export type OutreachActionResult =
+  | { ok: true; text: string }
+  | { ok: false; error: string };
+
+export async function generateOutreachAction(
+  storeId: string,
+  channel: OutreachChannel
+): Promise<OutreachActionResult> {
+  try {
+    const text = await generateOutreach(storeId, channel);
+    revalidatePath(`/stores/${storeId}`);
+    return { ok: true, text };
+  } catch (err) {
+    const message =
+      err instanceof ServiceError ? err.message : "文面生成に失敗しました";
+    return { ok: false, error: message };
+  }
 }

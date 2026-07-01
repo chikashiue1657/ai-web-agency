@@ -201,6 +201,27 @@ function buildSummary(
   return `${name}様向け提案要約${rank}：${core} ${ctx.label}に最適化したページ構成（${ctx.sections.join("・")}）と、${ctx.bookingPoint}を整え、Googleマップの評価を来店・予約に転換します。費用対効果と次のアクションを5分でご説明します。`;
 }
 
+/**
+ * 期待できる効果（すべて仮説・幅を持たせた表現）。
+ * 実測値ではないため断定を避け「（仮説）」を明記する。
+ */
+function buildExpectedEffects(ctx: CategoryContext, hasWebsite: boolean): string[] {
+  const base = hasWebsite
+    ? [
+        "（仮説）予約導線の改善で、サイト経由の予約・問い合わせ数の増加が見込めます",
+        "（仮説）スマホ最適化により離脱を抑え、来店転換率の向上が期待できます",
+      ]
+    : [
+        "（仮説）「エリア＋業種」検索からの新規流入の獲得が見込めます",
+        "（仮説）24時間のWEB予約受付により、電話取りこぼしの削減が期待できます",
+      ];
+  return [
+    ...base,
+    `（仮説）${ctx.bookingPoint}の整備で、リピート・客単価への波及も期待できます`,
+    "※数値効果は業種・立地・運用で変動します。導入後の計測で検証する前提です。",
+  ];
+}
+
 function renderMarkdown(args: {
   input: BuildProposalInput;
   ctx: CategoryContext;
@@ -218,6 +239,7 @@ function renderMarkdown(args: {
   const reviewSummary =
     input.review_summary ?? "（仮説）口コミ内容は未取得。ヒアリングで具体化を推奨。";
   const audience = input.target_audience ?? `${area}周辺の地域客＋観光客（仮説）`;
+  const expectedEffects = buildExpectedEffects(ctx, !!s.has_website);
 
   return `# ${s.name} 様 ご提案書
 
@@ -245,22 +267,25 @@ ${problems.map((p) => `- ${p}`).join("\n")}
 - 24時間予約・問い合わせを受けられ、電話対応の負荷を下げられる
 - Googleマップの高評価を裏付ける情報発信で、来店の意思決定を後押しできる
 
-## 5. 予約導線の改善ポイント
+## 5. 期待できる効果（仮説）
+${expectedEffects.map((e) => `- ${e}`).join("\n")}
+
+## 6. 提案内容（予約導線の改善ポイント）
 - ${ctx.bookingPoint}
 - スマホ最優先（モバイルファースト）の導線設計
 - 口コミ要約: ${reviewSummary}
 
-## 6. 外国人向け対応の必要性
+## 7. 外国人向け対応の必要性
 - ${ctx.foreignerNote}
 - 沖縄エリアは訪日客比率が高く、多言語ページの費用対効果が高い（仮説：実需はエリア特性で要確認）
 
-## 7. 推奨ページ構成
+## 8. 推奨ページ構成
 ${suggested_sections.map((sec, i) => `${i + 1}. ${sec}`).join("\n")}
 
-## 8. 簡易営業メッセージ
+## 9. 営業トーク（簡易メッセージ）
 ${sales_message}
 
-## 9. オーナー向け5分説明用 要約
+## 10. オーナー向け5分説明用 要約
 ${summary}
 
 ---

@@ -16,6 +16,7 @@ import type {
   ActivityEventType,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
+import { DEFAULT_LEAD_STATUS, isContactStatus } from "@/lib/status";
 import {
   seedStores,
   seedLeads,
@@ -190,7 +191,7 @@ class MemoryRepository implements Repository {
       reasons: input.reasons,
       sales_angle: input.sales_angle,
       risk_flags: input.risk_flags,
-      status: "new",
+      status: DEFAULT_LEAD_STATUS,
       contact_method: null,
       last_contacted_at: null,
       notes: null,
@@ -218,7 +219,7 @@ class MemoryRepository implements Repository {
     if (!lead) return null;
     lead.status = status;
     if (contactMethod) lead.contact_method = contactMethod;
-    if (status === "contacted") lead.last_contacted_at = new Date().toISOString();
+    if (isContactStatus(status)) lead.last_contacted_at = new Date().toISOString();
     lead.updated_at = new Date().toISOString();
     return lead;
   }

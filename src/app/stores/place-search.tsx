@@ -15,6 +15,7 @@ type Result = {
   found: number;
   inserted: number;
   updated: number;
+  scored: number;
 };
 
 export function PlaceSearch() {
@@ -39,7 +40,12 @@ export function PlaceSearch() {
         setError(res.error);
         return;
       }
-      setResult({ found: res.found, inserted: res.inserted, updated: res.updated });
+      setResult({
+        found: res.found,
+        inserted: res.inserted,
+        updated: res.updated,
+        scored: res.scored,
+      });
       // 一覧を再取得（サーバコンポーネントの再レンダリング）
       startTransition(() => router.refresh());
     } catch {
@@ -71,13 +77,14 @@ export function PlaceSearch() {
           {busy ? "取得中…" : "店舗取得"}
         </button>
         <span className="text-xs text-gray-400">
-          Google Places API (New) で検索し、重複(place_id)を除いて保存します
+          Google Places API (New) で検索→保存（place_id重複は更新）→優先度を自動判定します
         </span>
       </div>
 
       {result && (
         <p className="mt-2 text-sm text-green-700">
-          {result.found}件ヒット／新規 {result.inserted}件・更新 {result.updated}件を保存しました。
+          {result.found}件ヒット／新規 {result.inserted}件・更新 {result.updated}件を保存し、
+          {result.scored}件の優先度を判定しました。
         </p>
       )}
       {error && <p className="mt-2 text-sm text-red-600">エラー: {error}</p>}

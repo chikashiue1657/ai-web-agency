@@ -23,7 +23,7 @@ import type { LeadStatus } from "@/lib/types";
  * - 例外は投げず、UIで扱いやすい結果オブジェクトを返す。
  */
 export type SearchPlacesActionResult =
-  | { ok: true; found: number; inserted: number; updated: number }
+  | { ok: true; found: number; inserted: number; updated: number; scored: number }
   | { ok: false; error: string };
 
 export async function searchPlacesAction(
@@ -34,7 +34,13 @@ export async function searchPlacesAction(
     // 一覧・ダッシュボードを再取得
     revalidatePath("/stores");
     revalidatePath("/");
-    return { ok: true, found: r.found, inserted: r.inserted, updated: r.updated };
+    return {
+      ok: true,
+      found: r.found,
+      inserted: r.inserted,
+      updated: r.updated,
+      scored: r.scored,
+    };
   } catch (err) {
     const message =
       err instanceof ServiceError ? err.message : "店舗取得に失敗しました";

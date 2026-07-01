@@ -66,16 +66,6 @@ export async function searchTextPlaces(
   query: string,
   opts: PlacesSearchOptions = {}
 ): Promise<PlacesNewResult[]> {
-  // ===== TEMP DEBUG（確認後に削除する）: 実際に読めているキーの先頭と長さを出力 =====
-  console.log("GOOGLE_PLACES_API_KEY prefix:", process.env.GOOGLE_PLACES_API_KEY?.slice(0, 10));
-  console.log(
-    "GOOGLE_PLACES_API_KEY raw length:",
-    process.env.GOOGLE_PLACES_API_KEY?.length,
-    "trimmed length:",
-    process.env.GOOGLE_PLACES_API_KEY?.trim().length
-  );
-  // ================================================================================
-
   // env値の前後空白/改行を除去。Vercel等で貼り付け時に末尾改行が混入すると
   // Googleが "API key not valid" を返す（改行だとfetchがヘッダ例外を出す）ため防御的にtrim。
   const apiKey = process.env.GOOGLE_PLACES_API_KEY?.trim();

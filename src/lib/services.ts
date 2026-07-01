@@ -46,6 +46,7 @@ export interface PlacesSearchIngestResult {
   found: number; // APIヒット件数
   inserted: number; // 新規保存件数
   updated: number; // 既存更新（place_id重複）件数
+  scored: number; // 優先度判定を実行できた件数
   store_ids: string[];
 }
 
@@ -83,11 +84,28 @@ export async function searchAndIngestPlaces(
     )
   );
 
+  // 5) 取得直後に自動でルールベースの優先度判定を実行。
+  //    → 一覧に即 A/B/C・スコア・ステータス(新規)を表示できる。
+  //    LLMは使わない（20件を高速・確実に。APIキー不要）。個別失敗は握りつぶす。
+  const scoredResults = await Promise.all(
+    result.stores.map((s) =>
+      scoreStore(s.id, { useLlm: false }).then(
+        () => true,
+        (e) => {
+          logger.warn("auto scoring failed", { store_id: s.id, error: String(e) });
+          return false;
+        }
+      )
+    )
+  );
+  const scored = scoredResults.filter(Boolean).length;
+
   logger.info("places searched & ingested", {
     query: trimmed,
     found: places.length,
     inserted: result.inserted,
     updated: result.updated,
+    scored,
   });
 
   return {
@@ -95,6 +113,7 @@ export async function searchAndIngestPlaces(
     found: places.length,
     inserted: result.inserted,
     updated: result.updated,
+    scored,
     store_ids: result.stores.map((s) => s.id),
   };
 }

@@ -8,11 +8,12 @@
  *  - 入力は SiteGenerationBrief（契約）。実装はHTTP POSTを想定したスタブ。
  *
  * 将来の本接続:
- *  - submitSiteGeneration: brief を POST し、ジョブID(externalId)を受け取る（非同期生成）。
+ *  - submitContentGeneration: brief(generationType付き) を POST し、ジョブID を受け取る。
+ *  - 生成種別(website/blog/instagram等)は brief.generationType で分岐（エンドポイントは共通）。
  *  - Webhook/ポーリングで status を更新（queued→generating→preview→published）。
  *  - 公開は GitHub+Vercel / Cloudflare 側の自動化と組み合わせる。
  */
-import type { SiteGenerationBrief, SiteGenRequestStatus } from "@/lib/types";
+import type { ContentGenerationBrief, SiteGenRequestStatus } from "@/lib/types";
 import { logger } from "@/lib/logger";
 
 export interface NeumosSubmitResult {
@@ -28,12 +29,12 @@ export function isNeumosConfigured(): boolean {
 }
 
 /**
- * サイト生成ジョブを投入する。
+ * コンテンツ生成ジョブを投入する（種別は brief.generationType）。
  * - 未接続時は { status: "not_configured" }（例外を投げない）。
  * - 接続時は brief を POST（実エンドポイント仕様確定後にレスポンスマッピングを調整）。
  */
-export async function submitSiteGeneration(
-  brief: SiteGenerationBrief
+export async function submitContentGeneration(
+  brief: ContentGenerationBrief
 ): Promise<NeumosSubmitResult> {
   if (!isNeumosConfigured()) {
     return { status: "not_configured" };
@@ -43,13 +44,14 @@ export async function submitSiteGeneration(
   const key = process.env.NEUMOS_API_KEY as string;
 
   try {
-    const res = await fetch(url.replace(/\/$/, "") + "/v1/sites", {
+    // 種別横断の共通エンドポイント。brief.generationType でノイモスAI側が分岐する想定。
+    const res = await fetch(url.replace(/\/$/, "") + "/v1/contents", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${key}`,
       },
-      body: JSON.stringify({ brief }),
+      body: JSON.stringify({ generationType: brief.generationType, brief }),
     });
 
     if (!res.ok) {
@@ -74,3 +76,6 @@ export async function submitSiteGeneration(
     return { status: "failed", error: String(err) };
   }
 }
+
+/** @deprecated 旧名。submitContentGeneration を使用（後方互換のため残置）。 */
+export const submitSiteGeneration = submitContentGeneration;

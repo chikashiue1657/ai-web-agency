@@ -15,7 +15,8 @@ import type {
   Lead,
   Proposal,
   StoreCategory,
-  SiteGenerationBrief,
+  ContentGenerationBrief,
+  GenerationType,
 } from "@/lib/types";
 import { pickTheme } from "@/lib/site/themes";
 import { buildSeo } from "@/lib/site/seo";
@@ -41,16 +42,23 @@ export interface BuildBriefInput {
   store: Store;
   lead?: Lead | null;
   proposal?: Proposal | null;
+  /** 生成対象コンテンツ種別（既定: website）。同じ共有コンテキストから種別だけ変えて生成可能。 */
+  generationType?: GenerationType;
   /** 想定顧客層の明示指定（無ければ提案書/仮説から補完） */
   target?: string | null;
   /** 口コミ要約（あれば訴求・SEOに反映） */
   reviewSummary?: string | null;
+  /** 種別固有の追加指定（将来拡張） */
+  typeOptions?: Record<string, unknown>;
 }
 
 /**
- * ブリーフを組み立てる。副作用なし・決定的（テスト容易）。
+ * コンテンツ生成ブリーフを組み立てる。副作用なし・決定的（テスト容易）。
+ * 共有コンテキストは種別非依存。generationType のみ差し替えれば別コンテンツを生成できる。
  */
-export function buildSiteGenerationBrief(input: BuildBriefInput): SiteGenerationBrief {
+export function buildContentGenerationBrief(
+  input: BuildBriefInput
+): ContentGenerationBrief {
   const { store, lead, proposal } = input;
   const category = (store.category as StoreCategory) ?? "other";
   const categoryLabel = CATEGORY_LABEL[category] ?? "店舗";
@@ -90,6 +98,7 @@ export function buildSiteGenerationBrief(input: BuildBriefInput): SiteGeneration
 
   return {
     schemaVersion: BRIEF_SCHEMA_VERSION,
+    generationType: input.generationType ?? "website",
     store: {
       storeId: store.id,
       name: store.name,
@@ -128,8 +137,12 @@ export function buildSiteGenerationBrief(input: BuildBriefInput): SiteGeneration
     reviewSummary,
     assumptions,
     sourceProposalMarkdown: proposal?.generated_markdown ?? null,
+    typeOptions: input.typeOptions,
   };
 }
+
+/** @deprecated 旧名。buildContentGenerationBrief を使用（後方互換のため残置）。 */
+export const buildSiteGenerationBrief = buildContentGenerationBrief;
 
 /** 提案書が無い場合の強み導出（実データのみ／仮説明記）。 */
 function deriveStrengths(store: Store): string[] {

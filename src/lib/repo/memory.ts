@@ -274,6 +274,7 @@ class MemoryRepository implements Repository {
       id: randomUUID(),
       store_id: input.store_id,
       provider: input.provider,
+      generation_type: input.generation_type,
       status: input.status,
       brief: input.brief,
       external_id: input.external_id ?? null,

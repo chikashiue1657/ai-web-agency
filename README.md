@@ -101,25 +101,34 @@ npm run build      # 本番ビルド
 - **提案書**: 実データのみ断定、欠損は「（仮説）」明示。業種別に文脈差分。
 - **仮サイト**: JSON schema（Zod）ベース、業種別テーマ分岐、口コミ由来訴求、SEO生成、写真不足フォールバック、`isHypothesis`で仮説部分を明示。
 
-## ノイモスAI連携（ホームページ自動生成）— 営業支援→受注→生成→公開
+## ノイモスAI連携（店舗のWeb集客コンテンツ生成）— 営業支援→受注→生成→公開
 
-本ツールは営業支援で終わらず、**HP自動生成AI「ノイモスAI」への受け渡し口**を備えています。
-生成エンジンを疎結合に保つため、以下の3層で設計しています。
+ノイモスAIは「HP生成」ではなく**Web集客コンテンツ生成AI**として設計。
+同じ店舗ブリーフから `generationType` を変えて複数種類のコンテンツを生成できます。
 
-1. **受け渡し契約 `SiteGenerationBrief`**（`src/lib/types.ts`）
+**対応予定の生成種別**（`GenerationType` / `src/lib/neumos/catalog.ts`）
+ホームページ ✅（実装済） / ランディングページ / ブログ記事 / Instagram投稿 /
+Googleビジネスプロフィール改善案 / FAQ / キャッチコピー / SEOコンテンツ（以降は近日対応）。
+
+生成エンジンを疎結合に保つ3層設計:
+
+1. **受け渡し契約 `ContentGenerationBrief`**（`src/lib/types.ts`）
    店舗情報・業種・強み・改善点・期待効果・ターゲット・優先度・推奨構成・テーマ・SEO・
-   写真参照・仮説（要確認）・提案書Markdown を1つの構造に集約。`schemaVersion` でバージョン管理。
-   実データと仮説を分離し捏造を防ぐ。
-2. **ブリーフ組み立て `buildSiteGenerationBrief()`**（`src/lib/neumos/brief.ts`, 純関数・テスト済み）
-   店舗＋優先度＋提案書からブリーフを決定的に生成。
-3. **アダプタ `submitSiteGeneration()`**（`src/lib/neumos/client.ts`）
+   写真参照・仮説（要確認）・提案書Markdown を集約した**種別非依存の共有コンテキスト**。
+   `generationType` で生成対象を選び、`typeOptions` に種別固有指定を持たせる（コアを汚さない）。
+   `schemaVersion` で後方互換管理。実データと仮説を分離し捏造を防ぐ。
+2. **ブリーフ組み立て `buildContentGenerationBrief()`**（`src/lib/neumos/brief.ts`, 純関数・テスト済み）
+   店舗＋優先度＋提案書からブリーフを決定的に生成。`generationType` は差し替え可能。
+3. **アダプタ `submitContentGeneration()`**（`src/lib/neumos/client.ts`）
    `NEUMOS_API_URL` / `NEUMOS_API_KEY` があれば本接続、無ければ `not_configured`（下書き）。
+   種別横断の共通エンドポイントに `brief.generationType` を渡して分岐する想定。
    **ここだけ差し替えれば本接続完了**。UI/業務ロジックは無改修。
 
 **フロー**: 店舗詳細ページの「この店舗のホームページをAIで作成」ボタン →
-`requestSiteGeneration()` がブリーフを組み立て → ノイモスAIへ投入（未接続なら
-`site_generation_requests` に下書き保存）→ 状態を `draft→requested→queued→generating→preview→published`
-で追跡。未接続時も**実際に渡すブリーフJSONをUIで確認**できる。
+`requestContentGeneration(storeId, "website")` がブリーフを組み立て → ノイモスAIへ投入
+（未接続なら `site_generation_requests` に `generation_type` 付きで下書き保存）→ 状態を
+`draft→requested→queued→generating→preview→published` で追跡。未接続時も**実際に渡す
+ブリーフJSONをUIで確認**できる。新しい種別は catalog の `enabled` を true にするだけで有効化。
 
 営業ステータス（未対応→DM送信→電話→商談→**成約**）と連動し、成約後に本番生成を促す導線。
 

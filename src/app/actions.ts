@@ -13,10 +13,10 @@ import {
   updateStatus,
   searchAndIngestPlaces,
   generateOutreach,
-  requestSiteGeneration,
+  requestContentGeneration,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
-import type { LeadStatus, SiteGenerationRequest } from "@/lib/types";
+import type { LeadStatus, SiteGenerationRequest, GenerationType } from "@/lib/types";
 import type { OutreachChannel } from "@/lib/outreach";
 
 /**
@@ -119,16 +119,17 @@ export type SiteGenerationActionResult =
   | { ok: true; connected: boolean; request: SiteGenerationRequest }
   | { ok: false; error: string };
 
-export async function requestSiteGenerationAction(
-  storeId: string
+export async function requestContentGenerationAction(
+  storeId: string,
+  generationType: GenerationType = "website"
 ): Promise<SiteGenerationActionResult> {
   try {
-    const { request, connected } = await requestSiteGeneration(storeId);
+    const { request, connected } = await requestContentGeneration(storeId, generationType);
     revalidatePath(`/stores/${storeId}`);
     return { ok: true, connected, request };
   } catch (err) {
     const message =
-      err instanceof ServiceError ? err.message : "サイト生成依頼に失敗しました";
+      err instanceof ServiceError ? err.message : "コンテンツ生成依頼に失敗しました";
     return { ok: false, error: message };
   }
 }

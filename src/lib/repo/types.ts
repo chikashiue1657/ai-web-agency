@@ -14,8 +14,9 @@ import type {
   ActivityEventType,
   SiteDocument,
   SiteGenerationRequest,
-  SiteGenerationBrief,
+  ContentGenerationBrief,
   SiteGenRequestStatus,
+  GenerationType,
 } from "@/lib/types";
 
 /** 一覧表示用：店舗＋リード概要 */
@@ -90,8 +91,9 @@ export interface SaveSiteInput {
 export interface CreateSiteRequestInput {
   store_id: string;
   provider: string;
+  generation_type: GenerationType;
   status: SiteGenRequestStatus;
-  brief: SiteGenerationBrief;
+  brief: ContentGenerationBrief;
   external_id?: string | null;
   preview_url?: string | null;
   error?: string | null;

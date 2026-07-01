@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSiteGenerationBrief, BRIEF_SCHEMA_VERSION } from "@/lib/neumos/brief";
+import { buildContentGenerationBrief, BRIEF_SCHEMA_VERSION } from "@/lib/neumos/brief";
 import type { Store, Lead, Proposal } from "@/lib/types";
 
 const store: Store = {
@@ -53,9 +53,9 @@ const proposal: Proposal = {
   created_at: "x",
 };
 
-describe("buildSiteGenerationBrief", () => {
+describe("buildContentGenerationBrief", () => {
   it("店舗・優先度・提案書を1つの契約に集約する", () => {
-    const brief = buildSiteGenerationBrief({ store, lead, proposal });
+    const brief = buildContentGenerationBrief({ store, lead, proposal });
     expect(brief.schemaVersion).toBe(BRIEF_SCHEMA_VERSION);
     expect(brief.store.name).toBe("海風食堂");
     expect(brief.store.categoryLabel).toBe("飲食店");
@@ -75,7 +75,7 @@ describe("buildSiteGenerationBrief", () => {
   });
 
   it("提案書が無くても実データから最小限のブリーフを作る", () => {
-    const brief = buildSiteGenerationBrief({ store, lead: null, proposal: null });
+    const brief = buildContentGenerationBrief({ store, lead: null, proposal: null });
     expect(brief.priority).toBeNull();
     expect(brief.strengths.length).toBeGreaterThan(0);
     expect(brief.improvements.length).toBeGreaterThan(0);
@@ -85,7 +85,32 @@ describe("buildSiteGenerationBrief", () => {
   });
 
   it("写真が少ない場合は仮説（フォールバック前提）を含める", () => {
-    const brief = buildSiteGenerationBrief({ store, lead: null, proposal: null });
+    const brief = buildContentGenerationBrief({ store, lead: null, proposal: null });
     expect(brief.assumptions.join("")).toContain("写真");
+  });
+
+  it("generationType 既定は website", () => {
+    const brief = buildContentGenerationBrief({ store });
+    expect(brief.generationType).toBe("website");
+  });
+
+  it("同じ共有コンテキストから種別だけ変えて生成できる（コアは不変）", () => {
+    const web = buildContentGenerationBrief({ store, lead, proposal, generationType: "website" });
+    const blog = buildContentGenerationBrief({ store, lead, proposal, generationType: "blog_post" });
+    expect(web.generationType).toBe("website");
+    expect(blog.generationType).toBe("blog_post");
+    // 共有コンテキスト（店舗・強み・優先度）は種別に依存せず同一
+    expect(blog.store).toEqual(web.store);
+    expect(blog.strengths).toEqual(web.strengths);
+    expect(blog.priority).toEqual(web.priority);
+  });
+
+  it("typeOptions を渡せる（種別固有の拡張余地）", () => {
+    const brief = buildContentGenerationBrief({
+      store,
+      generationType: "blog_post",
+      typeOptions: { topic: "沖縄そばの魅力", wordCount: 1200 },
+    });
+    expect(brief.typeOptions).toEqual({ topic: "沖縄そばの魅力", wordCount: 1200 });
   });
 });

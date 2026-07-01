@@ -22,9 +22,13 @@ import {
   type OutreachInput,
 } from "@/lib/outreach";
 import { refineOutreachWithLlm } from "@/lib/outreach/llm";
-import { buildSiteGenerationBrief } from "@/lib/neumos/brief";
-import { submitSiteGeneration } from "@/lib/neumos/client";
-import type { SiteGenRequestStatus, SiteGenerationRequest } from "@/lib/types";
+import { buildContentGenerationBrief } from "@/lib/neumos/brief";
+import { submitContentGeneration } from "@/lib/neumos/client";
+import type {
+  SiteGenRequestStatus,
+  SiteGenerationRequest,
+  GenerationType,
+} from "@/lib/types";
 
 // ------------------------------------------------------------
 // 取り込み（正規化 + upsert + ログ）
@@ -283,8 +287,9 @@ export async function generateOutreach(
 }
 
 // ------------------------------------------------------------
-// ノイモスAI連携: 本番サイト生成リクエスト
+// ノイモスAI連携: コンテンツ生成リクエスト
 //   店舗+優先度+提案書 → ブリーフ(契約)を組み立て → ノイモスAIへ投入(未接続なら下書き保存)。
+//   generationType で website / blog / instagram 等を選択（まず website を実装）。
 //   営業支援 → 受注 → 生成 → 公開 のうち「生成」の入口。
 // ------------------------------------------------------------
 export interface SiteGenerationRequestResult {
@@ -292,23 +297,25 @@ export interface SiteGenerationRequestResult {
   connected: boolean; // ノイモスAIに接続済みか（未接続なら下書き）
 }
 
-export async function requestSiteGeneration(
-  storeId: string
+export async function requestContentGeneration(
+  storeId: string,
+  generationType: GenerationType = "website"
 ): Promise<SiteGenerationRequestResult> {
   const repo = getRepo();
   const detail = await repo.getStoreDetail(storeId);
   if (!detail) throw new ServiceError("store_not_found", `store ${storeId} not found`, 404);
   const { store, lead, proposals } = detail;
 
-  // 1) 受け渡し契約(ブリーフ)を組み立て
-  const brief = buildSiteGenerationBrief({
+  // 1) 受け渡し契約(ブリーフ)を組み立て（generationTypeを付与）
+  const brief = buildContentGenerationBrief({
     store,
     lead,
     proposal: proposals[0] ?? null,
+    generationType,
   });
 
   // 2) ノイモスAIへ投入（未接続なら not_configured）
-  const submit = await submitSiteGeneration(brief);
+  const submit = await submitContentGeneration(brief);
   const connected = submit.status !== "not_configured";
   const status: SiteGenRequestStatus = connected
     ? (submit.status as SiteGenRequestStatus)
@@ -318,6 +325,7 @@ export async function requestSiteGeneration(
   const request = await repo.createSiteGenerationRequest({
     store_id: storeId,
     provider: "neumos",
+    generation_type: generationType,
     status,
     brief,
     external_id: submit.externalId ?? null,
@@ -327,13 +335,22 @@ export async function requestSiteGeneration(
 
   await repo.logActivity(storeId, "site.generation_requested", {
     provider: "neumos",
+    generation_type: generationType,
     status,
     connected,
   });
-  logger.info("site generation requested", { store_id: storeId, status, connected });
+  logger.info("content generation requested", {
+    store_id: storeId,
+    generation_type: generationType,
+    status,
+    connected,
+  });
 
   return { request, connected };
 }
+
+/** @deprecated 旧名。requestContentGeneration を使用。 */
+export const requestSiteGeneration = requestContentGeneration;
 
 // API層で扱いやすいHTTPステータス付き業務エラーは errors.ts に定義。
 // 既存の import パス互換（@/lib/services から使う箇所）のため再エクスポートする。

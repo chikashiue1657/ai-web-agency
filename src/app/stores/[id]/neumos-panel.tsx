@@ -1,14 +1,17 @@
 "use client";
 /**
- * ノイモスAI連携パネル（HP自動生成）。
- * - 「この店舗のホームページをAIで作成」ボタンを配置。
+ * ノイモスAI連携パネル（店舗のWeb集客コンテンツ生成）。
+ * - まず「この店舗のホームページをAIで作成」を実装。
+ * - 同じBrief(契約)から将来 LP/ブログ/Instagram/GBP/FAQ/コピー/SEO も生成できる設計。
+ *   未対応の種別は「近日対応」チップで提示（generationType を渡すだけで有効化可能）。
  * - 営業支援 → 受注 → 生成 → 公開 のフローを可視化。
- * - 押下でブリーフ(契約)を組み立て、ノイモスAIへ投入（未接続なら下書き保存）。
+ * - 押下でブリーフを組み立て、ノイモスAIへ投入（未接続なら下書き保存）。
  *   未接続時は、実際に渡されるブリーフJSONを表示して受け渡し内容を確認できる。
  */
 import { useState, useTransition } from "react";
-import { requestSiteGenerationAction } from "@/app/actions";
-import type { SiteGenerationRequest } from "@/lib/types";
+import { requestContentGenerationAction } from "@/app/actions";
+import type { SiteGenerationRequest, GenerationType } from "@/lib/types";
+import { GENERATION_TYPES, GENERATION_TYPE_LABEL } from "@/lib/neumos/catalog";
 
 const FLOW = ["営業支援", "受注", "生成", "公開"] as const;
 
@@ -22,6 +25,7 @@ export function NeumosPanel({
   latestRequest: SiteGenerationRequest | null;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [runningType, setRunningType] = useState<GenerationType | null>(null);
   const [result, setResult] = useState<{
     connected: boolean;
     request: SiteGenerationRequest;
@@ -40,14 +44,19 @@ export function NeumosPanel({
         ? 1
         : 0;
 
-  function run() {
+  function run(type: GenerationType) {
     setError(null);
+    setRunningType(type);
     startTransition(async () => {
-      const res = await requestSiteGenerationAction(storeId);
+      const res = await requestContentGenerationAction(storeId, type);
       if (res.ok) setResult({ connected: res.connected, request: res.request });
       else setError(res.error);
+      setRunningType(null);
     });
   }
+
+  const website = GENERATION_TYPES.find((t) => t.type === "website")!;
+  const comingSoon = GENERATION_TYPES.filter((t) => !t.enabled);
 
   return (
     <div className="space-y-4">
@@ -69,19 +78,41 @@ export function NeumosPanel({
         ))}
       </div>
 
+      {/* 主実装: ホームページ生成 */}
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={run}
+          onClick={() => run("website")}
           disabled={isPending}
           className="text-sm px-4 py-2 rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 font-medium"
         >
-          {isPending ? "依頼中…" : "この店舗のホームページをAIで作成"}
+          {isPending && runningType === "website"
+            ? "依頼中…"
+            : "この店舗のホームページをAIで作成"}
         </button>
         {!isWon && (
           <span className="text-xs text-amber-600">
             ※本番生成は受注（成約）後を推奨。未受注でもブリーフの確認は可能です。
           </span>
         )}
+      </div>
+      <p className="text-xs text-gray-400">{website.description}</p>
+
+      {/* 将来対応の生成種別（同じBriefから拡張予定） */}
+      <div>
+        <div className="text-xs text-gray-500 mb-1">
+          同じ店舗ブリーフから生成予定のコンテンツ（近日対応）
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {comingSoon.map((t) => (
+            <span
+              key={t.type}
+              title={t.description}
+              className="text-xs px-2 py-1 rounded border border-dashed border-gray-300 text-gray-400"
+            >
+              {t.label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">エラー: {error}</p>}
@@ -90,8 +121,9 @@ export function NeumosPanel({
       {current && (
         <div className="text-sm border border-gray-100 rounded p-3 bg-gray-50 space-y-1">
           <div>
-            連携先: <span className="font-medium">{current.provider}</span> ／ 状態:{" "}
-            <span className="font-medium">{statusLabel(current.status)}</span>
+            種別: <span className="font-medium">{GENERATION_TYPE_LABEL[current.generation_type] ?? current.generation_type}</span>
+            {" ／ "}連携先: <span className="font-medium">{current.provider}</span>
+            {" ／ "}状態: <span className="font-medium">{statusLabel(current.status)}</span>
           </div>
           {result && !result.connected && (
             <p className="text-xs text-amber-700">

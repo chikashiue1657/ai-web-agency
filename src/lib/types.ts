@@ -125,19 +125,38 @@ export interface GeneratedSite {
 }
 
 // ------------------------------------------------------------
-// ノイモスAI連携（ホームページ自動生成AI）
-//   営業支援 → 受注 → 本番サイト生成 → 公開 の受け渡し契約。
-//   ここを安定させることで、生成エンジン(ノイモスAI)を疎結合に差し替え可能にする。
+// ノイモスAI連携（店舗のWeb集客コンテンツ生成AI）
+//   営業支援 → 受注 → コンテンツ生成 → 公開 の受け渡し契約。
+//   ここ（Brief）を安定させることで、生成エンジンを疎結合に差し替え可能にする。
+//   同じ Brief から generationType を変えて複数種類のコンテンツを生成できる。
 // ------------------------------------------------------------
 
 /**
- * サイト生成ブリーフ（ノイモスAIへ渡す入力データ契約）。
- * - 店舗情報・提案内容・業種・強み・ターゲット等を1つの構造に集約。
- * - schemaVersion でバージョン管理し、後方互換を保つ。
+ * 生成コンテンツ種別。
+ * まず website（ホームページ）を実装し、以降を同じ Brief から拡張する。
+ */
+export type GenerationType =
+  | "website" // ホームページ
+  | "landing_page" // ランディングページ
+  | "blog_post" // ブログ記事
+  | "instagram_post" // Instagram投稿
+  | "gbp_improvement" // Googleビジネスプロフィール改善案
+  | "faq" // FAQ
+  | "catchcopy" // キャッチコピー
+  | "seo_content"; // SEOコンテンツ
+
+/**
+ * コンテンツ生成ブリーフ（ノイモスAIへ渡す入力データ契約）。
+ * - 店舗情報・提案内容・業種・強み・ターゲット等の“共有コンテキスト”を1つに集約。
+ * - generationType で生成対象を選ぶ。同じ共有コンテキストから複数種別を生成可能。
+ * - typeOptions に種別固有の指定（将来拡張）を持たせ、コア構造を汚さない。
+ * - schemaVersion でバージョン管理し後方互換を保つ。
  * - 実データと仮説を分離（assumptions に仮説を明示）。捏造を防ぐ。
  */
-export interface SiteGenerationBrief {
+export interface ContentGenerationBrief {
   schemaVersion: string; // 例: "1.0"
+  /** 生成対象コンテンツ種別 */
+  generationType: GenerationType;
   store: {
     storeId: string;
     name: string;
@@ -174,9 +193,14 @@ export interface SiteGenerationBrief {
   assumptions: string[]; // 仮説（要確認事項）
   /** 生成AIが参照できるよう、生成済み提案書Markdownを同梱（任意） */
   sourceProposalMarkdown: string | null;
+  /** 種別固有の追加指定（将来拡張。例: blogのテーマ, LPのCVゴール, IG投稿数など） */
+  typeOptions?: Record<string, unknown>;
 }
 
-/** 本番サイト生成パイプラインの状態 */
+/** @deprecated 旧名。ContentGenerationBrief を使用（後方互換のため残置）。 */
+export type SiteGenerationBrief = ContentGenerationBrief;
+
+/** 生成パイプラインの状態 */
 export type SiteGenRequestStatus =
   | "draft" // ブリーフ作成のみ（ノイモスAI未接続/受注前）
   | "requested" // ノイモスAIへ送信済み
@@ -187,15 +211,16 @@ export type SiteGenRequestStatus =
   | "failed"; // 失敗
 
 /**
- * サイト生成リクエスト（受注→生成→公開の記録）。
+ * コンテンツ生成リクエスト（受注→生成→公開の記録）。
  * - brief を保持し、ノイモスAI側の外部ID/公開URLを追跡する。
  */
 export interface SiteGenerationRequest {
   id: string;
   store_id: string;
   provider: string; // "neumos" 等
+  generation_type: GenerationType; // 生成対象コンテンツ種別
   status: SiteGenRequestStatus;
-  brief: SiteGenerationBrief | null;
+  brief: ContentGenerationBrief | null;
   external_id: string | null; // ノイモスAI側ジョブID
   preview_url: string | null;
   published_url: string | null;

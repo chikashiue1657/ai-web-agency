@@ -13,6 +13,9 @@ import { buildProposal, type BuildProposalInput } from "@/lib/proposal";
 import { refineProposalWithLlm } from "@/lib/proposal/llm";
 import { buildSite, type BuildSiteInput } from "@/lib/site";
 import { logger } from "@/lib/logger";
+import { ServiceError } from "@/lib/errors";
+import { normalizePlacesNew } from "@/lib/normalize";
+import { searchTextPlaces, type PlacesSearchOptions } from "@/lib/places/client";
 
 // ------------------------------------------------------------
 // 取り込み（正規化 + upsert + ログ）
@@ -33,6 +36,67 @@ export async function ingestStores(source: StoreSource, items: unknown[]) {
     updated: result.updated,
   });
   return result;
+}
+
+// ------------------------------------------------------------
+// Google Places API (New) 検索 → 正規化 → upsert（place_id重複は保存せず更新）
+// ------------------------------------------------------------
+export interface PlacesSearchIngestResult {
+  query: string;
+  found: number; // APIヒット件数
+  inserted: number; // 新規保存件数
+  updated: number; // 既存更新（place_id重複）件数
+  store_ids: string[];
+}
+
+export async function searchAndIngestPlaces(
+  query: string,
+  opts?: PlacesSearchOptions
+): Promise<PlacesSearchIngestResult> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    throw new ServiceError("invalid_query", "検索キーワードを入力してください", 400);
+  }
+
+  // 1) Places API (New) で検索
+  const places = await searchTextPlaces(trimmed, opts);
+
+  // 2) 正規化（source=google_places）
+  const normalized = places
+    .map((p) => normalizePlacesNew(p))
+    // 保存キーとして place_id を必須にする（重複判定の要件を満たすため）
+    .filter((n) => !!n.place_id);
+
+  // 3) upsert（place_id 一致は insert せず update = 重複を保存しない）
+  const repo = getRepo();
+  const result = await repo.upsertStores(normalized);
+
+  // 4) 取り込みログ（新規/更新の別も残す）
+  await Promise.all(
+    result.stores.map((s) =>
+      repo.logActivity(s.id, "store.ingested", {
+        source: "google_places",
+        via: "places_api_new",
+        query: trimmed,
+        name: s.name,
+      })
+    )
+  );
+
+  logger.info("places searched & ingested", {
+    query: trimmed,
+    found: places.length,
+    inserted: result.inserted,
+    updated: result.updated,
+  });
+
+  return {
+    query: trimmed,
+    found: places.length,
+    inserted: result.inserted,
+    updated: result.updated,
+    store_ids: result.stores.map((s) => s.id),
+  };
 }
 
 // ------------------------------------------------------------
@@ -161,14 +225,6 @@ export async function updateStatus(storeId: string, status: LeadStatus, contactM
   return lead;
 }
 
-/** API層で扱いやすいよう、HTTPステータス付きの業務エラー。 */
-export class ServiceError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-    public status: number = 400
-  ) {
-    super(message);
-    this.name = "ServiceError";
-  }
-}
+// API層で扱いやすいHTTPステータス付き業務エラーは errors.ts に定義。
+// 既存の import パス互換（@/lib/services から使う箇所）のため再エクスポートする。
+export { ServiceError };

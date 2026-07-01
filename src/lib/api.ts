@@ -76,6 +76,11 @@ export const IngestSchema = z.object({
   items: z.array(z.unknown()).min(1, "items must not be empty"),
 });
 
+export const PlacesSearchSchema = z.object({
+  query: z.string().min(1, "検索キーワードを入力してください"),
+  max_results: z.number().int().min(1).max(20).optional(),
+});
+
 export const ScoreSchema = z.object({
   store_id: z.string().min(1),
   use_llm: z.boolean().optional(),

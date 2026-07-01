@@ -9,6 +9,7 @@ import type { StoreListFilters } from "@/lib/repo";
 import type { PriorityRank, LeadStatus } from "@/lib/types";
 import { PriorityBadge, StatusBadge, YesNo, categoryLabel } from "@/components/ui";
 import { StoreFilters } from "./filters";
+import { PlaceSearch } from "./place-search";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,8 @@ export default async function StoresPage({
         <h1 className="text-xl font-bold">店舗一覧</h1>
         <span className="text-sm text-gray-500">{stores.length}件</span>
       </div>
+
+      <PlaceSearch />
 
       <StoreFilters areas={areas} />
 

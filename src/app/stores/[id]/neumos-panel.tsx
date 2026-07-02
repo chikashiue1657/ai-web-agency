@@ -45,6 +45,35 @@ function StatusBadge({ status }: { status: ContentGenStatus }) {
   );
 }
 
+/** submitContentGeneration が失敗時に格納する構造化JSON（推測せずそのまま表示するための最小型）。 */
+interface NeumosErrorDetail {
+  requestUrl?: string;
+  requestMethod?: string;
+  requestHeaders?: { authorization?: string; "content-type"?: string };
+  requestBody?: unknown;
+  responseStatus?: number | null;
+  responseHeaders?: Record<string, string> | null;
+  responseBody?: string | null;
+  networkError?: string | null;
+}
+
+function parseErrorDetail(raw: string): NeumosErrorDetail | null {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as NeumosErrorDetail) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 一覧表示用の短い要約行。値を推測・加工せず、受信した生の値をそのまま並べるだけ。 */
+function errorSummary(raw: string): string {
+  const detail = parseErrorDetail(raw);
+  if (!detail) return raw;
+  if (detail.networkError) return `接続エラー: ${detail.networkError}`;
+  return `HTTP ${detail.responseStatus ?? "?"} — ${detail.requestUrl ?? ""}`;
+}
+
 export function NeumosPanel({
   storeId,
   isWon,
@@ -58,6 +87,18 @@ export function NeumosPanel({
   const [runningKey, setRunningKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showBriefId, setShowBriefId] = useState<string | null>(null);
+  const [showErrorDetailId, setShowErrorDetailId] = useState<string | null>(null);
+  const [copiedErrorId, setCopiedErrorId] = useState<string | null>(null);
+
+  async function copyErrorDetail(reqId: string, raw: string) {
+    try {
+      await navigator.clipboard.writeText(raw);
+      setCopiedErrorId(reqId);
+      setTimeout(() => setCopiedErrorId((v) => (v === reqId ? null : v)), 2000);
+    } catch {
+      // クリップボード権限が無い環境ではコピーボタンを押しても無反応（フォールバック不要）。
+    }
+  }
 
   const latest = requests[0] ?? null;
 
@@ -157,10 +198,31 @@ export function NeumosPanel({
           )}
           {latest.error && (
             <div>
-              <p className="text-xs text-rose-700">理由:</p>
-              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-rose-50 p-2 text-xs text-rose-800">
-                {latest.error}
-              </pre>
+              <p className="text-xs text-rose-700">理由: {errorSummary(latest.error)}</p>
+              <div className="mt-1 flex items-center gap-2">
+                <button
+                  onClick={() => setShowErrorDetailId((v) => (v === latest.id ? null : latest.id))}
+                  className="text-xs text-rose-700 hover:text-rose-900 underline"
+                >
+                  {showErrorDetailId === latest.id ? "エラー詳細を隠す" : "エラー詳細を表示"}
+                </button>
+                {showErrorDetailId === latest.id && (
+                  <button
+                    onClick={() => copyErrorDetail(latest.id, latest.error as string)}
+                    className="text-xs px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50"
+                  >
+                    {copiedErrorId === latest.id ? "コピーしました" : "JSONをコピー"}
+                  </button>
+                )}
+              </div>
+              {showErrorDetailId === latest.id && (
+                <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-gray-900 p-3 text-xs text-rose-200">
+                  {(() => {
+                    const detail = parseErrorDetail(latest.error);
+                    return detail ? JSON.stringify(detail, null, 2) : latest.error;
+                  })()}
+                </pre>
+              )}
             </div>
           )}
 

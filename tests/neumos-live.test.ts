@@ -88,4 +88,44 @@ describe("Neumos 実HTTP連携（モックサーバ）", () => {
     expect(r.publishedUrl).toBe("https://umikaze.example");
     expect(r.generatedContents?.[0]?.title).toBe("TOP");
   });
+
+  it("パスが /v1/contents からズレていると(例: /api/v1/contents 誤設定)失敗として扱われる", async () => {
+    // NEUMOS_API_URLにパスを足してしまう典型的な誤設定を再現する。
+    // submitContentGenerationは常に `${NEUMOS_API_URL}/v1/contents` を叩くため、
+    // ベースに /api を含めると実際には /api/v1/contents を叩いてしまい、
+    // このモックサーバには存在しないパスとなって404で失敗する。
+    const misconfigured = `${baseUrl}/api`;
+    process.env.NEUMOS_API_URL = misconfigured;
+    try {
+      const r = await submitContentGeneration(brief);
+      expect(r.status).toBe("failed");
+      expect(r.error).toContain("404");
+    } finally {
+      process.env.NEUMOS_API_URL = baseUrl;
+    }
+  });
+});
+
+describe("エラー時にresponse.text()をそのまま(切り詰めずに)返す", () => {
+  it("200文字を超える長いエラー本文もそのまま error に含める", async () => {
+    const longBody = "E".repeat(400);
+    const errServer = createServer((req, res) => {
+      res.statusCode = 500;
+      res.end(longBody);
+    });
+    await new Promise<void>((resolve) => errServer.listen(0, resolve));
+    const addr = errServer.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+
+    process.env.NEUMOS_API_URL = `http://127.0.0.1:${port}`;
+    process.env.NEUMOS_API_KEY = "test-key";
+    try {
+      const r = await submitContentGeneration(brief);
+      expect(r.status).toBe("failed");
+      expect(r.error).toContain(longBody); // 従来の200文字切り詰めが復活していないことを保証
+    } finally {
+      process.env.NEUMOS_API_URL = baseUrl;
+      await new Promise<void>((resolve) => errServer.close(() => resolve()));
+    }
+  });
 });

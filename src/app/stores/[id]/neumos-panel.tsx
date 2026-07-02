@@ -155,7 +155,14 @@ export function NeumosPanel({
               ノイモスAI未接続のため「下書き」保存。NEUMOS_API_URL/KEY 設定で本番生成が有効化されます。
             </p>
           )}
-          {latest.error && <p className="text-xs text-rose-700">理由: {latest.error}</p>}
+          {latest.error && (
+            <div>
+              <p className="text-xs text-rose-700">理由:</p>
+              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-rose-50 p-2 text-xs text-rose-800">
+                {latest.error}
+              </pre>
+            </div>
+          )}
 
           {/* アクション: 更新 / プレビュー / 公開 / 再生成 */}
           <div className="flex flex-wrap gap-2">

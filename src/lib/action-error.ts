@@ -4,7 +4,7 @@
  * Neumos連携に限らず、AI診断・優先度判定・提案書生成・仮サイト生成・アウトリーチ生成・
  * 店舗取得など、外部API/LLM呼び出しを伴う全アクションで共有する。
  */
-import type { NeumosErrorDetail } from "@/lib/neumos/client";
+import { extractErrorCause, type NeumosErrorDetail } from "@/lib/neumos/client";
 
 export function serializeUnknownError(err: unknown): NeumosErrorDetail {
   return {
@@ -17,5 +17,6 @@ export function serializeUnknownError(err: unknown): NeumosErrorDetail {
     responseBody: null,
     networkError:
       err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ""}` : String(err),
+    errorCause: extractErrorCause(err),
   };
 }

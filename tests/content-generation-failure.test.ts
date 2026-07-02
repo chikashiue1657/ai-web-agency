@@ -41,6 +41,45 @@ describe("Neumos呼び出し前の失敗もNeumosErrorDetail付きで報告さ�
     }
   });
 
+  it("SupabaseのPostgrestError(code/details/hint付き)も errorCause にそのまま残る", async () => {
+    // 実際のSupabase未マイグレーション(store_strategiesテーブル未作成)を模したエラー形状。
+    class FakePostgrestError extends Error {
+      code: string;
+      details: string;
+      hint: string;
+      constructor() {
+        super('relation "public.store_strategies" does not exist');
+        this.name = "PostgrestError";
+        this.code = "42P01";
+        this.details = "";
+        this.hint = "Perhaps you meant to reference the table \"public.stores\".";
+      }
+    }
+
+    const repo = getRepo();
+    const original = repo.getStoreStrategy;
+    repo.getStoreStrategy = async () => {
+      throw new FakePostgrestError();
+    };
+
+    try {
+      let caught: unknown = null;
+      try {
+        await requestContentGeneration(STORE_ID, "website");
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(ContentGenerationError);
+      const cge = caught as InstanceType<typeof ContentGenerationError>;
+      expect(cge.detail.errorCause?.name).toBe("PostgrestError");
+      expect(cge.detail.errorCause?.message).toBe('relation "public.store_strategies" does not exist');
+      expect(cge.detail.errorCause?.code).toBe("42P01");
+      expect(cge.detail.errorCause?.hint).toContain("public.stores");
+    } finally {
+      repo.getStoreStrategy = original;
+    }
+  });
+
   it("リクエスト保存(createContentGenerationRequest)が生の例外を投げても検出できる", async () => {
     process.env.NEUMOS_API_URL = "http://127.0.0.1:1"; // 到達不可能。submitは失敗を返す(例外は投げない)
     process.env.NEUMOS_API_KEY = "test-key";

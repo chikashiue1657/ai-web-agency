@@ -92,6 +92,24 @@ export function ErrorDetailPanel({
               <dd className="text-gray-800 break-all whitespace-pre-wrap">{detail.responseBody ?? "-"}</dd>
               <dt className="text-gray-400">Network Error</dt>
               <dd className="text-gray-800 break-all whitespace-pre-wrap">{detail.networkError ?? "-"}</dd>
+              {detail.errorCause && (
+                <>
+                  <dt className="text-gray-400">Error Message</dt>
+                  <dd className="text-gray-800 break-all whitespace-pre-wrap">
+                    {detail.errorCause.message ?? "-"}
+                  </dd>
+                  <dt className="text-gray-400">Error Code</dt>
+                  <dd className="text-gray-800 break-all">{detail.errorCause.code ?? "-"}</dd>
+                  <dt className="text-gray-400">Error Details</dt>
+                  <dd className="text-gray-800 break-all whitespace-pre-wrap">
+                    {detail.errorCause.details ?? "-"}
+                  </dd>
+                  <dt className="text-gray-400">Error Hint</dt>
+                  <dd className="text-gray-800 break-all whitespace-pre-wrap">
+                    {detail.errorCause.hint ?? "-"}
+                  </dd>
+                </>
+              )}
             </dl>
           )}
           <div>

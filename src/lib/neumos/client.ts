@@ -42,6 +42,18 @@ export interface NeumosErrorDetail {
   networkError: string | null;
 }
 
+/**
+ * 生成パイプライン中の失敗（Neumos HTTP呼び出し以前の診断・保存処理の失敗を含む）を
+ * NeumosErrorDetail付きで運ぶ例外。呼び出し側(actions.ts)は`.detail`をそのまま
+ * 画面のJSON詳細表示に使う（メッセージへの要約・変換をしない）。
+ */
+export class ContentGenerationError extends Error {
+  constructor(message: string, public readonly detail: NeumosErrorDetail) {
+    super(message);
+    this.name = "ContentGenerationError";
+  }
+}
+
 export function isNeumosConfigured(): boolean {
   return !!process.env.NEUMOS_API_URL && !!process.env.NEUMOS_API_KEY;
 }
@@ -50,6 +62,46 @@ export function isNeumosConfigured(): boolean {
 function maskAuthorization(): string {
   const key = process.env.NEUMOS_API_KEY ?? "";
   return `Bearer ${key.slice(0, 5)}${"*".repeat(Math.max(key.length - 5, 0))}`;
+}
+
+/**
+ * Neumos呼び出しの「意図した」リクエスト情報（URL/method/headers/body）を組み立てる。
+ * `callNeumos`本体と、呼び出し前の失敗（診断・保存エラー等）を報告する
+ * `buildUnreachedErrorDetail`の両方から使う共通部品。
+ */
+function describeRequest(path: string, method: "GET" | "POST", body?: unknown) {
+  const base = process.env.NEUMOS_API_URL
+    ? process.env.NEUMOS_API_URL.replace(/\/$/, "")
+    : "(NEUMOS_API_URL未設定)";
+  return {
+    requestUrl: `${base}${path}`,
+    requestMethod: method,
+    requestHeaders: { authorization: maskAuthorization(), "content-type": "application/json" },
+    requestBody: body ?? null,
+  };
+}
+
+/**
+ * Neumos HTTP呼び出しへ到達する前（AI診断・DB保存等）に例外が発生した場合の
+ * NeumosErrorDetailを組み立てる。実際にHTTP通信していないため response系はnull、
+ * networkErrorに実際の例外情報をそのまま入れる（要約しない）。
+ */
+export function buildUnreachedErrorDetail(
+  generationType: string,
+  brief: unknown,
+  err: unknown
+): NeumosErrorDetail {
+  const req = describeRequest("/v1/contents", "POST", brief ? { generationType, brief } : null);
+  return {
+    ...req,
+    responseStatus: null,
+    responseHeaders: null,
+    responseBody: null,
+    networkError:
+      err instanceof Error
+        ? `${err.name}: ${err.message}`
+        : `Neumos呼び出しに到達する前に失敗: ${String(err)}`,
+  };
 }
 
 /** ノイモスAIの状態文字列を内部 ContentGenStatus に正規化する。 */
@@ -78,14 +130,10 @@ async function callNeumos(
   method: "GET" | "POST",
   requestBody?: unknown
 ): Promise<NeumosResult> {
-  const requestUrl = `${(process.env.NEUMOS_API_URL as string).replace(/\/$/, "")}${path}`;
-  const requestHeaders = { authorization: maskAuthorization(), "content-type": "application/json" };
+  const req = describeRequest(path, method, requestBody);
 
   const detail: NeumosErrorDetail = {
-    requestUrl,
-    requestMethod: method,
-    requestHeaders,
-    requestBody: requestBody ?? null,
+    ...req,
     responseStatus: null,
     responseHeaders: null,
     responseBody: null,
@@ -94,7 +142,7 @@ async function callNeumos(
 
   let res: Response;
   try {
-    res = await fetch(requestUrl, {
+    res = await fetch(req.requestUrl, {
       method,
       headers: {
         "content-type": "application/json",

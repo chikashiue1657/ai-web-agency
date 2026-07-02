@@ -28,11 +28,14 @@ import { buildNeumosBrief } from "@/lib/neumos/neumos-brief";
 import {
   submitContentGeneration,
   getContentGenerationStatus,
+  buildUnreachedErrorDetail,
+  ContentGenerationError,
 } from "@/lib/neumos/client";
 import type {
   ContentGenStatus,
   ContentGenerationRequest,
   GenerationType,
+  NeumosBrief,
   StoreStrategy,
 } from "@/lib/types";
 
@@ -341,14 +344,19 @@ export async function requestContentGeneration(
 ): Promise<ContentGenerationRequestResult> {
   const repo = getRepo();
 
-  // 1) 戦略を用意（無ければ診断して保存）→ 常に最新の受け渡し核を使う
-  let strategy = await repo.getStoreStrategy(storeId);
-  if (!strategy) {
-    strategy = await runStoreDiagnosis(storeId);
+  // 1)〜2) 戦略を用意（無ければ診断して保存）→ NeumosBrief を組み立てる。
+  // Neumos APIへ到達する前（AI診断・DB保存等）の失敗も、Neumos呼び出し自体の失敗と
+  // 同じ NeumosErrorDetail 形式でリクエストレコードに記録する（UI側の表示を一本化するため）。
+  let brief;
+  try {
+    let strategy = await repo.getStoreStrategy(storeId);
+    if (!strategy) {
+      strategy = await runStoreDiagnosis(storeId);
+    }
+    brief = buildNeumosBrief(strategy, generationType);
+  } catch (err) {
+    throw await persistPipelineFailure(repo, storeId, generationType, null, err);
   }
-
-  // 2) NeumosBrief を組み立て（generationType を付与）
-  const brief = buildNeumosBrief(strategy, generationType);
 
   // 3) ノイモスAIへ投入（未接続なら not_configured=下書き）
   const submit = await submitContentGeneration(brief);
@@ -358,18 +366,24 @@ export async function requestContentGeneration(
     : "draft";
 
   // 4) リクエストを永続化（NeumosBrief＋Neumosレスポンス込みで監査・再送可能に）
-  const request = await repo.createContentGenerationRequest({
-    store_id: storeId,
-    provider: "neumos",
-    generation_type: generationType,
-    status,
-    brief,
-    external_id: submit.requestId ?? null,
-    preview_url: submit.previewUrl ?? null,
-    published_url: submit.publishedUrl ?? null,
-    generated_contents: submit.generatedContents ?? null,
-    error: submit.error ?? null,
-  });
+  let request: ContentGenerationRequest;
+  try {
+    request = await repo.createContentGenerationRequest({
+      store_id: storeId,
+      provider: "neumos",
+      generation_type: generationType,
+      status,
+      brief,
+      external_id: submit.requestId ?? null,
+      preview_url: submit.previewUrl ?? null,
+      published_url: submit.publishedUrl ?? null,
+      generated_contents: submit.generatedContents ?? null,
+      error: submit.error ?? null,
+    });
+  } catch (err) {
+    // Neumosへの送信自体は完了している可能性があるため、そちらのエラー詳細があれば優先する。
+    throw await persistPipelineFailure(repo, storeId, generationType, brief, err, submit.error);
+  }
 
   await repo.logActivity(storeId, "content.generation_requested", {
     provider: "neumos",
@@ -385,6 +399,49 @@ export async function requestContentGeneration(
   });
 
   return { request, connected };
+}
+
+/**
+ * 生成パイプラインの失敗を NeumosErrorDetail 付きで記録する。
+ * - 可能な限り content_generation_requests に status:"failed" として保存する
+ *   （成功すれば、以降はUIの通常の「Failed」リクエスト表示・詳細展開がそのまま使える）。
+ * - 保存自体が失敗した場合でも、呼び出し元(actions.ts)がUIへ詳細を渡せるよう
+ *   ContentGenerationError（.detail に NeumosErrorDetail）を返す。
+ */
+async function persistPipelineFailure(
+  repo: ReturnType<typeof getRepo>,
+  storeId: string,
+  generationType: GenerationType,
+  brief: NeumosBrief | null,
+  err: unknown,
+  existingErrorJson?: string
+): Promise<ContentGenerationError> {
+  const errorJson = existingErrorJson ?? JSON.stringify(buildUnreachedErrorDetail(generationType, brief, err));
+  const detail = JSON.parse(errorJson) as ReturnType<typeof buildUnreachedErrorDetail>;
+  const message = err instanceof Error ? err.message : String(err);
+
+  try {
+    await repo.createContentGenerationRequest({
+      store_id: storeId,
+      provider: "neumos",
+      generation_type: generationType,
+      status: "failed",
+      brief,
+      external_id: null,
+      preview_url: null,
+      published_url: null,
+      generated_contents: null,
+      error: errorJson,
+    });
+  } catch (persistErr) {
+    logger.error("failed to persist content generation failure record", {
+      store_id: storeId,
+      error: String(persistErr),
+    });
+  }
+
+  logger.error("content generation pipeline failed", { store_id: storeId, generation_type: generationType, error: message });
+  return new ContentGenerationError(message, detail);
 }
 
 /**

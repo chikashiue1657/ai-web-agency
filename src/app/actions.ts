@@ -18,6 +18,7 @@ import {
   runStoreDiagnosis,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
+import { ContentGenerationError, type NeumosErrorDetail } from "@/lib/neumos/client";
 import type {
   LeadStatus,
   ContentGenerationRequest,
@@ -25,6 +26,25 @@ import type {
   StoreStrategy,
 } from "@/lib/types";
 import type { OutreachChannel } from "@/lib/outreach";
+
+/**
+ * 予期しない例外（本来は services.ts 側で ContentGenerationError に包まれているはずだが、
+ * 最後の砦として）を、画面の「エラー詳細を表示」でそのまま確認できる形に落とす。
+ * 値を要約・推測せず、例外が持つ情報をそのまま格納する。
+ */
+function serializeUnknownError(err: unknown): NeumosErrorDetail {
+  return {
+    requestUrl: "(unknown — request did not reach Neumos client)",
+    requestMethod: "(unknown)",
+    requestHeaders: { authorization: "(n/a)", "content-type": "(n/a)" },
+    requestBody: null,
+    responseStatus: null,
+    responseHeaders: null,
+    responseBody: null,
+    networkError:
+      err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ""}` : String(err),
+  };
+}
 
 /**
  * 店舗取得（Google Places API New）を server action として実行。
@@ -124,7 +144,7 @@ export async function generateOutreachAction(
  */
 export type ContentGenerationActionResult =
   | { ok: true; connected: boolean; request: ContentGenerationRequest }
-  | { ok: false; error: string };
+  | { ok: false; error: string; errorDetail: NeumosErrorDetail | null };
 
 export async function requestContentGenerationAction(
   storeId: string,
@@ -135,9 +155,18 @@ export async function requestContentGenerationAction(
     revalidatePath(`/stores/${storeId}`);
     return { ok: true, connected, request };
   } catch (err) {
-    const message =
-      err instanceof ServiceError ? err.message : "コンテンツ生成依頼に失敗しました";
-    return { ok: false, error: message };
+    revalidatePath(`/stores/${storeId}`); // 失敗レコードが保存されていれば一覧に反映する
+    if (err instanceof ContentGenerationError) {
+      return { ok: false, error: err.message, errorDetail: err.detail };
+    }
+    if (err instanceof ServiceError) {
+      return { ok: false, error: err.message, errorDetail: null };
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      errorDetail: serializeUnknownError(err),
+    };
   }
 }
 
@@ -150,13 +179,18 @@ export async function refreshContentStatusAction(
 ): Promise<ContentGenerationActionResult> {
   try {
     const request = await refreshContentGenerationStatus(requestRowId);
-    if (!request) return { ok: false, error: "リクエストが見つかりません" };
+    if (!request) return { ok: false, error: "リクエストが見つかりません", errorDetail: null };
     revalidatePath(`/stores/${storeId}`);
     return { ok: true, connected: !!request.external_id, request };
   } catch (err) {
-    const message =
-      err instanceof ServiceError ? err.message : "状況更新に失敗しました";
-    return { ok: false, error: message };
+    if (err instanceof ServiceError) {
+      return { ok: false, error: err.message, errorDetail: null };
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      errorDetail: serializeUnknownError(err),
+    };
   }
 }
 

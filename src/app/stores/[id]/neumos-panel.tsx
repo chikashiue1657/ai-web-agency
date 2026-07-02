@@ -13,6 +13,7 @@ import {
   refreshContentStatusAction,
 } from "@/app/actions";
 import type { ContentGenerationRequest, ContentGenStatus, GenerationType } from "@/lib/types";
+import type { NeumosErrorDetail } from "@/lib/neumos/client";
 import { GENERATION_TYPES, GENERATION_TYPE_LABEL } from "@/lib/neumos/catalog";
 
 const FLOW = ["営業支援", "受注", "生成", "公開"] as const;
@@ -45,18 +46,6 @@ function StatusBadge({ status }: { status: ContentGenStatus }) {
   );
 }
 
-/** submitContentGeneration が失敗時に格納する構造化JSON（推測せずそのまま表示するための最小型）。 */
-interface NeumosErrorDetail {
-  requestUrl?: string;
-  requestMethod?: string;
-  requestHeaders?: { authorization?: string; "content-type"?: string };
-  requestBody?: unknown;
-  responseStatus?: number | null;
-  responseHeaders?: Record<string, string> | null;
-  responseBody?: string | null;
-  networkError?: string | null;
-}
-
 function parseErrorDetail(raw: string): NeumosErrorDetail | null {
   try {
     const parsed = JSON.parse(raw);
@@ -74,6 +63,74 @@ function errorSummary(raw: string): string {
   return `HTTP ${detail.responseStatus ?? "?"} — ${detail.requestUrl ?? ""}`;
 }
 
+/**
+ * NeumosErrorDetail を「HTTP Status / URL / Request Method / Request Body /
+ * Response Body / Network Error」の各項目としてそのまま並べ、
+ * 「エラー詳細を表示」の折りたたみとJSONコピーボタンを提供する共通表示部品。
+ * 値の要約・推測は行わず、受信した値をそのまま表示する。
+ */
+function ErrorDetailPanel({
+  detail,
+  rawJson,
+  isOpen,
+  onToggle,
+  isCopied,
+  onCopy,
+}: {
+  detail: NeumosErrorDetail | null;
+  rawJson: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  isCopied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div>
+      <div className="mt-1 flex items-center gap-2">
+        <button onClick={onToggle} className="text-xs text-rose-700 hover:text-rose-900 underline">
+          {isOpen ? "エラー詳細を隠す" : "エラー詳細を表示"}
+        </button>
+        {isOpen && (
+          <button
+            onClick={onCopy}
+            className="text-xs px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50"
+          >
+            {isCopied ? "コピーしました" : "JSONをコピー"}
+          </button>
+        )}
+      </div>
+      {isOpen && (
+        <div className="mt-2 space-y-2">
+          {detail && (
+            <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
+              <dt className="text-gray-400">HTTP Status</dt>
+              <dd className="text-gray-800">{detail.responseStatus ?? "(レスポンス無し)"}</dd>
+              <dt className="text-gray-400">URL</dt>
+              <dd className="text-gray-800 break-all">{detail.requestUrl ?? "-"}</dd>
+              <dt className="text-gray-400">Request Method</dt>
+              <dd className="text-gray-800">{detail.requestMethod ?? "-"}</dd>
+              <dt className="text-gray-400">Request Body</dt>
+              <dd className="text-gray-800 break-all whitespace-pre-wrap">
+                {detail.requestBody ? JSON.stringify(detail.requestBody) : "-"}
+              </dd>
+              <dt className="text-gray-400">Response Body</dt>
+              <dd className="text-gray-800 break-all whitespace-pre-wrap">{detail.responseBody ?? "-"}</dd>
+              <dt className="text-gray-400">Network Error</dt>
+              <dd className="text-gray-800 break-all whitespace-pre-wrap">{detail.networkError ?? "-"}</dd>
+            </dl>
+          )}
+          <div>
+            <p className="text-xs text-gray-400 mb-1">JSON全文:</p>
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-gray-900 p-3 text-xs text-rose-200">
+              {detail ? JSON.stringify(detail, null, 2) : rawJson}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NeumosPanel({
   storeId,
   isWon,
@@ -86,6 +143,7 @@ export function NeumosPanel({
   const [isPending, startTransition] = useTransition();
   const [runningKey, setRunningKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<NeumosErrorDetail | null>(null);
   const [showBriefId, setShowBriefId] = useState<string | null>(null);
   const [showErrorDetailId, setShowErrorDetailId] = useState<string | null>(null);
   const [copiedErrorId, setCopiedErrorId] = useState<string | null>(null);
@@ -96,7 +154,7 @@ export function NeumosPanel({
       setCopiedErrorId(reqId);
       setTimeout(() => setCopiedErrorId((v) => (v === reqId ? null : v)), 2000);
     } catch {
-      // クリップボード権限が無い環境ではコピーボタンを押しても無反応（フォールバック不要）。
+      // クリップボード権限が無い環境ではコピーボタンを押しても無反応(フォールバック不要)。
     }
   }
 
@@ -113,20 +171,28 @@ export function NeumosPanel({
 
   function generate(type: GenerationType, key: string) {
     setError(null);
+    setErrorDetail(null);
     setRunningKey(key);
     startTransition(async () => {
       const res = await requestContentGenerationAction(storeId, type);
-      if (!res.ok) setError(res.error);
+      if (!res.ok) {
+        setError(res.error);
+        setErrorDetail(res.errorDetail);
+      }
       setRunningKey(null);
     });
   }
 
   function refresh(reqId: string) {
     setError(null);
+    setErrorDetail(null);
     setRunningKey("refresh:" + reqId);
     startTransition(async () => {
       const res = await refreshContentStatusAction(storeId, reqId);
-      if (!res.ok) setError(res.error);
+      if (!res.ok) {
+        setError(res.error);
+        setErrorDetail(res.errorDetail);
+      }
       setRunningKey(null);
     });
   }
@@ -175,7 +241,21 @@ export function NeumosPanel({
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">エラー: {error}</p>}
+      {error && (
+        <div className="rounded border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-600">エラー: {error}</p>
+          <ErrorDetailPanel
+            detail={errorDetail}
+            rawJson={errorDetail ? JSON.stringify(errorDetail) : error}
+            isOpen={showErrorDetailId === "action-error"}
+            onToggle={() => setShowErrorDetailId((v) => (v === "action-error" ? null : "action-error"))}
+            isCopied={copiedErrorId === "action-error"}
+            onCopy={() =>
+              copyErrorDetail("action-error", errorDetail ? JSON.stringify(errorDetail, null, 2) : error)
+            }
+          />
+        </div>
+      )}
 
       {/* 最新リクエストの詳細 */}
       {latest && (
@@ -199,30 +279,14 @@ export function NeumosPanel({
           {latest.error && (
             <div>
               <p className="text-xs text-rose-700">理由: {errorSummary(latest.error)}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <button
-                  onClick={() => setShowErrorDetailId((v) => (v === latest.id ? null : latest.id))}
-                  className="text-xs text-rose-700 hover:text-rose-900 underline"
-                >
-                  {showErrorDetailId === latest.id ? "エラー詳細を隠す" : "エラー詳細を表示"}
-                </button>
-                {showErrorDetailId === latest.id && (
-                  <button
-                    onClick={() => copyErrorDetail(latest.id, latest.error as string)}
-                    className="text-xs px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50"
-                  >
-                    {copiedErrorId === latest.id ? "コピーしました" : "JSONをコピー"}
-                  </button>
-                )}
-              </div>
-              {showErrorDetailId === latest.id && (
-                <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-gray-900 p-3 text-xs text-rose-200">
-                  {(() => {
-                    const detail = parseErrorDetail(latest.error);
-                    return detail ? JSON.stringify(detail, null, 2) : latest.error;
-                  })()}
-                </pre>
-              )}
+              <ErrorDetailPanel
+                detail={parseErrorDetail(latest.error)}
+                rawJson={latest.error}
+                isOpen={showErrorDetailId === latest.id}
+                onToggle={() => setShowErrorDetailId((v) => (v === latest.id ? null : latest.id))}
+                isCopied={copiedErrorId === latest.id}
+                onCopy={() => copyErrorDetail(latest.id, latest.error as string)}
+              />
             </div>
           )}
 

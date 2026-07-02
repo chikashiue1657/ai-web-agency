@@ -96,7 +96,7 @@ export interface CreateContentRequestInput {
   provider: string;
   generation_type: GenerationType;
   status: ContentGenStatus;
-  brief: NeumosBrief;
+  brief: NeumosBrief | null;
   external_id?: string | null;
   preview_url?: string | null;
   published_url?: string | null;

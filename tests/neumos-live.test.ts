@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer, type Server } from "node:http";
 import { submitContentGeneration, getContentGenerationStatus } from "@/lib/neumos/client";
 import type { NeumosBrief } from "@/lib/types";
+import type { NeumosErrorDetail } from "@/lib/neumos/client";
 
 /**
  * モックのノイモスAIサーバを立て、実HTTP経路（POST/GET・ヘッダ・レスポンスマッピング）を検証する。
@@ -126,6 +127,56 @@ describe("エラー時にresponse.text()をそのまま(切り詰めずに)返�
     } finally {
       process.env.NEUMOS_API_URL = baseUrl;
       await new Promise<void>((resolve) => errServer.close(() => resolve()));
+    }
+  });
+
+  it("error は HTTP Status/Response Headers/Response Body/URL/masked Authorization/Request Body を含む構造化JSON", async () => {
+    const errServer = createServer((req, res) => {
+      res.statusCode = 503;
+      res.setHeader("content-type", "application/json");
+      res.setHeader("x-neumos-trace-id", "trace-xyz");
+      res.end(JSON.stringify({ error: "internal error from neumos" }));
+    });
+    await new Promise<void>((resolve) => errServer.listen(0, resolve));
+    const addr = errServer.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    const errBase = `http://127.0.0.1:${port}`;
+
+    process.env.NEUMOS_API_URL = errBase;
+    process.env.NEUMOS_API_KEY = "super-secret-key-123";
+    try {
+      const r = await submitContentGeneration(brief);
+      expect(r.status).toBe("failed");
+      const detail = JSON.parse(r.error as string) as NeumosErrorDetail;
+
+      expect(detail.requestUrl).toBe(`${errBase}/v1/contents`);
+      expect(detail.requestMethod).toBe("POST");
+      expect(detail.requestHeaders.authorization).toMatch(/^Bearer super\*+$/);
+      expect(detail.requestHeaders.authorization).not.toContain("super-secret-key-123");
+      expect((detail.requestBody as { generationType?: string }).generationType).toBe("website");
+
+      expect(detail.responseStatus).toBe(503);
+      expect(detail.responseHeaders?.["x-neumos-trace-id"]).toBe("trace-xyz");
+      expect(detail.responseBody).toBe(JSON.stringify({ error: "internal error from neumos" }));
+      expect(detail.networkError).toBeNull();
+    } finally {
+      process.env.NEUMOS_API_URL = baseUrl;
+      await new Promise<void>((resolve) => errServer.close(() => resolve()));
+    }
+  });
+
+  it("fetch自体が失敗した場合(接続不可)も networkError を含む構造化JSONを返す", async () => {
+    process.env.NEUMOS_API_URL = "http://127.0.0.1:1"; // 到達不可能なポート
+    process.env.NEUMOS_API_KEY = "test-key";
+    try {
+      const r = await submitContentGeneration(brief);
+      expect(r.status).toBe("failed");
+      const detail = JSON.parse(r.error as string) as NeumosErrorDetail;
+      expect(detail.responseStatus).toBeNull();
+      expect(detail.responseBody).toBeNull();
+      expect(detail.networkError).toBeTruthy();
+    } finally {
+      process.env.NEUMOS_API_URL = baseUrl;
     }
   });
 });

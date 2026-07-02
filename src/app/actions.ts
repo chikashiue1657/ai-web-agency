@@ -3,6 +3,10 @@
  * Server Actions（管理画面のボタン操作用）。
  * - APIと同じサービス層を呼ぶ。UIからの操作後は revalidatePath で再描画。
  * - 失敗時はthrowせず結果を返してUIで扱いやすくする。
+ * - 外部API/LLM呼び出しを伴うアクションは、ServiceError以外の例外も
+ *   要約せず errorDetail（NeumosErrorDetail形状）としてそのまま返す
+ *   （画面の「エラー詳細を表示」でHTTP Status/URL/Request Method/Request Body/
+ *   Response Body/Network Errorを確認できる）。
  */
 import { revalidatePath } from "next/cache";
 import {
@@ -18,6 +22,8 @@ import {
   runStoreDiagnosis,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
+import { ContentGenerationError, type NeumosErrorDetail } from "@/lib/neumos/client";
+import { serializeUnknownError } from "@/lib/action-error";
 import type {
   LeadStatus,
   ContentGenerationRequest,
@@ -25,6 +31,18 @@ import type {
   StoreStrategy,
 } from "@/lib/types";
 import type { OutreachChannel } from "@/lib/outreach";
+
+/** ServiceError以外の例外を errorDetail 付きの失敗結果に変換する共通ヘルパー。 */
+function toFailure(err: unknown, fallbackMessage: string): { ok: false; error: string; errorDetail: NeumosErrorDetail | null } {
+  if (err instanceof ServiceError) {
+    return { ok: false, error: err.message, errorDetail: null };
+  }
+  return {
+    ok: false,
+    error: err instanceof Error ? err.message : fallbackMessage,
+    errorDetail: serializeUnknownError(err),
+  };
+}
 
 /**
  * 店舗取得（Google Places API New）を server action として実行。
@@ -34,7 +52,7 @@ import type { OutreachChannel } from "@/lib/outreach";
  */
 export type SearchPlacesActionResult =
   | { ok: true; found: number; inserted: number; updated: number; scored: number }
-  | { ok: false; error: string };
+  | { ok: false; error: string; errorDetail: NeumosErrorDetail | null };
 
 export async function searchPlacesAction(
   query: string
@@ -52,27 +70,48 @@ export async function searchPlacesAction(
       scored: r.scored,
     };
   } catch (err) {
-    const message =
-      err instanceof ServiceError ? err.message : "店舗取得に失敗しました";
-    return { ok: false, error: message };
+    return toFailure(err, "店舗取得に失敗しました");
   }
 }
 
-export async function scoreStoreAction(storeId: string) {
-  await scoreStore(storeId, { useLlm: true });
-  revalidatePath(`/stores/${storeId}`);
-  revalidatePath("/stores");
-  revalidatePath("/");
+/** 優先度判定 / 提案書生成 / 仮サイト生成 共通の結果型。 */
+export type SimpleActionResult =
+  | { ok: true }
+  | { ok: false; error: string; errorDetail: NeumosErrorDetail | null };
+
+export async function scoreStoreAction(storeId: string): Promise<SimpleActionResult> {
+  try {
+    await scoreStore(storeId, { useLlm: true });
+    revalidatePath(`/stores/${storeId}`);
+    revalidatePath("/stores");
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return toFailure(err, "優先度判定に失敗しました");
+  }
 }
 
-export async function generateProposalAction(storeId: string, reviewSummary?: string) {
-  await generateProposal(storeId, { useLlm: true, review_summary: reviewSummary || null });
-  revalidatePath(`/stores/${storeId}`);
+export async function generateProposalAction(
+  storeId: string,
+  reviewSummary?: string
+): Promise<SimpleActionResult> {
+  try {
+    await generateProposal(storeId, { useLlm: true, review_summary: reviewSummary || null });
+    revalidatePath(`/stores/${storeId}`);
+    return { ok: true };
+  } catch (err) {
+    return toFailure(err, "提案書生成に失敗しました");
+  }
 }
 
-export async function generateSiteAction(storeId: string) {
-  await generateSite(storeId, {});
-  revalidatePath(`/stores/${storeId}`);
+export async function generateSiteAction(storeId: string): Promise<SimpleActionResult> {
+  try {
+    await generateSite(storeId, {});
+    revalidatePath(`/stores/${storeId}`);
+    return { ok: true };
+  } catch (err) {
+    return toFailure(err, "仮サイト生成に失敗しました");
+  }
 }
 
 export async function saveNotesAction(storeId: string, formData: FormData) {
@@ -101,7 +140,7 @@ export async function setStatusAction(storeId: string, status: LeadStatus) {
  */
 export type OutreachActionResult =
   | { ok: true; text: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; errorDetail: NeumosErrorDetail | null };
 
 export async function generateOutreachAction(
   storeId: string,
@@ -112,9 +151,7 @@ export async function generateOutreachAction(
     revalidatePath(`/stores/${storeId}`);
     return { ok: true, text };
   } catch (err) {
-    const message =
-      err instanceof ServiceError ? err.message : "文面生成に失敗しました";
-    return { ok: false, error: message };
+    return toFailure(err, "文面生成に失敗しました");
   }
 }
 
@@ -124,7 +161,7 @@ export async function generateOutreachAction(
  */
 export type ContentGenerationActionResult =
   | { ok: true; connected: boolean; request: ContentGenerationRequest }
-  | { ok: false; error: string };
+  | { ok: false; error: string; errorDetail: NeumosErrorDetail | null };
 
 export async function requestContentGenerationAction(
   storeId: string,
@@ -135,9 +172,11 @@ export async function requestContentGenerationAction(
     revalidatePath(`/stores/${storeId}`);
     return { ok: true, connected, request };
   } catch (err) {
-    const message =
-      err instanceof ServiceError ? err.message : "コンテンツ生成依頼に失敗しました";
-    return { ok: false, error: message };
+    revalidatePath(`/stores/${storeId}`); // 失敗レコードが保存されていれば一覧に反映する
+    if (err instanceof ContentGenerationError) {
+      return { ok: false, error: err.message, errorDetail: err.detail };
+    }
+    return toFailure(err, "コンテンツ生成依頼に失敗しました");
   }
 }
 
@@ -150,13 +189,11 @@ export async function refreshContentStatusAction(
 ): Promise<ContentGenerationActionResult> {
   try {
     const request = await refreshContentGenerationStatus(requestRowId);
-    if (!request) return { ok: false, error: "リクエストが見つかりません" };
+    if (!request) return { ok: false, error: "リクエストが見つかりません", errorDetail: null };
     revalidatePath(`/stores/${storeId}`);
     return { ok: true, connected: !!request.external_id, request };
   } catch (err) {
-    const message =
-      err instanceof ServiceError ? err.message : "状況更新に失敗しました";
-    return { ok: false, error: message };
+    return toFailure(err, "状況更新に失敗しました");
   }
 }
 
@@ -165,7 +202,7 @@ export async function refreshContentStatusAction(
  */
 export type DiagnosisActionResult =
   | { ok: true; strategy: StoreStrategy }
-  | { ok: false; error: string };
+  | { ok: false; error: string; errorDetail: NeumosErrorDetail | null };
 
 export async function runDiagnosisAction(storeId: string): Promise<DiagnosisActionResult> {
   try {
@@ -173,8 +210,6 @@ export async function runDiagnosisAction(storeId: string): Promise<DiagnosisActi
     revalidatePath(`/stores/${storeId}`);
     return { ok: true, strategy };
   } catch (err) {
-    const message =
-      err instanceof ServiceError ? err.message : "AI診断に失敗しました";
-    return { ok: false, error: message };
+    return toFailure(err, "AI診断に失敗しました");
   }
 }

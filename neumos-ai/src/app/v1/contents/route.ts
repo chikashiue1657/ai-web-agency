@@ -6,9 +6,17 @@ import { toLegacyGeneratedContents } from "@/lib/bridge";
 import { IMPLEMENTED_GENERATION_TYPES } from "@/lib/types";
 
 /**
- * POST /api/v1/contents — AI集客支援MVPの `NEUMOS_API_URL` 連携用エンドポイント。
- * MVP側 `src/lib/neumos/client.ts` の想定契約
- *   POST {BASE}/v1/contents  body: { generationType, brief }
+ * POST /v1/contents — AI集客支援MVPの `NEUMOS_API_URL` 連携用エンドポイント。
+ *
+ * 重要: このルートは意図的に `app/api/` 配下ではなく `app/v1/` 配下に置いている。
+ * MVP側 `src/lib/neumos/client.ts` は `fetch(\`${NEUMOS_API_URL}/v1/contents\`)` を
+ * 直接叩く実装（`/api` prefixなし）で、`tests/neumos-live.test.ts` のモックサーバも
+ * `/v1/contents` で固定検証済み。ここを `app/api/v1/contents/route.ts` に置くと
+ * 実際のパスが `/api/v1/contents` になりMVPからの呼び出しが404になるため、
+ * 移動しないこと（過去に実際にこの位置ズレで生成依頼が失敗した）。
+ *
+ * MVP側の想定契約:
+ *   POST {NEUMOS_API_URL}/v1/contents  body: { generationType, brief }
  *   resp: { requestId, status, previewUrl?, publishedUrl?, generatedContents? }
  * にそのまま対応する。`generatedContents` はMVPの `GeneratedContent[]`
  * （`{type,title,url,body,meta}`）形式に変換して返す。

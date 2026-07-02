@@ -27,7 +27,7 @@ StoreBrief（店舗情報・AI診断・営業提案）
 ⑤ サイトコンセプト作成 (buildConcept)
 ⑥ ページ構成作成 (buildPageStructure)
 ⑦ SEOキーワード反映 (buildSeo)
-⑧ 本文生成（Hero / Sections / CTA / FAQ / Instagram / GBP改善案）
+⑧ 本文生成（Hero / About / Service / Feature / Gallery / Access / FAQ / Contact / Instagram / GBP改善案）
 ```
 
 - ①〜⑧はすべて `src/lib/engine/rule-based.ts` に**純関数**として実装。LLMキー未設定でも
@@ -39,6 +39,41 @@ StoreBrief（店舗情報・AI診断・営業提案）
   LLM出力はZodスキーマ（`GeneratedWebsiteContentsSchema`）で検証し、壊れたJSONの場合は
   自動的にルールベース結果へフォールバックする（例外を投げない）。
 
+## Website Renderer（実際に公開できるホームページの生成）
+
+`generatedContents` からNext.jsコンポーネントを組み立て、`/preview/[requestId]` に
+アクセスすると**実際に公開できる状態のレスポンシブなホームページ**がそのまま表示される
+（`src/components/website/`）。
+
+| コンポーネント | 内容 |
+|---|---|
+| `Header` | 店舗名 + セクションへのアンカーナビ（モバイルはハンバーガーメニュー、クライアントコンポーネント） |
+| `Hero` | キャッチコピー・エリア/業種バッジ・CTAボタン |
+| `About` | サイトコンセプト + 強み（`sections`のうち`kind:"about"`） |
+| `Service` | メニュー・サービス紹介カード（`kind:"service"`） |
+| `Feature` | 選ばれる理由を番号付きカードで表示（`kind:"feature"`） |
+| `Gallery` | 実写真が無い前提のデザイン性プレースホルダー（グラデーション+キャプション） |
+| `Faq` | `<details>`によるアコーディオン（JS無しでも動作） |
+| `Access` | エリア・行き方 + Google Maps埋め込み（APIキー不要の`output=embed`） |
+| `Contact` | CTA + 問い合わせ手段一覧 |
+| `Footer` | 店舗名・エリア・トップへ戻るリンク |
+
+`WebsiteRenderer`（`src/components/website/WebsiteRenderer.tsx`）がこれらを1つに合成する。
+すべてTailwindでモバイルファースト・レスポンシブ対応（`sm:`/`md:`/`lg:`ブレークポイント）。
+
+- **About/Service/Featureは必ず生成される**: `src/lib/engine/rule-based.ts` の
+  `ensureRequiredKinds()` が、`recommendedPages`にそれらに該当するページが無い場合でも
+  デフォルトページ（お店の強み/メニュー・サービス/選ばれる理由）を自動的に補う。
+  LLM生成時も `GeneratedWebsiteContentsSchema` が `sections` に
+  `about`/`service`/`feature` を最低1件ずつ含むことを検証し、欠けていればルールベースに
+  フォールバックするため、Website Rendererが空セクションを描画することはない。
+- **Gallery**: 実写真が無い前提のため`caption`/`altText`のみを生成し、グラデーション+
+  カメラアイコンのプレースホルダーで表現（実写真に差し替え可能な設計）。
+- **Access**: `AccessInfo.mapQuery`（店舗名+エリア）を使い、APIキー不要の
+  `https://www.google.com/maps?q=...&output=embed` でマップを埋め込む。
+- 静的HTML書き出し版（`src/lib/preview/render.ts` → `GET /api/preview/{requestId}/raw`）も
+  同じセクション構成に追従しており、Next.js非依存で単体HTMLとして配布・移植できる。
+
 ## ディレクトリ構成
 
 ```
@@ -46,11 +81,16 @@ neumos-ai/
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                       # トップ（API概要・対応generationType一覧）
-│   │   ├── preview/[requestId]/page.tsx   # 生成結果プレビュー
+│   │   ├── preview/[requestId]/page.tsx   # 生成結果プレビュー（Website Rendererをそのまま表示）
 │   │   └── api/
 │   │       ├── generate/route.ts          # POST /api/generate（ネイティブ契約）
-│   │       ├── preview/[requestId]/raw/   # 単体HTML配信（プレビューのiframe元）
+│   │       ├── preview/[requestId]/raw/   # 単体HTML書き出し（静的エクスポート用）
 │   │       └── v1/contents/               # AI集客支援MVP互換ブリッジ（後述）
+│   ├── components/website/                # Website Renderer本体
+│   │   ├── Header.tsx / Hero.tsx / About.tsx / Service.tsx / Feature.tsx
+│   │   ├── Gallery.tsx / Faq.tsx / Access.tsx / Contact.tsx / Footer.tsx
+│   │   ├── WebsiteRenderer.tsx            # 上記9+1コンポーネントを合成
+│   │   └── utils.ts                       # 本文の箇条書きパース等
 │   └── lib/
 │       ├── types.ts        # StoreBrief / GenerationType / GeneratedWebsiteContents 等の契約
 │       ├── validation.ts   # Zodスキーマ（入力検証・LLM出力検証）
@@ -65,7 +105,7 @@ neumos-ai/
 │       │   ├── website.ts     # generationType="website" のオーケストレーション
 │       │   └── index.ts       # generationType ディスパッチャ（拡張ポイント）
 │       └── preview/render.ts  # 生成物 → 単体HTMLドキュメント
-└── tests/                     # vitest（19件）
+└── tests/                     # vitest（23件、コンポーネントの描画テスト含む）
 ```
 
 ## セットアップ
@@ -121,7 +161,10 @@ npm run test        # vitest 19件
     "concept": "…",
     "heroTitle": "…",
     "heroSubtitle": "…",
-    "sections": [{ "id": "section-1", "heading": "…", "body": "…" }],
+    "sections": [{ "id": "section-1", "kind": "about", "heading": "…", "body": "…" }],
+    "gallery": [{ "id": "gallery-1", "caption": "…", "altText": "…" }],
+    "access": { "areaLabel": "…", "addressHint": "…", "mapQuery": "…" },
+    "contactMethods": ["…"],
     "cta": { "headline": "…", "body": "…", "buttonLabel": "…" },
     "seoTitle": "…",
     "metaDescription": "…",
@@ -143,8 +186,9 @@ npm run test        # vitest 19件
 
 ### `GET /preview/{requestId}`
 
-生成されたホームページ本文を実際のページとして確認できるプレビュー画面。
-単体HTML（`GET /api/preview/{requestId}/raw`）をiframe表示している。
+Website Rendererが組み立てた**実際に公開できる状態のレスポンシブなホームページ**をそのまま
+表示するプレビュー画面（Next.jsコンポーネントとして直接レンダリング。iframeではない）。
+単体HTML書き出し版は `GET /api/preview/{requestId}/raw` から確認できる。
 
 ---
 
@@ -159,8 +203,15 @@ AI集客支援MVP（`../`）は `src/lib/neumos/client.ts` で以下のREST契�
 
 Neumos AI v1は、この契約に対応する**互換ブリッジ**を用意している：
 
-- `POST /api/v1/contents` — `POST /api/generate` と同じ生成処理を実行する。
-- `GET /api/v1/contents/{requestId}` — 生成結果の状態を返す（v1は同期生成のため常に `status: "preview"`）。
+- `POST /v1/contents` — `POST /api/generate` と同じ生成処理を実行する。
+- `GET /v1/contents/{requestId}` — 生成結果の状態を返す（v1は同期生成のため常に `status: "preview"`）。
+
+> ⚠️ **このルートは意図的に `/api` の外（`src/app/v1/contents/route.ts`）に置いている。**
+> Next.js App Routerでは `src/app/api/v1/contents/route.ts` は `/api/v1/contents` に
+> マッピングされてしまい、MVP側 `client.ts` が叩く `POST {NEUMOS_API_URL}/v1/contents`
+> と一致せず404になる（実際にこのズレが原因で「コンテンツ生成依頼に失敗しました」が
+> 発生していた）。ルートを追加・変更する際は `npm run build` の `Route (app)` 出力で
+> 実際のパスが `/v1/contents` になっていることを必ず確認すること。
 
 ### 接続手順
 
@@ -184,13 +235,47 @@ Neumos AI v1は、この契約に対応する**互換ブリッジ**を用意し�
 - **Neumos AI v1のネイティブ契約**（`/api/generate`）: 本README冒頭の通り、`concept` /
   `heroTitle` / `sections` などの**構造化オブジェクト**を返す（マーケティング戦略の
   中間成果物 `strategy` も含む）。
-- **MVP互換ブリッジ**（`/api/v1/contents`）: MVP側の型 `GeneratedContent[]`
+- **MVP互換ブリッジ**（`/v1/contents`）: MVP側の型 `GeneratedContent[]`
   （`{ type?, title?, url?, body?, meta? }` の緩い配列）に変換して返す
   （`src/lib/bridge.ts` の `toLegacyGeneratedContents`）。これにより、MVP側の
   「生成物一覧」表示コンポーネント（`neumos-panel.tsx`）は無改修でそのまま動作する。
 - 将来的にMVP側の型をNeumos AI v1のネイティブ契約（構造化オブジェクト）に合わせて
   拡張する場合は、MVP側 `src/lib/types.ts` の `GeneratedContent` を更新し、
   `/api/generate` を直接呼ぶよう `client.ts` を切り替えればよい。
+
+### トラブルシューティング: 「コンテンツ生成依頼に失敗しました」
+
+MVP側でこのエラーが出た場合の確認手順（`requestContentGenerationAction` →
+`requestContentGeneration` → `submitContentGeneration` の順に追う）。
+
+1. **ログを確認する**（Vercelなら Project → Functions → Logs、ローカルなら`npm run dev`の標準出力）。
+   `submitContentGeneration()`は毎回 `neumos submit request` / `neumos submit response` を
+   構造化ログ出力する（endpoint・request body・マスク済みAuthorization・status・response body）。
+   ログが1件も出ていなければ、`requestContentGeneration()`より前段（AI診断 `runStoreDiagnosis` や
+   `repo.createContentGenerationRequest`）で例外が発生している可能性が高い。
+2. **`NEUMOS_API_URL` / `NEUMOS_API_KEY` がProductionに設定されているか確認する。**
+   `.env.local`はデプロイに含まれないため、Vercel等のダッシュボードでProduction環境変数として
+   別途設定する必要がある。`neumos submit skipped: not configured` ログが出ていれば未設定。
+   `neumos config status`ログの`NEUMOS_API_URL_host`で、意図したホストが読めているか確認できる。
+3. **エンドポイントがREADMEと一致しているか確認する。**
+   本READMEが定める契約は `POST {NEUMOS_API_URL}/v1/contents`（`/api`を含まない）。
+   `NEUMOS_API_URL`にパスを足していないか（例: 誤って`.../api`まで含めていないか）を確認する。
+   含めていると実際には`.../api/v1/contents`を叩いてしまい404になる
+   （`neumos config warning: NEUMOS_API_URL contains a path`ログで検出できる）。
+   Neumos AI v1側のルートも `src/app/v1/contents/route.ts`（`app/api/`配下ではない）に
+   あることを確認し、`npm run build`の`Route (app)`出力で実際のパスが`/v1/contents`に
+   なっているか確認する。
+4. **送信JSONとAPIの期待するJSONを比較する。**
+   MVPは `{ generationType, brief }`（`brief`は`NeumosBrief`全体）を送る。
+   Neumos AI v1の`GenerateRequestSchema`（`src/lib/validation.ts`）が期待するのは
+   `storeName/industry/area/targetCustomer/mainProblem/salesAngle/websiteGoal/siteConcept/
+   recommendedPages/seoKeywords/tone/offer`の12フィールドで、名称・要求（非空文字列）は
+   MVP側`NeumosBrief`と1:1で一致する（`brief`内の余分な`generationType`はZodが無視するため
+   問題ない）。`400`が返る場合はログの`requestBody`と本スキーマを見比べ、
+   空文字列になっているフィールドが無いか確認する。
+5. **画面にエラー本文が表示されない/読みにくい場合**は`neumos-panel.tsx`の該当リクエストの
+   「理由:」欄を確認する。`client.ts`は`response.text()`を切り詰めずにそのまま`error`へ格納するため、
+   長いHTMLエラーページ等も含めて全文が`<pre>`内にスクロール表示される。
 
 ---
 
@@ -226,7 +311,7 @@ Neumos AI v1は、この契約に対応する**互換ブリッジ**を用意し�
 - **公開自動化**: `publishedUrl` は現状常に `null`。静的ホスティングへのデプロイや
   独自ドメイン接続は今後の拡張ポイント（`preview/render.ts` の出力はビルド非依存の
   単体HTMLのため、そのまま静的配信可能）。
-- **認証**: `/api/v1/contents` は現状 `Authorization` ヘッダを検証しない。本番運用では
+- **認証**: `/v1/contents` は現状 `Authorization` ヘッダを検証しない。本番運用では
   MVPの `INTERNAL_API_KEY` と同様の仕組みを追加すること。
 - **多言語対応**: `StoreBrief` に `language` を追加し、`prompts.ts` / `rule-based.ts` を
   言語別に分岐させることで対応可能。

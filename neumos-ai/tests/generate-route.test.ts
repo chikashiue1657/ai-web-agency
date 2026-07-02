@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { POST as generatePOST } from "@/app/api/generate/route";
-import { POST as v1ContentsPOST } from "@/app/api/v1/contents/route";
-import { GET as v1ContentsStatusGET } from "@/app/api/v1/contents/[requestId]/route";
+import { POST as v1ContentsPOST } from "@/app/v1/contents/route";
+import { GET as v1ContentsStatusGET } from "@/app/v1/contents/[requestId]/route";
 
 const brief = {
   storeName: "整体院 結",
@@ -63,14 +63,14 @@ describe("POST /api/generate", () => {
   });
 });
 
-describe("MVP bridge: POST /api/v1/contents + GET /api/v1/contents/:requestId", () => {
+describe("MVP bridge: POST /v1/contents + GET /v1/contents/:requestId (NOT under /api — must match MVP's client.ts + neumos-live.test.ts contract)", () => {
   beforeEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
   });
 
   it("submits a generation job and returns a status pollable via GET", async () => {
-    const submitReq = jsonRequest("http://localhost:3100/api/v1/contents", {
+    const submitReq = jsonRequest("http://localhost:3100/v1/contents", {
       generationType: "website",
       brief,
     });
@@ -82,7 +82,7 @@ describe("MVP bridge: POST /api/v1/contents + GET /api/v1/contents/:requestId", 
     expect(submitJson.generatedContents[0]).toHaveProperty("type");
 
     const statusRes = await v1ContentsStatusGET(
-      new NextRequest(new Request(`http://localhost:3100/api/v1/contents/${submitJson.requestId}`)),
+      new NextRequest(new Request(`http://localhost:3100/v1/contents/${submitJson.requestId}`)),
       { params: { requestId: submitJson.requestId } }
     );
     expect(statusRes.status).toBe(200);

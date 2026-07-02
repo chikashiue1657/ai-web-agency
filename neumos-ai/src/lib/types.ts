@@ -53,9 +53,17 @@ export interface GenerateRequest {
 /** 生成パイプラインの状態。v1は同期生成のため queued/generating は実質一瞬で通過する。 */
 export type GenerateStatus = "queued" | "generating" | "preview" | "published" | "failed";
 
+/**
+ * セクションの意味的分類。Website Rendererはこの `kind` を見て
+ * About / Service / Feature のどのコンポーネントに描画するかを決める。
+ * 分類できない構成ページは "other" として汎用セクション扱いにする。
+ */
+export type SectionKind = "about" | "service" | "feature" | "other";
+
 /** ホームページの1セクション（構成案 + 生成本文）。 */
 export interface WebsiteSection {
   id: string;
+  kind: SectionKind;
   heading: string;
   body: string;
 }
@@ -69,6 +77,23 @@ export interface WebsiteCta {
 export interface FaqItem {
   question: string;
   answer: string;
+}
+
+/**
+ * ギャラリーの1枠。実写真は無い前提のため、Website Rendererは
+ * `caption`/`altText` を使ってデザイン性のあるプレースホルダー（グラデーション+文言）を描画する。
+ */
+export interface GalleryItem {
+  id: string;
+  caption: string;
+  altText: string;
+}
+
+/** アクセス（地図・行き方）情報。Google Maps埋め込み用のクエリのみ保持し、APIキーは不要。 */
+export interface AccessInfo {
+  areaLabel: string;
+  addressHint: string;
+  mapQuery: string;
 }
 
 /**
@@ -91,6 +116,9 @@ export interface GeneratedWebsiteContents {
   heroTitle: string;
   heroSubtitle: string;
   sections: WebsiteSection[];
+  gallery: GalleryItem[];
+  access: AccessInfo;
+  contactMethods: string[];
   cta: WebsiteCta;
   seoTitle: string;
   metaDescription: string;

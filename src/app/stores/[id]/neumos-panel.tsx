@@ -13,7 +13,7 @@ import {
   refreshContentStatusAction,
 } from "@/app/actions";
 import type { ContentGenerationRequest, ContentGenStatus, GenerationType } from "@/lib/types";
-import type { NeumosErrorDetail } from "@/lib/neumos/client";
+import { ErrorDetailPanel, parseErrorDetail, type NeumosErrorDetail } from "@/components/error-detail";
 import { GENERATION_TYPES, GENERATION_TYPE_LABEL } from "@/lib/neumos/catalog";
 
 const FLOW = ["営業支援", "受注", "生成", "公開"] as const;
@@ -46,89 +46,12 @@ function StatusBadge({ status }: { status: ContentGenStatus }) {
   );
 }
 
-function parseErrorDetail(raw: string): NeumosErrorDetail | null {
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? (parsed as NeumosErrorDetail) : null;
-  } catch {
-    return null;
-  }
-}
-
 /** 一覧表示用の短い要約行。値を推測・加工せず、受信した生の値をそのまま並べるだけ。 */
 function errorSummary(raw: string): string {
   const detail = parseErrorDetail(raw);
   if (!detail) return raw;
   if (detail.networkError) return `接続エラー: ${detail.networkError}`;
   return `HTTP ${detail.responseStatus ?? "?"} — ${detail.requestUrl ?? ""}`;
-}
-
-/**
- * NeumosErrorDetail を「HTTP Status / URL / Request Method / Request Body /
- * Response Body / Network Error」の各項目としてそのまま並べ、
- * 「エラー詳細を表示」の折りたたみとJSONコピーボタンを提供する共通表示部品。
- * 値の要約・推測は行わず、受信した値をそのまま表示する。
- */
-function ErrorDetailPanel({
-  detail,
-  rawJson,
-  isOpen,
-  onToggle,
-  isCopied,
-  onCopy,
-}: {
-  detail: NeumosErrorDetail | null;
-  rawJson: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  isCopied: boolean;
-  onCopy: () => void;
-}) {
-  return (
-    <div>
-      <div className="mt-1 flex items-center gap-2">
-        <button onClick={onToggle} className="text-xs text-rose-700 hover:text-rose-900 underline">
-          {isOpen ? "エラー詳細を隠す" : "エラー詳細を表示"}
-        </button>
-        {isOpen && (
-          <button
-            onClick={onCopy}
-            className="text-xs px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50"
-          >
-            {isCopied ? "コピーしました" : "JSONをコピー"}
-          </button>
-        )}
-      </div>
-      {isOpen && (
-        <div className="mt-2 space-y-2">
-          {detail && (
-            <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt className="text-gray-400">HTTP Status</dt>
-              <dd className="text-gray-800">{detail.responseStatus ?? "(レスポンス無し)"}</dd>
-              <dt className="text-gray-400">URL</dt>
-              <dd className="text-gray-800 break-all">{detail.requestUrl ?? "-"}</dd>
-              <dt className="text-gray-400">Request Method</dt>
-              <dd className="text-gray-800">{detail.requestMethod ?? "-"}</dd>
-              <dt className="text-gray-400">Request Body</dt>
-              <dd className="text-gray-800 break-all whitespace-pre-wrap">
-                {detail.requestBody ? JSON.stringify(detail.requestBody) : "-"}
-              </dd>
-              <dt className="text-gray-400">Response Body</dt>
-              <dd className="text-gray-800 break-all whitespace-pre-wrap">{detail.responseBody ?? "-"}</dd>
-              <dt className="text-gray-400">Network Error</dt>
-              <dd className="text-gray-800 break-all whitespace-pre-wrap">{detail.networkError ?? "-"}</dd>
-            </dl>
-          )}
-          <div>
-            <p className="text-xs text-gray-400 mb-1">JSON全文:</p>
-            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-gray-900 p-3 text-xs text-rose-200">
-              {detail ? JSON.stringify(detail, null, 2) : rawJson}
-            </pre>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function NeumosPanel({

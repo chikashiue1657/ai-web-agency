@@ -6,6 +6,7 @@
  */
 import { useState, useTransition } from "react";
 import { generateOutreachAction } from "@/app/actions";
+import { ErrorDetailPanel, useErrorDetailToggle, type NeumosErrorDetail } from "@/components/error-detail";
 import type { OutreachChannel } from "@/lib/outreach";
 
 const CHANNELS: Array<{ key: OutreachChannel; label: string }> = [
@@ -19,11 +20,15 @@ export function OutreachPanel({ storeId }: { storeId: string }) {
   const [active, setActive] = useState<OutreachChannel | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<NeumosErrorDetail | null>(null);
   const [copied, setCopied] = useState(false);
+  const detailToggle = useErrorDetailToggle();
 
   function run(channel: OutreachChannel) {
     setActive(channel);
     setError(null);
+    setErrorDetail(null);
+    detailToggle.reset();
     setCopied(false);
     startTransition(async () => {
       const res = await generateOutreachAction(storeId, channel);
@@ -31,6 +36,7 @@ export function OutreachPanel({ storeId }: { storeId: string }) {
       else {
         setText("");
         setError(res.error);
+        setErrorDetail(res.errorDetail);
       }
     });
   }
@@ -64,7 +70,19 @@ export function OutreachPanel({ storeId }: { storeId: string }) {
         ))}
       </div>
 
-      {error && <p className="text-sm text-red-600">エラー: {error}</p>}
+      {error && (
+        <div className="rounded border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-600">エラー: {error}</p>
+          <ErrorDetailPanel
+            detail={errorDetail}
+            rawJson={errorDetail ? JSON.stringify(errorDetail) : error}
+            isOpen={detailToggle.isOpen}
+            onToggle={detailToggle.toggle}
+            isCopied={detailToggle.isCopied}
+            onCopy={() => detailToggle.copy(errorDetail ? JSON.stringify(errorDetail, null, 2) : error)}
+          />
+        </div>
+      )}
 
       {text && (
         <div>

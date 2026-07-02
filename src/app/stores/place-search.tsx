@@ -10,6 +10,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { searchPlacesAction } from "@/app/actions";
+import { ErrorDetailPanel, useErrorDetailToggle, type NeumosErrorDetail } from "@/components/error-detail";
 
 type Result = {
   found: number;
@@ -24,7 +25,9 @@ export function PlaceSearch() {
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<NeumosErrorDetail | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const detailToggle = useErrorDetailToggle();
 
   const busy = loading || isPending;
 
@@ -33,11 +36,14 @@ export function PlaceSearch() {
     if (!q || busy) return;
     setLoading(true);
     setError(null);
+    setErrorDetail(null);
+    detailToggle.reset();
     setResult(null);
     try {
       const res = await searchPlacesAction(q);
       if (!res.ok) {
         setError(res.error);
+        setErrorDetail(res.errorDetail);
         return;
       }
       setResult({
@@ -48,8 +54,8 @@ export function PlaceSearch() {
       });
       // 一覧を再取得（サーバコンポーネントの再レンダリング）
       startTransition(() => router.refresh());
-    } catch {
-      setError("ネットワークエラーが発生しました");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ネットワークエラーが発生しました");
     } finally {
       setLoading(false);
     }
@@ -87,7 +93,19 @@ export function PlaceSearch() {
           {result.scored}件の優先度を判定しました。
         </p>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">エラー: {error}</p>}
+      {error && (
+        <div className="mt-2 rounded border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-600">エラー: {error}</p>
+          <ErrorDetailPanel
+            detail={errorDetail}
+            rawJson={errorDetail ? JSON.stringify(errorDetail) : error}
+            isOpen={detailToggle.isOpen}
+            onToggle={detailToggle.toggle}
+            isCopied={detailToggle.isCopied}
+            onCopy={() => detailToggle.copy(errorDetail ? JSON.stringify(errorDetail, null, 2) : error)}
+          />
+        </div>
+      )}
     </div>
   );
 }

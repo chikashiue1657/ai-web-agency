@@ -6,6 +6,7 @@
  */
 import { useState, useTransition } from "react";
 import { runDiagnosisAction } from "@/app/actions";
+import { ErrorDetailPanel, useErrorDetailToggle, type NeumosErrorDetail } from "@/components/error-detail";
 import type { StoreStrategy } from "@/lib/types";
 
 export function DiagnosisPanel({
@@ -18,13 +19,20 @@ export function DiagnosisPanel({
   const [isPending, startTransition] = useTransition();
   const [strategy, setStrategy] = useState<StoreStrategy | null>(initialStrategy);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<NeumosErrorDetail | null>(null);
+  const detailToggle = useErrorDetailToggle();
 
   function run() {
     setError(null);
+    setErrorDetail(null);
+    detailToggle.reset();
     startTransition(async () => {
       const res = await runDiagnosisAction(storeId);
       if (res.ok) setStrategy(res.strategy);
-      else setError(res.error);
+      else {
+        setError(res.error);
+        setErrorDetail(res.errorDetail);
+      }
     });
   }
 
@@ -49,7 +57,19 @@ export function DiagnosisPanel({
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600">エラー: {error}</p>}
+      {error && (
+        <div className="rounded border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-600">エラー: {error}</p>
+          <ErrorDetailPanel
+            detail={errorDetail}
+            rawJson={errorDetail ? JSON.stringify(errorDetail) : error}
+            isOpen={detailToggle.isOpen}
+            onToggle={detailToggle.toggle}
+            isCopied={detailToggle.isCopied}
+            onCopy={() => detailToggle.copy(errorDetail ? JSON.stringify(errorDetail, null, 2) : error)}
+          />
+        </div>
+      )}
 
       {!strategy && !error && (
         <p className="text-sm text-gray-400">

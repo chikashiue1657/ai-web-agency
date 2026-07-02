@@ -40,6 +40,52 @@ export interface NeumosErrorDetail {
   responseBody: string | null;
   /** fetchが例外を投げた場合のメッセージ。正常にレスポンスを受けた場合はnull。 */
   networkError: string | null;
+  /**
+   * 例外オブジェクトの生の情報。Supabase(PostgrestError)の code/details/hint を含め、
+   * 存在するプロパティだけをそのまま格納する（無いものは省き、値を作らない）。
+   */
+  errorCause: ErrorCause | null;
+}
+
+export interface ErrorCause {
+  name?: string;
+  message?: string;
+  /** Postgrest/Postgresのエラーコード（例: 42P01 = relation does not exist）。 */
+  code?: string;
+  /** Postgrestのdetails（例: 存在しないテーブル名など）。 */
+  details?: string;
+  /** Postgrestのhint（対処のヒント）。 */
+  hint?: string;
+  stack?: string;
+}
+
+/**
+ * 例外から、あるかどうか分からないプロパティ(code/details/hint等)だけを
+ * そのまま抜き出す。Supabase PostgrestError・ServiceError・素のErrorのいずれでも、
+ * 存在する項目だけを拾い、無い項目を捏造しない。
+ */
+export function extractErrorCause(err: unknown): ErrorCause {
+  if (err instanceof Error) {
+    const withPg = err as Error & { code?: unknown; details?: unknown; hint?: unknown };
+    return {
+      name: err.name,
+      message: err.message,
+      code: typeof withPg.code === "string" ? withPg.code : undefined,
+      details: typeof withPg.details === "string" ? withPg.details : undefined,
+      hint: typeof withPg.hint === "string" ? withPg.hint : undefined,
+      stack: err.stack,
+    };
+  }
+  if (err && typeof err === "object") {
+    const obj = err as Record<string, unknown>;
+    return {
+      message: typeof obj.message === "string" ? obj.message : String(err),
+      code: typeof obj.code === "string" ? obj.code : undefined,
+      details: typeof obj.details === "string" ? obj.details : undefined,
+      hint: typeof obj.hint === "string" ? obj.hint : undefined,
+    };
+  }
+  return { message: String(err) };
 }
 
 /**
@@ -92,6 +138,7 @@ export function buildUnreachedErrorDetail(
   err: unknown
 ): NeumosErrorDetail {
   const req = describeRequest("/v1/contents", "POST", brief ? { generationType, brief } : null);
+  const cause = extractErrorCause(err);
   return {
     ...req,
     responseStatus: null,
@@ -101,6 +148,7 @@ export function buildUnreachedErrorDetail(
       err instanceof Error
         ? `${err.name}: ${err.message}`
         : `Neumos呼び出しに到達する前に失敗: ${String(err)}`,
+    errorCause: cause,
   };
 }
 
@@ -138,6 +186,7 @@ async function callNeumos(
     responseHeaders: null,
     responseBody: null,
     networkError: null,
+    errorCause: null,
   };
 
   let res: Response;
@@ -152,6 +201,7 @@ async function callNeumos(
     });
   } catch (err) {
     detail.networkError = err instanceof Error ? err.message : String(err);
+    detail.errorCause = extractErrorCause(err);
     return { status: "failed", error: JSON.stringify(detail) };
   }
 

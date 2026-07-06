@@ -30,6 +30,25 @@ create index if not exists content_gen_requests_created_idx
   on content_generation_requests (created_at desc);
 
 -- ============================================================
+-- 既存テーブルへの追従用マイグレーション
+-- ------------------------------------------------------------
+-- `create table if not exists` は既にテーブルが存在する環境には効かないため、
+-- 上のcreate table定義へカラムを追加しただけでは本番DBに反映されない
+-- （実例: methodカラムが本番テーブルに存在せずPGRST204「Could not find the
+-- 'method' column」が発生）。今後カラムを追加する場合も、この節に
+-- add column if not existsを追記した上でschema.sqlを再実行すれば、
+-- 新規作成・既存テーブルのどちらにも同じ結果になる。
+-- ============================================================
+alter table content_generation_requests
+  add column if not exists generation_type text not null default 'website';
+alter table content_generation_requests
+  add column if not exists status text not null default 'preview';
+alter table content_generation_requests
+  add column if not exists method text not null default 'rule';
+alter table content_generation_requests
+  add column if not exists published_url text;
+
+-- ============================================================
 -- RLS（雛形）: v1はservice role経由のサーバアクセス前提。今は無効のまま。
 -- ------------------------------------------------------------
 -- alter table content_generation_requests enable row level security;

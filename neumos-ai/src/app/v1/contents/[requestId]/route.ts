@@ -6,7 +6,13 @@ import { toLegacyGeneratedContents } from "@/lib/bridge";
  * GET /v1/contents/{requestId} — MVP側のポーリング契約に対応する状態取得API。
  * `app/api/` 配下に置かないこと（`../route.ts` のコメント参照。パスがズレるとMVPから404になる）。
  * v1 は同期生成のため、生成済みリクエストは常に status="preview" を返す。
+ *
+ * Next.js App RouterはGETの動的ルートを既定でキャッシュしうるため、
+ * Supabaseへ書き込んだ直後の行を必ず最新で読めるよう動的レンダリングを強制する。
  */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(_req: NextRequest, { params }: { params: { requestId: string } }) {
   const record = await getGenerationRecord(params.requestId);
   if (!record) {

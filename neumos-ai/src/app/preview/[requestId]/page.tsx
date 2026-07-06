@@ -2,6 +2,16 @@ import { getGenerationRecord } from "@/lib/store";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 
 /**
+ * Next.js App RouterはGETの動的ルートを既定でキャッシュしうる（Full Route Cache /
+ * fetchのData Cache）。生成直後にSupabaseへ書き込まれたばかりの行を必ず最新で
+ * 読むため、このセグメントは常に動的レンダリング・no-storeにする
+ * （さもないと、書き込み前に一度でも同じrequestIdへアクセスされた場合、
+ * 「見つかりません」の結果がキャッシュされ続けてしまう）。
+ */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+/**
  * 生成結果のプレビュー画面。
  * `/api/generate` が返した requestId でこのページへアクセスすると、
  * Website Renderer が組み立てた実際のホームページ（Next.jsコンポーネント・Tailwind・レスポンシブ対応）

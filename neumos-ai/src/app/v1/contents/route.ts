@@ -4,6 +4,7 @@ import { GenerationTypeNotImplementedError } from "@/lib/engine";
 import { performGeneration } from "@/lib/generate";
 import { toLegacyGeneratedContents } from "@/lib/bridge";
 import { IMPLEMENTED_GENERATION_TYPES } from "@/lib/types";
+import { extractErrorDetail } from "@/lib/error-detail";
 
 /**
  * POST /v1/contents — AI集客支援MVPの `NEUMOS_API_URL` 連携用エンドポイント。
@@ -58,7 +59,8 @@ export async function POST(req: NextRequest) {
         { status: 501 }
       );
     }
-    console.error("[neumos-ai] v1/contents generation failed", err);
-    return NextResponse.json({ error: "generation failed" }, { status: 500 });
+    const detail = extractErrorDetail(err);
+    console.error("[neumos-ai] v1/contents generation failed", detail);
+    return NextResponse.json({ error: "generation failed", errorDetail: detail }, { status: 500 });
   }
 }

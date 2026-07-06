@@ -5,16 +5,24 @@
  *   （ローカル開発では未設定でも動作するが、Vercelサーバーレス環境では
  *   インスタンスが使い捨て・複数並行のため、Production運用には必須）。
  * - AI集客支援MVP側のSupabaseプロジェクトとは別物（Neumos AI v1専用）。
- *   同じ変数名(NEXT_PUBLIC_SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY)を使うが、
- *   Vercelプロジェクトが分かれているため値が衝突することはない。
+ *
+ * URLは `SUPABASE_URL`（サーバ専用。クライアントバンドルへ公開する必要が無いため
+ * `NEXT_PUBLIC_` 接頭辞は付けない）を優先し、`NEXT_PUBLIC_SUPABASE_URL` が
+ * 設定されていればそちらもフォールバックとして受け付ける
+ * （過去にこの2つの変数名の不一致で本番のみSupabase未接続扱いになり、
+ * インメモリへ静かにフォールバックしていた事故があったため、両対応にしている）。
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let cached: SupabaseClient | null | undefined;
 
+function resolveUrl(): string | undefined {
+  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+
 export function getSupabaseAdmin(): SupabaseClient | null {
   if (cached !== undefined) return cached;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = resolveUrl();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     cached = null;
@@ -27,5 +35,5 @@ export function getSupabaseAdmin(): SupabaseClient | null {
 }
 
 export function isSupabaseConfigured(): boolean {
-  return !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return !!resolveUrl() && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 }

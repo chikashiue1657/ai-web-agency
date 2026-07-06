@@ -4,6 +4,7 @@ import { GenerationTypeNotImplementedError } from "@/lib/engine";
 import { performGeneration } from "@/lib/generate";
 import { IMPLEMENTED_GENERATION_TYPES } from "@/lib/types";
 import type { GenerateResponse } from "@/lib/types";
+import { extractErrorDetail } from "@/lib/error-detail";
 
 /**
  * POST /api/generate
@@ -49,7 +50,8 @@ export async function POST(req: NextRequest) {
         { status: 501 }
       );
     }
-    console.error("[neumos-ai] generation failed", err);
-    return NextResponse.json({ error: "generation failed" }, { status: 500 });
+    const detail = extractErrorDetail(err);
+    console.error("[neumos-ai] generation failed", detail);
+    return NextResponse.json({ error: "generation failed", errorDetail: detail }, { status: 500 });
   }
 }

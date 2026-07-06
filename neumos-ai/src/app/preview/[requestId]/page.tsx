@@ -1,5 +1,6 @@
 import { getGenerationRecord } from "@/lib/store";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
+import { extractErrorDetail } from "@/lib/error-detail";
 
 /**
  * Next.js App RouterはGETの動的ルートを既定でキャッシュしうる（Full Route Cache /
@@ -18,7 +19,22 @@ export const revalidate = 0;
  * をそのまま確認できる。このページ自体がそのまま公開可能な状態になっている。
  */
 export default async function PreviewPage({ params }: { params: { requestId: string } }) {
-  const record = await getGenerationRecord(params.requestId);
+  let record;
+  try {
+    record = await getGenerationRecord(params.requestId);
+  } catch (err) {
+    const detail = extractErrorDetail(err);
+    console.error("[neumos-ai] preview page lookup failed", detail);
+    return (
+      <main className="mx-auto max-w-2xl p-8">
+        <h1 className="text-xl font-bold text-red-700">プレビューの取得に失敗しました</h1>
+        <p className="mt-2 text-sm text-gray-500">requestId: <code>{params.requestId}</code></p>
+        <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-gray-900 p-3 text-xs text-rose-200">
+          {JSON.stringify(detail, null, 2)}
+        </pre>
+      </main>
+    );
+  }
 
   if (!record) {
     return (

@@ -180,6 +180,46 @@ create trigger trg_content_gen_requests_updated_at before update on content_gene
   for each row execute function set_updated_at();
 
 -- ============================================================
+-- 既存テーブルへの追従用マイグレーション
+-- ------------------------------------------------------------
+-- `create table if not exists` は既にテーブルが存在する環境には効かないため、
+-- 上のcreate table定義へカラムを追加しただけでは本番DBに反映されない
+-- （実例: errorカラムが本番テーブルに存在せずPGRST204
+-- 「Could not find the 'error' column」が発生）。今後カラムを追加する場合も
+-- この節にadd column if not existsを追記した上でこのファイルを再実行すれば、
+-- 新規作成・既存テーブルのどちらにも同じ結果になる。
+-- ============================================================
+alter table content_generation_requests
+  add column if not exists provider text not null default 'neumos';
+alter table content_generation_requests
+  add column if not exists generation_type text not null default 'website';
+alter table content_generation_requests
+  add column if not exists status text not null default 'draft';
+alter table content_generation_requests
+  add column if not exists brief jsonb;
+alter table content_generation_requests
+  add column if not exists external_id text;
+alter table content_generation_requests
+  add column if not exists preview_url text;
+alter table content_generation_requests
+  add column if not exists published_url text;
+alter table content_generation_requests
+  add column if not exists generated_contents jsonb;
+alter table content_generation_requests
+  add column if not exists error text;
+alter table content_generation_requests
+  add column if not exists updated_at timestamptz not null default now();
+
+-- ============================================================
+-- PostgRESTスキーマキャッシュの強制リロード
+-- ------------------------------------------------------------
+-- SQL Editorでのcreate/alter table直後、PostgREST側のスキーマキャッシュが
+-- 即時反映されず、実際には存在するカラムでも「Could not find the 'X' column」
+-- （PGRST204）が一時的に返ることがある。DDL変更のたびに必ず最後に実行する。
+-- ============================================================
+notify pgrst, 'reload schema';
+
+-- ============================================================
 -- activity_logs: 活動履歴（取り込み/判定/生成/営業メモ等）
 -- ============================================================
 create table if not exists activity_logs (

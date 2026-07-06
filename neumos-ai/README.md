@@ -96,7 +96,7 @@ neumos-ai/
 │       ├── validation.ts   # Zodスキーマ（入力検証・LLM出力検証）
 │       ├── catalog.ts      # generationType ラベル一元管理
 │       ├── generate.ts     # 生成〜保存の共通オーケストレーション
-│       ├── store.ts        # 生成結果のインメモリストア（本番は永続化に差し替え想定）
+│       ├── store.ts        # 生成結果の永続化ストア（Supabase / 未設定時はインメモリ）
 │       ├── bridge.ts       # MVP互換の GeneratedContent[] へ変換
 │       ├── llm/client.ts   # プロバイダ非依存LLMクライアント（Anthropic優先/OpenAI切替可）
 │       ├── engine/
@@ -113,15 +113,27 @@ neumos-ai/
 ```bash
 cd neumos-ai
 npm install
-cp .env.example .env.local   # 任意。未設定でもルールベースで完全動作
+cp .env.example .env.local   # 任意。未設定でもルールベース＋インメモリで完全動作
 npm run dev                  # http://localhost:3000
 ```
 
 ```bash
 npm run typecheck
 npm run build
-npm run test        # vitest 19件
+npm run test        # vitest
 ```
+
+### 永続化（Production必須）
+
+`/preview/[requestId]` はVercelのようなサーバーレス環境で複数インスタンス・
+再起動をまたいで参照できる必要があるため、Production運用では **Supabase設定が必須**。
+
+1. Supabaseで新規プロジェクトを作成（AI集客支援MVPとは別プロジェクト。DBを共有しない設計）
+2. `supabase/schema.sql` をSQL Editorで実行（`content_generation_requests`テーブルを作成）
+3. `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` を設定
+
+未設定のまま（ローカル開発等）だとインメモリにフォールバックし、同一プロセス内でのみ
+プレビューが参照できる（サーバーレスでは再起動・別インスタンスで失われる）。
 
 ## API
 
@@ -304,10 +316,11 @@ MVP側でこのエラーが出た場合の確認手順（`requestContentGenerati
 
 ## 制約・今後の拡張ポイント
 
-- **プレビューの永続化**: `src/lib/store.ts` は本番のVercelサーバーレス環境では
-  インスタンスごとに独立するため、複数インスタンス間でプレビューが引き継がれない
-  制約がある。本番運用では Vercel KV / Supabase 等の永続ストアに差し替えること
-  （`store.ts` のインターフェースのみ差し替えれば良い設計）。
+- **プレビューの永続化**: `src/lib/store.ts` はSupabase（`content_generation_requests`
+  テーブル）に保存する。`NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`が
+  未設定の場合のみインメモリにフォールバックする（ローカル開発向け。Vercel
+  サーバーレスでは複数インスタンス・再起動をまたげないため、Productionでは
+  必ずSupabaseを設定すること）。
 - **公開自動化**: `publishedUrl` は現状常に `null`。静的ホスティングへのデプロイや
   独自ドメイン接続は今後の拡張ポイント（`preview/render.ts` の出力はビルド非依存の
   単体HTMLのため、そのまま静的配信可能）。

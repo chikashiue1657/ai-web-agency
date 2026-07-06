@@ -7,8 +7,8 @@ import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
  * Website Renderer が組み立てた実際のホームページ（Next.jsコンポーネント・Tailwind・レスポンシブ対応）
  * をそのまま確認できる。このページ自体がそのまま公開可能な状態になっている。
  */
-export default function PreviewPage({ params }: { params: { requestId: string } }) {
-  const record = getGenerationRecord(params.requestId);
+export default async function PreviewPage({ params }: { params: { requestId: string } }) {
+  const record = await getGenerationRecord(params.requestId);
 
   if (!record) {
     return (
@@ -16,7 +16,7 @@ export default function PreviewPage({ params }: { params: { requestId: string } 
         <h1 className="text-xl font-bold text-gray-800">プレビューが見つかりません</h1>
         <p className="mt-2 text-sm text-gray-500">
           requestId: <code>{params.requestId}</code>{" "}
-          は存在しないか、サーバー再起動によりインメモリの生成結果が失われた可能性があります。
+          は存在しないか、生成結果がまだ保存されていない可能性があります。
           もう一度 <code>POST /api/generate</code> を実行してください。
         </p>
       </main>

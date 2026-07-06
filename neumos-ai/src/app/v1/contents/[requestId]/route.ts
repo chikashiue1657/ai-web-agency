@@ -8,7 +8,7 @@ import { toLegacyGeneratedContents } from "@/lib/bridge";
  * v1 は同期生成のため、生成済みリクエストは常に status="preview" を返す。
  */
 export async function GET(_req: NextRequest, { params }: { params: { requestId: string } }) {
-  const record = getGenerationRecord(params.requestId);
+  const record = await getGenerationRecord(params.requestId);
   if (!record) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

@@ -28,6 +28,6 @@ export async function performGeneration(
     publishedUrl: null,
     createdAt: new Date().toISOString(),
   };
-  saveGenerationRecord(record);
+  await saveGenerationRecord(record);
   return record;
 }

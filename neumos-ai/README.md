@@ -130,7 +130,9 @@ npm run test        # vitest
 
 1. Supabaseで新規プロジェクトを作成（AI集客支援MVPとは別プロジェクト。DBを共有しない設計）
 2. `supabase/schema.sql` をSQL Editorで実行（`content_generation_requests`テーブルを作成）
-3. `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` を設定
+3. `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` を設定
+   （`SUPABASE_URL`はサーバ専用のため`NEXT_PUBLIC_`接頭辞は不要。既に
+   `NEXT_PUBLIC_SUPABASE_URL`を設定済みの場合はそちらもフォールバックとして読む）
 
 未設定のまま（ローカル開発等）だとインメモリにフォールバックし、同一プロセス内でのみ
 プレビューが参照できる（サーバーレスでは再起動・別インスタンスで失われる）。
@@ -317,9 +319,9 @@ MVP側でこのエラーが出た場合の確認手順（`requestContentGenerati
 ## 制約・今後の拡張ポイント
 
 - **プレビューの永続化**: `src/lib/store.ts` はSupabase（`content_generation_requests`
-  テーブル）に保存する。`NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`が
-  未設定の場合のみインメモリにフォールバックする（ローカル開発向け。Vercel
-  サーバーレスでは複数インスタンス・再起動をまたげないため、Productionでは
+  テーブル）に保存する。`SUPABASE_URL`（または`NEXT_PUBLIC_SUPABASE_URL`）/
+  `SUPABASE_SERVICE_ROLE_KEY`が未設定の場合のみインメモリにフォールバックする
+  （ローカル開発向け。Vercelサーバーレスでは複数インスタンス・再起動をまたげないため、Productionでは
   必ずSupabaseを設定すること）。
 - **公開自動化**: `publishedUrl` は現状常に `null`。静的ホスティングへのデプロイや
   独自ドメイン接続は今後の拡張ポイント（`preview/render.ts` の出力はビルド非依存の

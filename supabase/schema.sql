@@ -180,7 +180,7 @@ create trigger trg_content_gen_requests_updated_at before update on content_gene
   for each row execute function set_updated_at();
 
 -- ============================================================
--- 既存テーブルへの追従用マイグレーション
+-- 既存テーブルへの追従用マイグレーション（部分的なカラム不足のみの場合）
 -- ------------------------------------------------------------
 -- `create table if not exists` は既にテーブルが存在する環境には効かないため、
 -- 上のcreate table定義へカラムを追加しただけでは本番DBに反映されない
@@ -188,6 +188,11 @@ create trigger trg_content_gen_requests_updated_at before update on content_gene
 -- 「Could not find the 'error' column」が発生）。今後カラムを追加する場合も
 -- この節にadd column if not existsを追記した上でこのファイルを再実行すれば、
 -- 新規作成・既存テーブルのどちらにも同じ結果になる。
+--
+-- 注意: store_idのような当初からの必須カラムまで不足を報告される場合、
+-- テーブルはこのファイルとは無関係な構造で作られている（＝差分ALTERでは
+-- 収束しない）ため、下の「全面リセット」を使うこと
+-- （実例: 本番でerror修正後もstore_idが見つからずPGRST204が再発）。
 -- ============================================================
 alter table content_generation_requests
   add column if not exists provider text not null default 'neumos';
@@ -209,6 +214,15 @@ alter table content_generation_requests
   add column if not exists error text;
 alter table content_generation_requests
   add column if not exists updated_at timestamptz not null default now();
+
+-- ============================================================
+-- 全面リセット（テーブル構造がこのファイルと大きく乖離している場合）
+-- ------------------------------------------------------------
+-- 既存の生成リクエスト履歴は全て失われる（stores等の他テーブルには影響しない）。
+-- 過去データの保持が不要な場合のみ、上のALTER節の代わりにこちらを使う。
+-- ------------------------------------------------------------
+-- drop table if exists content_generation_requests;
+-- （その後、上の create table / create index / create trigger をそのまま実行する）
 
 -- ============================================================
 -- PostgRESTスキーマキャッシュの強制リロード

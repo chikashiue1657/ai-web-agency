@@ -403,7 +403,7 @@ export async function requestContentGeneration(
 
 /**
  * 生成パイプラインの失敗を NeumosErrorDetail 付きで記録する。
- * - 可能な限り content_generation_requests に status:"failed" として保存する
+ * - 可能な限り mvp_content_generation_requests に status:"failed" として保存する
  *   （成功すれば、以降はUIの通常の「Failed」リクエスト表示・詳細展開がそのまま使える）。
  * - 保存自体が失敗した場合でも、呼び出し元(actions.ts)がUIへ詳細を渡せるよう
  *   ContentGenerationError（.detail に NeumosErrorDetail）を返す。

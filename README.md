@@ -132,7 +132,7 @@ blog_post / faq / seo_content / copywriting（以降は近日対応）。
 ### Neumos API 連携（実接続）
 
 `NEUMOS_API_URL` / `NEUMOS_API_KEY` が設定されていれば実APIへ送信、未設定なら
-`content_generation_requests` に**下書き保存**（NeumosBrief のJSONプレビュー）。想定REST契約:
+`mvp_content_generation_requests` に**下書き保存**（NeumosBrief のJSONプレビュー）。想定REST契約:
 
 | 操作 | メソッド/パス | ボディ | レスポンス |
 |---|---|---|---|
@@ -165,7 +165,7 @@ blog_post / faq / seo_content / copywriting（以降は近日対応）。
 
 ## 今後の拡張ポイント
 
-- **公開自動化**: `content_generation_requests.published_url` / `generated_sites.published_url` を起点に GitHub+Vercel デプロイ、Cloudflareで独自ドメイン接続。
+- **公開自動化**: `mvp_content_generation_requests.published_url` / `generated_sites.published_url` を起点に GitHub+Vercel デプロイ、Cloudflareで独自ドメイン接続。
 - **CMS化**: サイトは `generated_json`(SiteDocument schema) で保持済み → Sanity等への移行が容易。
 - **保守AI / 差分監視**: `activity_logs` を基盤に月次保守、Instagram/Googleマップ差分監視を追加。
 - **マルチテナント / 認証**: `tenant_id` 予約済み。Supabase Auth + RLS（schema.sqlに雛形）。`checkApiKey` を本認証へ差し替え。

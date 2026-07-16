@@ -129,10 +129,16 @@ npm run test        # vitest
 再起動をまたいで参照できる必要があるため、Production運用では **Supabase設定が必須**。
 
 1. Supabaseで新規プロジェクトを作成（AI集客支援MVPとは別プロジェクト。DBを共有しない設計）
-2. `supabase/schema.sql` をSQL Editorで実行（`content_generation_requests`テーブルを作成）
+2. `supabase/schema.sql` をSQL Editorで実行（`neumos_content_generation_requests`テーブルを作成）
 3. `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` を設定
    （`SUPABASE_URL`はサーバ専用のため`NEXT_PUBLIC_`接頭辞は不要。既に
    `NEXT_PUBLIC_SUPABASE_URL`を設定済みの場合はそちらもフォールバックとして読む）
+
+**注意**: MVPと同一のSupabaseプロジェクトを共有する運用になった場合でも、
+テーブル名が`neumos_`接頭辞付き（`neumos_content_generation_requests`）のため、
+MVP側の`mvp_content_generation_requests`とは衝突しない。過去に両者が同じ
+テーブル名`content_generation_requests`を取り合い、片方のcreate/drop tableが
+もう片方のカラムを消してしまう事故が発生したため、この接頭辞は変更しないこと。
 
 未設定のまま（ローカル開発等）だとインメモリにフォールバックし、同一プロセス内でのみ
 プレビューが参照できる（サーバーレスでは再起動・別インスタンスで失われる）。
@@ -240,7 +246,7 @@ Neumos AI v1は、この契約に対応する**互換ブリッジ**を用意し�
    ```
 
 3. MVP側は `NEUMOS_API_URL` が設定されると、店舗詳細の「この店舗のホームページをAIで作成」
-   ボタンから `POST {NEUMOS_API_URL}/v1/contents` を叩き、`content_generation_requests` に
+   ボタンから `POST {NEUMOS_API_URL}/v1/contents` を叩き、MVP自身の`mvp_content_generation_requests`に
    `requestId(=external_id)` / `status` / `previewUrl` / `publishedUrl` / `generatedContents` を保存する。
    「生成状況を更新」ボタンで `GET {NEUMOS_API_URL}/v1/contents/{requestId}` をポーリングする。
 
@@ -318,7 +324,7 @@ MVP側でこのエラーが出た場合の確認手順（`requestContentGenerati
 
 ## 制約・今後の拡張ポイント
 
-- **プレビューの永続化**: `src/lib/store.ts` はSupabase（`content_generation_requests`
+- **プレビューの永続化**: `src/lib/store.ts` はSupabase（`neumos_content_generation_requests`
   テーブル）に保存する。`SUPABASE_URL`（または`NEXT_PUBLIC_SUPABASE_URL`）/
   `SUPABASE_SERVICE_ROLE_KEY`が未設定の場合のみインメモリにフォールバックする
   （ローカル開発向け。Vercelサーバーレスでは複数インスタンス・再起動をまたげないため、Productionでは

@@ -2,8 +2,10 @@
  * 生成結果の永続化ストア。
  *
  * - Supabase（NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY）が設定されていれば
- *   `content_generation_requests` テーブルへ保存し、Vercelのどのサーバーレスインスタンス・
+ *   `neumos_content_generation_requests` テーブルへ保存し、Vercelのどのサーバーレスインスタンス・
  *   再起動後からでも `/preview/[requestId]` を再取得できるようにする。
+ *   （テーブル名にneumos_接頭辞。MVP側と同一Supabaseプロジェクトを共有する運用でも
+ *   テーブル名が衝突しないようにするため。詳細はsupabase/schema.sqlのコメント参照）
  * - 未設定（ローカル開発等）ならインメモリにフォールバックする
  *   （同一プロセス内でのみ有効。Production運用では必ずSupabaseを設定すること）。
  */
@@ -73,7 +75,7 @@ export async function saveGenerationRecord(record: StoredGenerationRecord): Prom
   if (!admin) return;
 
   const { error } = await admin
-    .from("content_generation_requests")
+    .from("neumos_content_generation_requests")
     .upsert(recordToRow(record), { onConflict: "request_id" });
   if (error) throw error;
 }
@@ -83,7 +85,7 @@ export async function getGenerationRecord(requestId: string): Promise<StoredGene
   if (!admin) return memStore.get(requestId);
 
   const { data, error } = await admin
-    .from("content_generation_requests")
+    .from("neumos_content_generation_requests")
     .select("*")
     .eq("request_id", requestId)
     .maybeSingle();
@@ -98,7 +100,7 @@ export async function listGenerationRecords(): Promise<StoredGenerationRecord[]>
   }
 
   const { data, error } = await admin
-    .from("content_generation_requests")
+    .from("neumos_content_generation_requests")
     .select("*")
     .order("created_at", { ascending: false });
   if (error) throw error;

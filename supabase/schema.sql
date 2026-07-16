@@ -151,11 +151,20 @@ create trigger trg_store_strategies_updated_at before update on store_strategies
   for each row execute function set_updated_at();
 
 -- ============================================================
--- content_generation_requests: コンテンツ生成リクエスト（ノイモスAI連携）
+-- mvp_content_generation_requests: コンテンツ生成リクエスト（ノイモスAI連携・MVP専用）
 --   営業支援 → 受注 → 生成 → 公開 の記録。NeumosBrief(契約)を保持する。
 --   generation_type で website / blog / instagram 等を区別（同じbriefから複数種別）。
+--
+-- 重要: テーブル名にmvp_接頭辞を付けている。
+-- Neumos AI v1もMVPと同一のSupabaseプロジェクトを使う運用になり得るため、
+-- もし両者が同じテーブル名(content_generation_requests)を使うと、
+-- 必要なカラムが全く異なる（MVP: id/store_id/provider/error/updated_at等、
+-- Neumos AI: request_id/method/preview_html等）ため、片方のdrop table/create tableが
+-- もう片方を破壊する（実例: 本番で両者が同じテーブルを取り合い、PGRST204が
+-- 交互に再発し続けた）。二度とこの種の事故が起きないよう、
+-- 本ファイルは今後も content_generation_requests という生の名前を使わないこと。
 -- ============================================================
-create table if not exists content_generation_requests (
+create table if not exists mvp_content_generation_requests (
   id              uuid primary key default gen_random_uuid(),
   store_id        uuid not null references stores(id) on delete cascade,
   provider        text not null default 'neumos',       -- 生成エンジン
@@ -171,58 +180,42 @@ create table if not exists content_generation_requests (
   updated_at         timestamptz not null default now()
 );
 
-create index if not exists content_gen_requests_store_idx on content_generation_requests (store_id);
-create index if not exists content_gen_requests_status_idx on content_generation_requests (status);
-create index if not exists content_gen_requests_type_idx on content_generation_requests (generation_type);
+create index if not exists mvp_content_gen_requests_store_idx on mvp_content_generation_requests (store_id);
+create index if not exists mvp_content_gen_requests_status_idx on mvp_content_generation_requests (status);
+create index if not exists mvp_content_gen_requests_type_idx on mvp_content_generation_requests (generation_type);
 
-drop trigger if exists trg_content_gen_requests_updated_at on content_generation_requests;
-create trigger trg_content_gen_requests_updated_at before update on content_generation_requests
+drop trigger if exists trg_mvp_content_gen_requests_updated_at on mvp_content_generation_requests;
+create trigger trg_mvp_content_gen_requests_updated_at before update on mvp_content_generation_requests
   for each row execute function set_updated_at();
 
 -- ============================================================
 -- 既存テーブルへの追従用マイグレーション（部分的なカラム不足のみの場合）
 -- ------------------------------------------------------------
 -- `create table if not exists` は既にテーブルが存在する環境には効かないため、
--- 上のcreate table定義へカラムを追加しただけでは本番DBに反映されない
--- （実例: errorカラムが本番テーブルに存在せずPGRST204
--- 「Could not find the 'error' column」が発生）。今後カラムを追加する場合も
--- この節にadd column if not existsを追記した上でこのファイルを再実行すれば、
--- 新規作成・既存テーブルのどちらにも同じ結果になる。
---
--- 注意: store_idのような当初からの必須カラムまで不足を報告される場合、
--- テーブルはこのファイルとは無関係な構造で作られている（＝差分ALTERでは
--- 収束しない）ため、下の「全面リセット」を使うこと
--- （実例: 本番でerror修正後もstore_idが見つからずPGRST204が再発）。
+-- 上のcreate table定義へカラムを追加しただけでは本番DBに反映されない。
+-- 今後カラムを追加する場合も、この節にadd column if not existsを追記した上で
+-- このファイルを再実行すれば、新規作成・既存テーブルのどちらにも同じ結果になる。
 -- ============================================================
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists provider text not null default 'neumos';
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists generation_type text not null default 'website';
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists status text not null default 'draft';
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists brief jsonb;
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists external_id text;
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists preview_url text;
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists published_url text;
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists generated_contents jsonb;
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists error text;
-alter table content_generation_requests
+alter table mvp_content_generation_requests
   add column if not exists updated_at timestamptz not null default now();
-
--- ============================================================
--- 全面リセット（テーブル構造がこのファイルと大きく乖離している場合）
--- ------------------------------------------------------------
--- 既存の生成リクエスト履歴は全て失われる（stores等の他テーブルには影響しない）。
--- 過去データの保持が不要な場合のみ、上のALTER節の代わりにこちらを使う。
--- ------------------------------------------------------------
--- drop table if exists content_generation_requests;
--- （その後、上の create table / create index / create trigger をそのまま実行する）
 
 -- ============================================================
 -- PostgRESTスキーマキャッシュの強制リロード

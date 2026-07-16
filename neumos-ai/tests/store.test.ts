@@ -12,7 +12,7 @@ const rows = new Map<string, Record<string, unknown>>();
 function fakeSupabaseAdmin() {
   return {
     from(table: string) {
-      if (table !== "content_generation_requests") throw new Error(`unexpected table: ${table}`);
+      if (table !== "neumos_content_generation_requests") throw new Error(`unexpected table: ${table}`);
       return {
         upsert(row: Record<string, unknown>, _opts: { onConflict: string }) {
           rows.set(row.request_id as string, row);

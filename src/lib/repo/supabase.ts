@@ -137,7 +137,7 @@ class SupabaseRepository implements Repository {
         db().from("generated_sites").select("*").eq("store_id", id).order("created_at", { ascending: false }),
         db().from("activity_logs").select("*").eq("store_id", id).order("created_at", { ascending: false }),
         db().from("store_strategies").select("*").eq("store_id", id).maybeSingle(),
-        db().from("content_generation_requests").select("*").eq("store_id", id).order("created_at", { ascending: false }),
+        db().from("mvp_content_generation_requests").select("*").eq("store_id", id).order("created_at", { ascending: false }),
       ]);
     return {
       store,
@@ -324,7 +324,7 @@ class SupabaseRepository implements Repository {
     input: CreateContentRequestInput
   ): Promise<ContentGenerationRequest> {
     const { data, error } = await db()
-      .from("content_generation_requests")
+      .from("mvp_content_generation_requests")
       .insert({
         store_id: input.store_id,
         provider: input.provider,
@@ -345,7 +345,7 @@ class SupabaseRepository implements Repository {
 
   async listContentGenerationRequests(storeId: string): Promise<ContentGenerationRequest[]> {
     const { data, error } = await db()
-      .from("content_generation_requests")
+      .from("mvp_content_generation_requests")
       .select("*")
       .eq("store_id", storeId)
       .order("created_at", { ascending: false });
@@ -355,7 +355,7 @@ class SupabaseRepository implements Repository {
 
   async getContentGenerationRequest(id: string): Promise<ContentGenerationRequest | null> {
     const { data, error } = await db()
-      .from("content_generation_requests")
+      .from("mvp_content_generation_requests")
       .select("*")
       .eq("id", id)
       .maybeSingle();
@@ -368,7 +368,7 @@ class SupabaseRepository implements Repository {
     patch: UpdateContentRequestPatch
   ): Promise<ContentGenerationRequest | null> {
     const { data, error } = await db()
-      .from("content_generation_requests")
+      .from("mvp_content_generation_requests")
       .update(patch)
       .eq("id", id)
       .select("*")

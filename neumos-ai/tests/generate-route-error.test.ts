@@ -16,7 +16,7 @@ function fakeFailingSupabaseAdmin() {
         upsert() {
           return Promise.resolve({
             error: {
-              message: "Could not find the table 'public.content_generation_requests' in the schema cache",
+              message: "Could not find the table 'public.neumos_content_generation_requests' in the schema cache",
               code: "PGRST205",
               details: null,
               hint: "Perhaps you meant the table 'public.stores'",

@@ -30,6 +30,7 @@ function fakeFailingSupabaseAdmin() {
 
 vi.mock("@/lib/supabase/server", () => ({
   getSupabaseAdmin: vi.fn(() => fakeFailingSupabaseAdmin()),
+  getSupabaseProjectRef: vi.fn(() => "test-project-ref"),
 }));
 
 const brief = {

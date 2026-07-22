@@ -5,6 +5,8 @@ import { performGeneration } from "@/lib/generate";
 import { toLegacyGeneratedContents } from "@/lib/bridge";
 import { IMPLEMENTED_GENERATION_TYPES } from "@/lib/types";
 import { extractErrorDetail } from "@/lib/error-detail";
+import { getSupabaseProjectRef } from "@/lib/supabase/server";
+import { TABLE_NAME } from "@/lib/store";
 
 /**
  * POST /v1/contents — AI集客支援MVPの `NEUMOS_API_URL` 連携用エンドポイント。
@@ -60,7 +62,11 @@ export async function POST(req: NextRequest) {
       );
     }
     const detail = extractErrorDetail(err);
-    console.error("[neumos-ai] v1/contents generation failed", detail);
-    return NextResponse.json({ error: "generation failed", errorDetail: detail }, { status: 500 });
+    const supabaseDebug = { projectRef: getSupabaseProjectRef(), table: TABLE_NAME };
+    console.error("[neumos-ai] v1/contents generation failed", { ...detail, supabaseDebug });
+    return NextResponse.json(
+      { error: "generation failed", errorDetail: { ...detail, supabaseDebug } },
+      { status: 500 }
+    );
   }
 }

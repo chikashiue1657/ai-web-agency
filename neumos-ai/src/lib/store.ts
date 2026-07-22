@@ -9,7 +9,7 @@
  * - 未設定（ローカル開発等）ならインメモリにフォールバックする
  *   （同一プロセス内でのみ有効。Production運用では必ずSupabaseを設定すること）。
  */
-import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { getSupabaseAdmin, getSupabaseProjectRef } from "@/lib/supabase/server";
 import type {
   GeneratedWebsiteContents,
   GenerateStatus,
@@ -24,6 +24,17 @@ const globalForStore = globalThis as unknown as {
 };
 const memStore = globalForStore.__neumosStore ?? new Map<string, StoredGenerationRecord>();
 globalForStore.__neumosStore = memStore;
+
+/** 実際にSupabaseへ読み書きするテーブル名。ここを唯一の真実の源にする。 */
+export const TABLE_NAME = "neumos_content_generation_requests";
+
+function logTableAccess(op: string, extra?: Record<string, unknown>) {
+  console.log(`[neumos-ai] store.${op}: Supabaseアクセス`, {
+    table: TABLE_NAME,
+    projectRef: getSupabaseProjectRef(),
+    ...extra,
+  });
+}
 
 interface ContentGenerationRequestRow {
   request_id: string;
@@ -74,8 +85,9 @@ export async function saveGenerationRecord(record: StoredGenerationRecord): Prom
   const admin = getSupabaseAdmin();
   if (!admin) return;
 
+  logTableAccess("saveGenerationRecord", { requestId: record.requestId });
   const { error } = await admin
-    .from("neumos_content_generation_requests")
+    .from(TABLE_NAME)
     .upsert(recordToRow(record), { onConflict: "request_id" });
   if (error) throw error;
 }
@@ -84,8 +96,9 @@ export async function getGenerationRecord(requestId: string): Promise<StoredGene
   const admin = getSupabaseAdmin();
   if (!admin) return memStore.get(requestId);
 
+  logTableAccess("getGenerationRecord", { requestId });
   const { data, error } = await admin
-    .from("neumos_content_generation_requests")
+    .from(TABLE_NAME)
     .select("*")
     .eq("request_id", requestId)
     .maybeSingle();
@@ -99,8 +112,9 @@ export async function listGenerationRecords(): Promise<StoredGenerationRecord[]>
     return Array.from(memStore.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
 
+  logTableAccess("listGenerationRecords");
   const { data, error } = await admin
-    .from("neumos_content_generation_requests")
+    .from(TABLE_NAME)
     .select("*")
     .order("created_at", { ascending: false });
   if (error) throw error;

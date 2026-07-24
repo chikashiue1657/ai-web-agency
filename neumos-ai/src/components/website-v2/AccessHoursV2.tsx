@@ -19,9 +19,18 @@ export function AccessHoursV2({
   theme: CafeThemeV2;
 }) {
   const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(access.mapQuery)}&output=embed`;
+
+  // 必要最低限だけ表示する：営業時間と定休日は別々の行にせず1行にまとめる
+  // （営業時間・定休日・電話・住所の4行がすべて並ぶと情報過多に見えるため）。
   const rows: { label: string; value: string; href?: string }[] = [];
-  if (realData?.openingHours?.length) rows.push({ label: "営業時間", value: realData.openingHours.join(" / ") });
-  if (realData?.closedDays) rows.push({ label: "定休日", value: realData.closedDays });
+  if (realData?.openingHours?.length) {
+    const hoursValue = realData.closedDays
+      ? `${realData.openingHours.join(" / ")}（${realData.closedDays}）`
+      : realData.openingHours.join(" / ");
+    rows.push({ label: "営業時間", value: hoursValue });
+  } else if (realData?.closedDays) {
+    rows.push({ label: "定休日", value: realData.closedDays });
+  }
   if (realData?.phone) rows.push({ label: "電話", value: realData.phone, href: `tel:${realData.phone}` });
   if (realData?.address) rows.push({ label: "住所", value: realData.address });
 

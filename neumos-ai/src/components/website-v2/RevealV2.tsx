@@ -14,11 +14,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
  * reveal演出の対象にする（＝演出は常に完成済みの静的表示の上に乗る追加効果とし、
  * 演出無しでは情報が欠けるような依存関係を作らない）。
  *
- * variant="scale"（写真専用）以外はopacityを一切下げない。文章・数値を
- * opacity-0で隠すと、reveal発火前の一瞬（スクロールを伴わない解析ツールや、
- * 読み込み直後にreveal前の状態を見る利用者）でテキストの実効コントラストが
- * 大きく下がり、axe-coreのcolor-contrast検証で実際に検出される不具合になった。
  * テキスト系（fade-up/fade）は位置（translate）だけを動かし、常に不透明度100%を保つ。
+ *
+ * variant="scale"はscale-[1.04]で「わずかに拡大した状態」から等倍へ収束させる。
+ * このscaleと同じ要素にoverflow-hiddenを付けても、クリップ境界自体が一緒に
+ * 拡大されてしまうため画像のはみ出しは防げない（実際にGallery内の単独バナー
+ * 写真で横スクロールが発生するバグとして確認した）。そのため外側に
+ * overflow-hiddenだけを持つ非変形の枠を1枚はさみ、scale/opacityの
+ * トランジションは内側の要素にだけ適用する。
  */
 export function RevealV2({
   children,
@@ -60,26 +63,33 @@ export function RevealV2({
     return () => observer.disconnect();
   }, []);
 
-  // scale（写真専用）だけがopacityクラスを持つ。fade-up/fadeはopacityクラスを
-  // 一切出力しない（=常にブラウザ既定の不透明のまま）ことで、Tailwindの
-  // opacity-0とopacity-100が同じ要素に両方乗って詳細度の生成順で片方が
-  // 無効化される事故を避ける。
-  const stateClass =
-    variant === "scale"
-      ? visible
-        ? "opacity-100 scale-100"
-        : "opacity-0 scale-[1.04]"
-      : visible
-        ? "translate-y-0"
-        : variant === "fade-up"
-          ? "translate-y-6"
-          : "translate-y-2";
+  const delayStyle = armed && delayMs ? { transitionDelay: `${delayMs}ms` } : undefined;
+
+  if (variant === "scale") {
+    return (
+      <div className={`overflow-hidden ${className}`}>
+        <div
+          ref={ref}
+          style={delayStyle}
+          className={`transition-all duration-700 ease-out motion-reduce:!transition-none motion-reduce:!transform-none motion-reduce:!opacity-100 ${
+            visible ? "scale-100 opacity-100" : "scale-[1.04] opacity-0"
+          }`}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  const hiddenTranslate = variant === "fade-up" ? "translate-y-6" : "translate-y-2";
 
   return (
     <div
       ref={ref}
-      style={armed && delayMs ? { transitionDelay: `${delayMs}ms` } : undefined}
-      className={`transition-all duration-700 ease-out motion-reduce:!transition-none motion-reduce:!transform-none motion-reduce:!opacity-100 ${stateClass} ${className}`}
+      style={delayStyle}
+      className={`transition-all duration-700 ease-out motion-reduce:!transition-none motion-reduce:!transform-none ${
+        visible ? "translate-y-0" : hiddenTranslate
+      } ${className}`}
     >
       {children}
     </div>

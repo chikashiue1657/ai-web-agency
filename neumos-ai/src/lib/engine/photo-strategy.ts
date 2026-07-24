@@ -6,8 +6,11 @@
  * ここでは Places が返す並び順（先頭を代表写真として扱う実務上の慣習）を
  * そのままHero優先度として使う、位置ベースの割当てにとどめる。
  *
- * 同じ写真をHeroと他セクションへ重複して渡さないよう、必ず重複排除してから
- * 先頭をHero用、残りをストーリー用に分配する。
+ * 同じ写真を複数セクションへ重複して渡さないよう、必ず重複排除してから
+ * Hero→Story→Gallery の順に1枚ずつ優先確保し、残りをGalleryへ渡す。
+ * Storyは「本文を写真に重ねる」演出（Phase3）のため専用に1枚確保するが、
+ * 写真がHero用の1枚しか無い場合はStoryを文章のみの構成に留める
+ * （無理に同じ写真を使い回さない）。
  */
 export type PhotoTier = "none" | "single" | "few" | "many";
 
@@ -15,11 +18,13 @@ export interface PhotoPlan {
   tier: PhotoTier;
   /** Heroの背景に使う1枚。tierが"none"の場合は無い。 */
   heroPhotoUrl?: string;
-  /** Hero以外（PhotoStory等）で使える残りの写真。重複なし。 */
-  storyPhotoUrls: string[];
+  /** Storyセクションに重ねる1枚。写真が2枚以上ある場合のみ確保する。 */
+  storyPhotoUrl?: string;
+  /** Gallery（PhotoStory）で使える残りの写真。重複なし。 */
+  galleryPhotoUrls: string[];
 }
 
-/** 2〜3枚を"few"（非対称の少数グリッド）、4枚以上を"many"（モザイク）として扱う閾値。 */
+/** 2〜3枚を"few"、4枚以上を"many"として扱う閾値（合計枚数の分類）。 */
 const FEW_MAX = 3;
 
 export function classifyPhotoTier(count: number): PhotoTier {
@@ -34,9 +39,12 @@ export function buildPhotoPlan(photoUrls?: string[]): PhotoPlan {
   const tier = classifyPhotoTier(deduped.length);
 
   if (tier === "none") {
-    return { tier, storyPhotoUrls: [] };
+    return { tier, galleryPhotoUrls: [] };
   }
 
-  const [heroPhotoUrl, ...storyPhotoUrls] = deduped;
-  return { tier, heroPhotoUrl, storyPhotoUrls };
+  const [heroPhotoUrl, storyPhotoUrl, ...galleryPhotoUrls] = deduped;
+  if (deduped.length === 1) {
+    return { tier, heroPhotoUrl, galleryPhotoUrls: [] };
+  }
+  return { tier, heroPhotoUrl, storyPhotoUrl, galleryPhotoUrls };
 }

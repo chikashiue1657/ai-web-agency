@@ -4,6 +4,7 @@ import { classifyIndustry } from "@/lib/engine/industry";
 import { resolveTheme } from "@/lib/theme";
 import { resolveCafeThemeV2 } from "@/lib/theme-v2";
 import { buildCafeV2Plan, type CafeV2BlockId } from "@/lib/engine/section-plan-v2";
+import { getSectionGapClass } from "@/lib/engine/section-rhythm-v2";
 import { splitBulletLines } from "@/components/website/utils";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 import { Footer } from "@/components/website/Footer";
@@ -62,9 +63,17 @@ export function WebsiteRendererV2({ brief, contents }: { brief: StoreBrief; cont
     ),
     signature: <SignatureV2 items={signatureItems} theme={theme} />,
     photoStory: (
-      <PhotoStoryV2 storeName={brief.storeName} photoUrls={plan.photoPlan.storyPhotoUrls} theme={theme} />
+      <PhotoStoryV2 storeName={brief.storeName} photoUrls={plan.photoPlan.galleryPhotoUrls} theme={theme} />
     ),
-    story: <StoryV2 concept={contents.concept} sections={aboutSections} theme={theme} />,
+    story: (
+      <StoryV2
+        storeName={brief.storeName}
+        concept={contents.concept}
+        sections={aboutSections}
+        photoUrl={plan.photoPlan.storyPhotoUrl}
+        theme={theme}
+      />
+    ),
     menu: <MenuV2 sections={serviceSections} offer={brief.offer} theme={theme} />,
     trust: (
       <TrustV2
@@ -84,9 +93,14 @@ export function WebsiteRendererV2({ brief, contents }: { brief: StoreBrief; cont
     <div className={theme.paperBg}>
       <HeaderV2 storeName={brief.storeName} blocks={plan.blocks} />
       <main>
-        {plan.blocks.map((block) => (
-          <div key={block}>{blockRenderer[block]}</div>
-        ))}
+        {plan.blocks.map((block, i) => {
+          const prevBlock = i === 0 ? null : plan.blocks[i - 1];
+          return (
+            <div key={block} className={getSectionGapClass(prevBlock, block)}>
+              {blockRenderer[block]}
+            </div>
+          );
+        })}
       </main>
       <Footer storeName={brief.storeName} area={brief.area} industry={brief.industry} theme={resolveTheme(brief.industry)} />
     </div>

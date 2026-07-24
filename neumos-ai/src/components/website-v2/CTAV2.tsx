@@ -22,11 +22,14 @@ export function CTAV2({
         <h2 className={`text-2xl text-white sm:text-3xl ${theme.displayFont}`}>{cta.headline}</h2>
         <p className="mt-4 max-w-md text-sm text-white/80 sm:text-base">{cta.body}</p>
 
-        {/* 白文字×amber-500は約2.4:1でWCAG AA未達だったため、明るいamber背景には
-            濃色文字を合わせる（axe-coreのcolor-contrastで検出）。 */}
+        {/*
+          塗りつぶしの目立つボタンをやめ、枠線だけのボタン＋広い余白で
+          行動喚起を作る（「ボタンを目立たせない、余白で目立たせる」）。
+          白文字・白枠×stone-900は十分なコントラストを確保できる。
+        */}
         <a
           href={cta.href}
-          className="mt-9 inline-flex items-center justify-center rounded-full bg-amber-500 px-9 py-3.5 text-sm font-semibold text-stone-950 shadow-lg transition hover:bg-amber-400 sm:text-base"
+          className="mt-12 inline-flex items-center justify-center rounded-full border border-white/70 px-9 py-3.5 text-sm font-medium text-white transition hover:bg-white hover:text-stone-950 sm:mt-14 sm:text-base"
         >
           {cta.buttonLabel}
         </a>

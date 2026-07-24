@@ -19,28 +19,39 @@ describe("classifyPhotoTier", () => {
 });
 
 describe("buildPhotoPlan", () => {
-  it("photoUrlsが未指定なら none でHero写真も無い", () => {
+  it("photoUrlsが未指定なら none で何も割り当てない", () => {
     const plan = buildPhotoPlan(undefined);
     expect(plan.tier).toBe("none");
     expect(plan.heroPhotoUrl).toBeUndefined();
-    expect(plan.storyPhotoUrls).toEqual([]);
+    expect(plan.storyPhotoUrl).toBeUndefined();
+    expect(plan.galleryPhotoUrls).toEqual([]);
   });
 
-  it("1枚なら single・その1枚がHeroへ割当てられ、story用は空", () => {
+  it("1枚なら single・その1枚がHeroへ割当てられ、Story/Gallery用は無い（使い回さない）", () => {
     const plan = buildPhotoPlan(["https://example.com/a.jpg"]);
     expect(plan.tier).toBe("single");
     expect(plan.heroPhotoUrl).toBe("https://example.com/a.jpg");
-    expect(plan.storyPhotoUrls).toEqual([]);
+    expect(plan.storyPhotoUrl).toBeUndefined();
+    expect(plan.galleryPhotoUrls).toEqual([]);
   });
 
-  it("2〜3枚なら few・先頭がHero、残りがstory用", () => {
+  it("2枚ならHero+Storyで使い切り、Gallery用は空", () => {
     const plan = buildPhotoPlan(["https://example.com/a.jpg", "https://example.com/b.jpg"]);
     expect(plan.tier).toBe("few");
     expect(plan.heroPhotoUrl).toBe("https://example.com/a.jpg");
-    expect(plan.storyPhotoUrls).toEqual(["https://example.com/b.jpg"]);
+    expect(plan.storyPhotoUrl).toBe("https://example.com/b.jpg");
+    expect(plan.galleryPhotoUrls).toEqual([]);
   });
 
-  it("4枚以上なら many", () => {
+  it("3枚ならHero+Storyの後、Gallery用に1枚残る", () => {
+    const plan = buildPhotoPlan(["https://example.com/a.jpg", "https://example.com/b.jpg", "https://example.com/c.jpg"]);
+    expect(plan.tier).toBe("few");
+    expect(plan.heroPhotoUrl).toBe("https://example.com/a.jpg");
+    expect(plan.storyPhotoUrl).toBe("https://example.com/b.jpg");
+    expect(plan.galleryPhotoUrls).toEqual(["https://example.com/c.jpg"]);
+  });
+
+  it("4枚以上ならHero+Storyを除いた残りが全てGallery用になる", () => {
     const plan = buildPhotoPlan([
       "https://example.com/a.jpg",
       "https://example.com/b.jpg",
@@ -48,10 +59,10 @@ describe("buildPhotoPlan", () => {
       "https://example.com/d.jpg",
     ]);
     expect(plan.tier).toBe("many");
-    expect(plan.storyPhotoUrls).toHaveLength(3);
+    expect(plan.galleryPhotoUrls).toHaveLength(2);
   });
 
-  it("同じURLが重複していても1枚として扱い、Heroとstoryで重複表示させない", () => {
+  it("同じURLが重複していても1枚として扱い、Hero/Story/Galleryで重複表示させない", () => {
     const plan = buildPhotoPlan([
       "https://example.com/a.jpg",
       "https://example.com/a.jpg",
@@ -59,6 +70,7 @@ describe("buildPhotoPlan", () => {
     ]);
     expect(plan.tier).toBe("few");
     expect(plan.heroPhotoUrl).toBe("https://example.com/a.jpg");
-    expect(plan.storyPhotoUrls).toEqual(["https://example.com/b.jpg"]);
+    expect(plan.storyPhotoUrl).toBe("https://example.com/b.jpg");
+    expect(plan.galleryPhotoUrls).toEqual([]);
   });
 });

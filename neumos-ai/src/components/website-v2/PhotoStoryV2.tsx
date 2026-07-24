@@ -2,21 +2,19 @@ import type { CafeThemeV2 } from "@/lib/theme-v2";
 import { RevealV2 } from "./RevealV2";
 
 /**
- * 写真セクション。ギャラリーの均一グリッドにはしない。件数（Hero用の1枚を
- * 除いた残り）に応じてレイアウト自体を変える。
- *   1枚: 画面幅いっぱいの1枚
- *   2枚: 正確に50:50の左右分割
- *   3〜4枚: 大小非対称のグリッド
- *   5枚以上: 列に自然な高さで流し込むPinterest風Masonry（画像の実寸比率をそのまま使う）
- * セクション自体もmax-w-6xl等のコンテナ幅に収めず、画面幅いっぱいに写真を
- * 使う（ブランドサイトとして写真を主役にするため）。
+ * Gallery（写真セクション）。写真サイズを固定しない。1枚のときだけ
+ * 意図的に横長バナー（あえて選んだ比率で、複数枚の均一な矩形化とは別物）
+ * として見せ、2枚以上はすべて同じ仕組み（列に自然な高さで流し込む
+ * Pinterest風Masonry）で扱う。画像自身のaspect-ratioを固定しないため、
+ * 縦長・横長・正方形が混在してもレイアウトが破綻しない。列数だけを
+ * 枚数に応じて増減させ、"3〜4枚だけ特別な矩形グリッド"のような
+ * 枚数ごとの専用レイアウトは持たない（=固定パターンの反復を避ける）。
  */
-const ASYMMETRIC_SLOTS = [
-  { className: "col-span-2 row-span-2", aspect: "aspect-square" },
-  { className: "col-span-1 row-span-1", aspect: "aspect-[3/4]" },
-  { className: "col-span-1 row-span-1", aspect: "aspect-[3/4]" },
-  { className: "col-span-3 row-span-1", aspect: "aspect-[21/9]" },
-];
+function columnsForCount(count: number): string {
+  if (count === 2) return "columns-1 sm:columns-2";
+  if (count <= 4) return "columns-2 sm:columns-2 lg:columns-3";
+  return "columns-2 sm:columns-3 lg:columns-4";
+}
 
 export function PhotoStoryV2({
   storeName,
@@ -43,37 +41,8 @@ export function PhotoStoryV2({
         </RevealV2>
       )}
 
-      {count === 2 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2">
-          {photoUrls.map((url, i) => (
-            <RevealV2 key={url} variant="scale" delayMs={i * 120}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt={i === 0 ? `${storeName}の店内` : `${storeName}の商品`}
-                className="aspect-square w-full object-cover sm:aspect-auto sm:h-[64vh]"
-              />
-            </RevealV2>
-          ))}
-        </div>
-      )}
-
-      {count >= 3 && count <= 4 && (
-        <div className="mx-auto grid max-w-6xl grid-cols-3 gap-1 px-1 sm:gap-2 sm:px-2">
-          {photoUrls.map((url, i) => {
-            const slot = ASYMMETRIC_SLOTS[i];
-            return (
-              <RevealV2 key={url} variant="scale" delayMs={i * 100} className={slot.className}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={`${storeName}の様子`} className={`h-full w-full object-cover ${slot.aspect}`} />
-              </RevealV2>
-            );
-          })}
-        </div>
-      )}
-
-      {count >= 5 && (
-        <div className="columns-2 gap-1 px-1 sm:columns-3 sm:gap-2 sm:px-2">
+      {count >= 2 && (
+        <div className={`${columnsForCount(count)} gap-1 px-1 sm:gap-2 sm:px-2`}>
           {photoUrls.map((url, i) => (
             <RevealV2 key={url} variant="scale" delayMs={(i % 6) * 70} className="mb-1 break-inside-avoid sm:mb-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}

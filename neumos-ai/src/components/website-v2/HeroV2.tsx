@@ -29,7 +29,7 @@ export function HeroV2({
   theme: CafeThemeV2;
 }) {
   return (
-    <section id="top" className="relative h-[92vh] min-h-[600px] w-full overflow-hidden sm:h-screen">
+    <section id="top" className="relative h-dvh min-h-[640px] w-full overflow-hidden">
       {photoUrl ? (
         <>
           <ParallaxImageV2 src={photoUrl} alt={`${storeName}の店内の様子`} />
@@ -43,9 +43,8 @@ export function HeroV2({
       )}
 
       <div className="relative flex h-full w-full flex-col justify-end px-5 pb-14 sm:px-10 sm:pb-20 lg:px-16 lg:pb-24">
-        <span
-          className={`mb-4 inline-flex w-fit items-center rounded-full border border-white/25 px-3.5 py-1 text-[11px] font-medium tracking-wide text-white/90 sm:text-xs`}
-        >
+        {/* ピル型バッジをやめ、文字だけで写真に溶け込ませる（枠線が「テンプレの部品」に見えるのを避ける）。 */}
+        <span className="mb-4 w-fit text-[11px] font-medium tracking-wide text-white/80 sm:text-xs">
           {area} ・ {industry}
         </span>
 

@@ -41,7 +41,10 @@ export function ParallaxImageV2({ src, alt }: { src: string; alt: string }) {
       ref={ref}
       src={src}
       alt={alt}
-      className="absolute inset-0 h-full w-full scale-[1.08] object-cover will-change-transform"
+      // 中央構図ではなく三分割構図（右1/3寄り・やや上）を優先する。
+      // 主題がどこにあっても機械的には分からないため、常に同じ黄金分割点に
+      // 寄せることで「中央にドン」という素人写真的な構図を避ける。
+      className="absolute inset-0 h-full w-full scale-[1.08] object-cover object-[68%_38%] will-change-transform"
     />
   );
 }

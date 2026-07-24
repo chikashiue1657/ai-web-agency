@@ -20,7 +20,7 @@ export function SignatureV2({ items, theme }: { items: string[]; theme: CafeThem
           <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Signature</p>
           <RevealV2>
             <p
-              className={`mt-4 max-w-[24ch] break-keep break-words text-2xl leading-snug sm:text-4xl sm:leading-snug ${theme.displayFont} ${theme.bodyText}`}
+              className={`mt-4 max-w-[22ch] break-keep break-words text-3xl leading-[1.15] sm:text-5xl sm:leading-[1.1] ${theme.displayFont} ${theme.bodyText}`}
             >
               {lead}
             </p>

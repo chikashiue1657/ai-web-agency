@@ -35,11 +35,12 @@ export function buildCafeV2Plan(brief: StoreBrief, contents: GeneratedWebsiteCon
   const hasMenu = contents.sections.some((s) => s.kind === "service");
   const hasTrust = typeof brief.realData?.googleRating === "number" || !!brief.realData?.googleReviewCount;
 
+  // Hero→Story→Gallery→Menu→Review→CTAの順（Phase3のセクション間リズム設計に
+  // 合わせた並び）。concept（コンセプト文）は常に生成されるため、storyは常に表示する。
   const blocks: CafeV2BlockId[] = ["hero"];
   if (hasSignature) blocks.push("signature");
-  if (photoPlan.storyPhotoUrls.length > 0) blocks.push("photoStory");
-  // concept（コンセプト文）は常に生成されるため、storyは常に表示する。
   blocks.push("story");
+  if (photoPlan.galleryPhotoUrls.length > 0) blocks.push("photoStory");
   if (hasMenu) blocks.push("menu");
   if (hasTrust) blocks.push("trust");
   // mapQueryは常に組み立て可能なため、accessHoursは常に表示する。

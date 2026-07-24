@@ -73,18 +73,32 @@ describe("buildCafeV2Plan", () => {
     expect(plan.blocks).not.toContain("trust");
   });
 
-  it("写真が1枚以上あるがstory用（Hero以外）に回せる分が無い場合、photoStoryは表示しない", () => {
+  it("写真が1枚のみだとHero専用になり、Gallery用に回せる分が無いのでphotoStoryは表示しない", () => {
     const plan = buildCafeV2Plan(makeBrief({ realData: { photoUrls: ["https://example.com/a.jpg"] } }), makeContents());
     expect(plan.blocks).not.toContain("photoStory");
     expect(plan.photoPlan.heroPhotoUrl).toBe("https://example.com/a.jpg");
   });
 
-  it("写真が2枚以上あればphotoStoryを表示する", () => {
+  it("写真が2枚だとHero+Story用で使い切り、Gallery用が無いのでphotoStoryは表示しない", () => {
     const plan = buildCafeV2Plan(
       makeBrief({ realData: { photoUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg"] } }),
       makeContents()
     );
+    expect(plan.blocks).not.toContain("photoStory");
+    expect(plan.photoPlan.storyPhotoUrl).toBe("https://example.com/b.jpg");
+  });
+
+  it("写真が3枚以上あればHero+Storyの後にGallery用が残り、photoStoryを表示する", () => {
+    const plan = buildCafeV2Plan(
+      makeBrief({
+        realData: {
+          photoUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg", "https://example.com/c.jpg"],
+        },
+      }),
+      makeContents()
+    );
     expect(plan.blocks).toContain("photoStory");
+    expect(plan.photoPlan.galleryPhotoUrls).toEqual(["https://example.com/c.jpg"]);
   });
 
   it("hero/story/accessHours/ctaは常に含まれる", () => {

@@ -18,7 +18,7 @@ export function CTAV2({
 }) {
   return (
     <section id="contact" className={`${theme.ctaBg}`}>
-      <div className="mx-auto flex max-w-2xl flex-col items-center px-5 py-20 text-center sm:py-28">
+      <div className="mx-auto flex max-w-2xl flex-col items-center px-5 py-32 text-center sm:py-40">
         <h2 className={`text-2xl text-white sm:text-3xl ${theme.displayFont}`}>{cta.headline}</h2>
         <p className="mt-4 max-w-md text-sm text-white/80 sm:text-base">{cta.body}</p>
 

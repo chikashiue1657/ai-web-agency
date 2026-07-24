@@ -24,7 +24,7 @@ export function StoryV2({
 
   return (
     <section id="story" className={theme.paperRaisedBg}>
-      <div className={`mx-auto max-w-3xl px-5 sm:px-10 lg:px-0 ${isThin ? "py-24 sm:py-32" : "py-16 sm:py-24"}`}>
+      <div className={`mx-auto max-w-3xl px-5 sm:px-10 lg:px-0 ${isThin ? "py-28 sm:py-36" : "py-20 sm:py-28"}`}>
         <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Story</p>
         <RevealV2>
           <p

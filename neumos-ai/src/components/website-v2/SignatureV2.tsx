@@ -12,7 +12,7 @@ export function SignatureV2({ items, theme }: { items: string[]; theme: CafeThem
 
   return (
     <section id="signature" className={`${theme.paperRaisedBg}`}>
-      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-5 py-20 sm:grid-cols-[auto_1fr] sm:gap-10 sm:px-10 sm:py-28 lg:px-16">
+      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-5 py-24 sm:grid-cols-[auto_1fr] sm:gap-10 sm:px-10 sm:py-32 lg:px-16">
         <RevealV2 variant="fade">
           <p className={`text-6xl leading-none sm:text-8xl ${theme.displayFont} ${theme.accentTextSoft}`}>“</p>
         </RevealV2>

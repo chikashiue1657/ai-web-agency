@@ -28,7 +28,7 @@ export function AccessHoursV2({
   return (
     <section id="access" className={theme.paperRaisedBg}>
       <div className="mx-auto grid max-w-6xl grid-cols-1 lg:grid-cols-5">
-        <div className="flex flex-col justify-center gap-6 px-5 py-16 sm:px-10 sm:py-20 lg:col-span-2 lg:px-16 lg:py-0">
+        <div className="flex flex-col justify-center gap-6 px-5 py-14 sm:px-10 sm:py-20 lg:col-span-2 lg:px-16 lg:py-0">
           <div>
             <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Access</p>
             <p className={`mt-3 text-xl sm:text-2xl ${theme.displayFont} ${theme.bodyText}`}>{storeName}</p>

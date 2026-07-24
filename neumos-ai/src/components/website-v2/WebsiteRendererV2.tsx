@@ -55,15 +55,24 @@ export function WebsiteRendererV2({ brief, contents }: { brief: StoreBrief; cont
         area={brief.area}
         industry={brief.industry}
         photoUrl={plan.photoPlan.heroPhotoUrl}
+        ctaLabel={contents.cta.buttonLabel}
+        ctaHref={contents.cta.href}
         theme={theme}
       />
     ),
     signature: <SignatureV2 items={signatureItems} theme={theme} />,
-    photoStory: <PhotoStoryV2 storeName={brief.storeName} photoUrls={plan.photoPlan.storyPhotoUrls} theme={theme} />,
+    photoStory: (
+      <PhotoStoryV2 storeName={brief.storeName} photoUrls={plan.photoPlan.storyPhotoUrls} theme={theme} />
+    ),
     story: <StoryV2 concept={contents.concept} sections={aboutSections} theme={theme} />,
     menu: <MenuV2 sections={serviceSections} offer={brief.offer} theme={theme} />,
     trust: (
-      <TrustV2 googleRating={brief.realData?.googleRating} googleReviewCount={brief.realData?.googleReviewCount} theme={theme} />
+      <TrustV2
+        googleRating={brief.realData?.googleRating}
+        googleReviewCount={brief.realData?.googleReviewCount}
+        reviews={brief.realData?.reviews}
+        theme={theme}
+      />
     ),
     accessHours: (
       <AccessHoursV2 storeName={brief.storeName} access={contents.access} realData={brief.realData} theme={theme} />

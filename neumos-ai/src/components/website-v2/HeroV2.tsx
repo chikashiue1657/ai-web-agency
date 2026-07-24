@@ -1,9 +1,11 @@
 import type { CafeThemeV2 } from "@/lib/theme-v2";
+import { ParallaxImageV2 } from "./ParallaxImageV2";
 
 /**
- * 没入型Hero。写真がある場合はフルブリードの背景写真＋下部を暗くするグラデーション、
- * 無い場合は色面と大型タイポグラフィだけで空気感を出す（プレースホルダー画像は使わない）。
- * 「制作会社側の説明」は一切書かず、店の空気感・見出しコピーのみを見せる。
+ * 没入型Hero。写真がある場合はフルブリードの背景写真（微細なパララックス付き）＋
+ * 下部を暗くするグラデーション、無い場合は色面と大型タイポグラフィだけで
+ * 空気感を出す（プレースホルダー画像は使わない）。
+ * 「制作会社側の説明」は一切書かず、店の空気感・見出しコピー・単一のCTAのみを見せる。
  */
 export function HeroV2({
   storeName,
@@ -12,6 +14,8 @@ export function HeroV2({
   area,
   industry,
   photoUrl,
+  ctaLabel,
+  ctaHref,
   theme,
 }: {
   storeName: string;
@@ -20,18 +24,15 @@ export function HeroV2({
   area: string;
   industry: string;
   photoUrl?: string;
+  ctaLabel: string;
+  ctaHref: string;
   theme: CafeThemeV2;
 }) {
   return (
-    <section id="top" className="relative h-[88vh] min-h-[560px] w-full overflow-hidden sm:h-screen">
+    <section id="top" className="relative h-[92vh] min-h-[600px] w-full overflow-hidden sm:h-screen">
       {photoUrl ? (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photoUrl}
-            alt={`${storeName}の店内の様子`}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+          <ParallaxImageV2 src={photoUrl} alt={`${storeName}の店内の様子`} />
           <div className={`absolute inset-0 ${theme.heroOverlay}`} />
         </>
       ) : (
@@ -68,11 +69,20 @@ export function HeroV2({
         <p className="mt-5 max-w-[26ch] break-keep break-words text-sm leading-relaxed text-white/85 sm:max-w-md sm:text-base sm:[overflow-wrap:normal]">
           {heroSubtitle}
         </p>
+
+        {/* Heroの行動喚起はここ1箇所のみ（ページ末尾のCTAセクションとは別の、最初の入口）。 */}
+        <a
+          href={ctaHref}
+          className="mt-8 inline-flex w-fit items-center gap-2 border-b border-white/70 pb-1 text-sm font-medium text-white transition hover:gap-3 hover:border-white sm:text-base"
+        >
+          {ctaLabel}
+          <span aria-hidden>→</span>
+        </a>
       </div>
 
       <div
         aria-hidden
-        className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-1 text-white/60 motion-safe:animate-bounce sm:flex"
+        className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-1 text-white/60 motion-safe:animate-pulse sm:flex"
       >
         <span className="h-8 w-px bg-white/40" />
       </div>

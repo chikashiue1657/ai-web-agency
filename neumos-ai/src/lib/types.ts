@@ -66,6 +66,20 @@ export interface StoreRealData {
   googleReviewCount?: number;
   /** 実写真のURL（表示可能な直リンク）。存在する分だけGallery/Aboutで使う。 */
   photoUrls?: string[];
+  /**
+   * Google レビューの本文（実データが取得できた場合のみ）。
+   * 現時点ではMVP側（AI集客支援MVP、疎結合な別サービス）にGoogle Places APIから
+   * レビュー本文を取得してこのフィールドへ渡す処理がまだ無いため、型だけ用意して
+   * おき、値が来た場合にのみ表示する（無ければ捏造せず非表示にする設計は他項目と同じ）。
+   */
+  reviews?: StoreReview[];
+}
+
+/** Google レビュー1件（本文のみ必須。評価者名・個別評価は取得できた場合のみ）。 */
+export interface StoreReview {
+  text: string;
+  authorName?: string;
+  rating?: number;
 }
 
 export interface GenerateRequest {

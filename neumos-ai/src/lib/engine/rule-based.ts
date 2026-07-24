@@ -18,6 +18,7 @@ import type {
   WebsiteCta,
   WebsiteSection,
 } from "@/lib/types";
+import { BODY_MAX, HERO_SUBTITLE_MAX, HERO_TITLE_MAX, sanitizeBrief, truncateJa } from "@/lib/engine/copy-limits";
 
 const DEFAULT_PAGES = ["トップ", "お店の強み", "メニュー・サービス", "選ばれる理由", "アクセス", "よくある質問", "お問い合わせ"];
 
@@ -72,10 +73,11 @@ export function defineDifferentiators(brief: StoreBrief, strengths: string[]): s
 
 export function buildConcept(brief: StoreBrief, strategy: StrategyAnalysis): string {
   const base = brief.siteConcept?.trim();
-  if (base) {
-    return `${base}（${strategy.targetPersona.split("。")[0]}に向けて、${brief.salesAngle}を前面に打ち出す）`;
-  }
-  return `${brief.storeName}が${brief.targetCustomer}に${brief.offer}を届ける、${brief.tone}なサイト`;
+  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
+  const concept = base
+    ? `${base}（${strategy.targetPersona.split("。")[0]}に向けて、${angleHeadline}を前面に打ち出す）`
+    : `${brief.storeName}が${brief.targetCustomer}に${brief.offer}を届ける、${brief.tone}なサイト`;
+  return truncateJa(concept, BODY_MAX);
 }
 
 export function buildPageStructure(brief: StoreBrief): string[] {
@@ -99,10 +101,17 @@ export function buildSeo(brief: StoreBrief): { seoTitle: string; metaDescription
   return { seoTitle: seoTitle.slice(0, 60), metaDescription: metaDescription.slice(0, 120) };
 }
 
+/**
+ * salesAngle/targetPersonaは営業提案としての説明文（複数文）であることが多く、
+ * そのまま連結するとヒーローの見出しが90文字を超えるなど長文化しやすい。
+ * 最初の一文（節）だけを見出しの元にし、最終的にはtruncateJaで上限まで丸める。
+ */
 export function buildHeroCopy(brief: StoreBrief, strategy: StrategyAnalysis): { heroTitle: string; heroSubtitle: string } {
+  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
+  const personaHeadline = strategy.targetPersona.split("。")[0]?.trim() || strategy.targetPersona;
   return {
-    heroTitle: `${brief.storeName} — ${brief.salesAngle}`,
-    heroSubtitle: `${strategy.targetPersona.split("。")[0]}へ。${brief.offer}`,
+    heroTitle: truncateJa(`${brief.storeName} — ${angleHeadline}`, HERO_TITLE_MAX),
+    heroSubtitle: truncateJa(`${personaHeadline}へ。${brief.offer}`, HERO_SUBTITLE_MAX),
   };
 }
 
@@ -119,15 +128,22 @@ export function buildSections(brief: StoreBrief, strategy: StrategyAnalysis, pag
 
 function sectionBody(kind: SectionKind, brief: StoreBrief, strategy: StrategyAnalysis): string {
   if (kind === "about") {
-    return strategy.strengths.map((s) => `・${s}`).join("\n");
+    return strategy.strengths.map((s) => `・${truncateJa(s, BODY_MAX)}`).join("\n");
   }
   if (kind === "service") {
-    return `${brief.offer}を中心に、${brief.targetCustomer}のニーズに合わせたメニュー・サービスをご用意しています。`;
+    return truncateJa(
+      `${brief.offer}を中心に、${brief.targetCustomer}のニーズに合わせたメニュー・サービスをご用意しています。`,
+      BODY_MAX
+    );
   }
   if (kind === "feature") {
-    return strategy.differentiators.map((d) => `・${d}`).join("\n");
+    return strategy.differentiators.map((d) => `・${truncateJa(d, BODY_MAX)}`).join("\n");
   }
-  return `${brief.storeName}は${brief.area}で${brief.industry}を営んでおり、${brief.salesAngle}を大切にしています。${brief.mainProblem.replace(/。$/, "")}でお悩みの方もぜひご相談ください。`;
+  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
+  return truncateJa(
+    `${brief.storeName}は${brief.area}で${brief.industry}を営んでおり、${angleHeadline}を大切にしています。${brief.mainProblem.replace(/。$/, "")}でお悩みの方もぜひご相談ください。`,
+    BODY_MAX
+  );
 }
 
 export function buildGallery(brief: StoreBrief): GalleryItem[] {
@@ -149,22 +165,26 @@ export function buildGallery(brief: StoreBrief): GalleryItem[] {
 export function buildAccess(brief: StoreBrief): AccessInfo {
   return {
     areaLabel: brief.area,
-    addressHint: `${brief.area}エリアにあり、${brief.targetCustomer}の方にもお越しいただきやすい立地です。詳しい道順はお問い合わせください。`,
+    addressHint: truncateJa(
+      `${brief.area}エリアにあり、${brief.targetCustomer}の方にもお越しいただきやすい立地です。詳しい道順はお問い合わせください。`,
+      BODY_MAX
+    ),
     mapQuery: `${brief.storeName} ${brief.area}`,
   };
 }
 
 export function buildContactMethods(brief: StoreBrief): string[] {
+  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
   const methods = ["お電話でのお問い合わせ"];
   methods.push(/予約/.test(brief.websiteGoal) ? "オンライン予約フォーム" : "お問い合わせフォーム");
-  methods.push(`SNSでのご相談（${brief.salesAngle}について）`);
+  methods.push(truncateJa(`SNSでのご相談（${angleHeadline}について）`, 40));
   return methods;
 }
 
 export function buildCta(brief: StoreBrief): WebsiteCta {
   return {
-    headline: `${brief.offer}`,
-    body: `${brief.websiteGoal}をお考えの方は、今すぐお気軽にご連絡ください。`,
+    headline: truncateJa(brief.offer, HERO_TITLE_MAX),
+    body: truncateJa(`${brief.websiteGoal}をお考えの方は、今すぐお気軽にご連絡ください。`, BODY_MAX),
     buttonLabel: /予約/.test(brief.websiteGoal) ? "今すぐ予約する" : "お問い合わせする",
   };
 }
@@ -173,15 +193,21 @@ export function buildFaq(brief: StoreBrief, strategy: StrategyAnalysis): FaqItem
   return [
     {
       question: `${brief.industry}を利用するのが初めてですが大丈夫ですか？`,
-      answer: `はい、${brief.targetCustomer}のお客様にもわかりやすくご案内しますのでご安心ください。`,
+      answer: truncateJa(`はい、${brief.targetCustomer}のお客様にもわかりやすくご案内しますのでご安心ください。`, BODY_MAX),
     },
     {
       question: `${brief.mainProblem.replace(/。$/, "")}という悩みも相談できますか？`,
-      answer: `もちろんです。${brief.salesAngle}を軸に、お客様一人ひとりに合わせてご提案します。`,
+      answer: truncateJa(
+        `もちろんです。${strategy.differentiators[0] ?? brief.salesAngle.split(/[。／/]/)[0]}を軸に、お客様一人ひとりに合わせてご提案します。`,
+        BODY_MAX
+      ),
     },
     {
       question: `${brief.area}エリア以外からでも利用できますか？`,
-      answer: `${strategy.targetPersona}`,
+      answer: truncateJa(
+        `はい、${brief.area}エリア外のお客様や観光客の方もご利用いただけます。お気軽にお問い合わせください。`,
+        BODY_MAX
+      ),
     },
   ];
 }
@@ -210,7 +236,12 @@ export function analyzeStrategy(brief: StoreBrief): StrategyAnalysis {
   };
 }
 
-export function generateWebsiteRuleBased(brief: StoreBrief): GeneratedWebsiteContents {
+export function generateWebsiteRuleBased(rawBrief: StoreBrief): GeneratedWebsiteContents {
+  // brief中の自由記述（targetCustomer等）に社内向けの括弧書きメモが含まれることがあり、
+  // そのまま連結すると公開ページの見出し・本文に漏れ出す（実例:
+  // 「（仮説：要ヒアリングで確定）」がヒーローの補足コピーにそのまま表示されていた）。
+  // 以降の全ての組み立て処理は、このsanitize済みbriefだけを参照する。
+  const brief = sanitizeBrief(rawBrief);
   const strategy = analyzeStrategy(brief);
   const pages = buildPageStructure(brief);
   const { seoTitle, metaDescription } = buildSeo(brief);

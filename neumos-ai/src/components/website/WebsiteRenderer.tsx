@@ -31,7 +31,7 @@ export function WebsiteRenderer({ brief, contents }: { brief: StoreBrief; conten
           industry={brief.industry}
           area={brief.area}
         />
-        <About concept={contents.concept} sections={aboutSections} />
+        <About storeName={brief.storeName} concept={contents.concept} sections={aboutSections} />
         <Service sections={serviceSections} offer={brief.offer} />
         <Feature sections={featureSections} />
         <Gallery items={contents.gallery} />

@@ -95,6 +95,24 @@ export interface WebsiteCta {
   headline: string;
   body: string;
   buttonLabel: string;
+  /**
+   * 実際に機能するリンク先（tel:.../https://instagram.com/...等、または
+   * ページ内アンカー"#contact"）。生成方式に依らず`applyRealDataLinks`が
+   * 最終的にrealDataとの整合性を保って上書きするため、ここに来る値を
+   * 信頼してそのまま描画してよい。
+   */
+  href: string;
+}
+
+/**
+ * Contact セクションの補助的な連絡手段1件。
+ * hrefが無い項目は「リンク先データが存在しない」ことを意味し、Website
+ * Rendererはクリック不可のプレーンテキストとして表示する（クリックしても
+ * 何も起きないボタンに見せないこと）。
+ */
+export interface ContactMethod {
+  label: string;
+  href?: string;
 }
 
 export interface FaqItem {
@@ -141,7 +159,7 @@ export interface GeneratedWebsiteContents {
   sections: WebsiteSection[];
   gallery: GalleryItem[];
   access: AccessInfo;
-  contactMethods: string[];
+  contactMethods: ContactMethod[];
   cta: WebsiteCta;
   seoTitle: string;
   metaDescription: string;

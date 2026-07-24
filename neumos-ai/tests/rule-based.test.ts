@@ -79,19 +79,23 @@ describe("rule-based marketing engine", () => {
     expect(kinds.has("feature")).toBe(true);
   });
 
-  it("業種別のCTAラベルを使う（カフェ=電話予約）", () => {
-    const contents = generateWebsiteRuleBased(brief);
-    expect(contents.cta.buttonLabel).toBe("電話で予約する");
+  it("電話番号の実データが無い場合は、業種に依らず正直な汎用CTA（#contact）になる（実データを捏造しない）", () => {
+    const contents = generateWebsiteRuleBased(brief); // brief.realDataは未設定
+    expect(contents.cta.buttonLabel).toBe("お問い合わせする");
+    expect(contents.cta.href).toBe("#contact");
   });
 
-  it("業種未分類の場合はwebsiteGoalの「予約」有無でCTAラベルを決める（フォールバック）", () => {
-    const genericBrief: StoreBrief = { ...brief, industry: "ジム" };
-    const contents = generateWebsiteRuleBased(genericBrief);
-    expect(contents.cta.buttonLabel).toBe("今すぐ予約する");
+  it("電話番号の実データがある場合のみ、業種別の電話予約CTA（tel:リンク）になる（カフェ）", () => {
+    const withPhone: StoreBrief = { ...brief, realData: { phone: "098-000-0001" } };
+    const contents = generateWebsiteRuleBased(withPhone);
+    expect(contents.cta.buttonLabel).toBe("電話で予約する");
+    expect(contents.cta.href).toBe("tel:098-000-0001");
+  });
 
-    const noReservationBrief: StoreBrief = { ...brief, industry: "ジム", websiteGoal: "問い合わせ増加" };
-    const contents2 = generateWebsiteRuleBased(noReservationBrief);
-    expect(contents2.cta.buttonLabel).toBe("お問い合わせする");
+  it("未分類の業種でも電話番号があればtel:リンクのCTAになる", () => {
+    const genericBrief: StoreBrief = { ...brief, industry: "ジム", realData: { phone: "098-000-0002" } };
+    const contents = generateWebsiteRuleBased(genericBrief);
+    expect(contents.cta.href).toBe("tel:098-000-0002");
   });
 
   it("業種別のFeatureは最低4件生成される", () => {

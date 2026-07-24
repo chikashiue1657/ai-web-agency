@@ -184,8 +184,8 @@ MVP側の`mvp_content_generation_requests`とは衝突しない。過去に両�
     "sections": [{ "id": "section-1", "kind": "about", "heading": "…", "body": "…" }],
     "gallery": [{ "id": "gallery-1", "caption": "…", "altText": "…" }],
     "access": { "areaLabel": "…", "addressHint": "…", "mapQuery": "…" },
-    "contactMethods": ["…"],
-    "cta": { "headline": "…", "body": "…", "buttonLabel": "…" },
+    "contactMethods": [{ "label": "…", "href": "tel:… または https://… （実データが無い連絡手段はhrefを持たない）" }],
+    "cta": { "headline": "…", "body": "…", "buttonLabel": "…", "href": "tel:… または \"#contact\"（実データが無ければ常にページ内アンカー）" },
     "seoTitle": "…",
     "metaDescription": "…",
     "faq": [{ "question": "…", "answer": "…" }],
@@ -203,6 +203,12 @@ MVP側の`mvp_content_generation_requests`とは衝突しない。過去に両�
   `src/lib/engine/index.ts` の `switch` にハンドラを1つ追加するだけで拡張できる。
 - 生成結果は `requestId` をキーにサーバ側で保持され、`GET /preview/{requestId}` で確認できる。
 - 入力不正時は `400`、生成失敗時は `500` を返す。
+- `contactMethods`/`cta.href` は、リクエストの `brief.realData`（`address`/`phone`/
+  `openingHours`/`instagramUrl`/`googleRating`/`googleReviewCount`/`photoUrls`、全項目任意）に
+  実際に存在する連絡手段だけをリンク先として組み立てる（`src/lib/engine/real-data-links.ts`）。
+  電話番号が無いのに「電話で予約する」のようなクリックしても機能しないボタンを表示しないための
+  設計で、これは生成方式（ルールベース/LLM）に依らず必ず適用される。realDataが無ければ
+  `cta.href` は常にページ内アンカー `"#contact"` になる。
 
 ### `GET /preview/{requestId}`
 

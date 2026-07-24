@@ -9,6 +9,7 @@
  */
 import type {
   AccessInfo,
+  ContactMethod,
   FaqItem,
   GalleryItem,
   GeneratedWebsiteContents,
@@ -19,8 +20,8 @@ import type {
   WebsiteSection,
 } from "@/lib/types";
 import { BODY_MAX, HERO_TITLE_MAX, sanitizeBrief, truncateJa } from "@/lib/engine/copy-limits";
-import { classifyIndustry } from "@/lib/engine/industry";
 import { buildHeroTitle, buildHeroSubtitle } from "@/lib/engine/hero-copy";
+import { buildCtaWithRealLinks, buildContactMethodsWithRealLinks } from "@/lib/engine/real-data-links";
 
 const DEFAULT_PAGES = ["トップ", "お店の強み", "メニュー・サービス", "選ばれる理由", "アクセス", "よくある質問", "お問い合わせ"];
 
@@ -80,7 +81,9 @@ export function defineDifferentiators(brief: StoreBrief): string[] {
   const offerHeadline = brief.offer.split(/[。／/]/)[0]?.trim() || brief.offer;
   const items = [
     `${offerHeadline}という他にはない提案`,
-    `${angleHeadline}に裏付けられた確かな実力`,
+    // salesAngleは営業チーム側の切り口・仮説であり、店舗の実績が検証済みという
+    // 意味ではないため、「確かな実力」等の断定表現は避け、あくまで方針・軸として書く。
+    `${angleHeadline}を軸にした専門性`,
     `${brief.area}エリアで通いやすい立地`,
     `${brief.targetCustomer}に寄り添った接客・ご案内`,
   ];
@@ -191,55 +194,22 @@ export function buildAccess(brief: StoreBrief): AccessInfo {
 }
 
 /**
- * 業種によって顧客が実際に使う連絡手段は大きく異なる
- * （飲食: 電話予約/Instagram/GoogleMap、美容: LINE予約/電話、整体: 予約/電話 等）。
- * 汎用の「電話・フォーム・SNS」一律ではなく、業種ごとに優先手段を並べる。
+ * 連絡手段・CTAのラベルとリンク先は、実際にbrief.realDataが存在する連絡手段
+ * （電話番号/Instagram URL等）だけを対象にする必要があるため、その判定は
+ * `engine/real-data-links.ts` に一本化している（ここでは委譲するだけ）。
+ * 実データが無いのに「電話で予約する」「LINEで予約する」等と表示すると、
+ * クリックしても何も起きない・存在しない連絡手段を約束するボタンになる
+ * （本番監査で実際に発見された不具合のため、業種テンプレート側では
+ * 一切リンク先を決め打ちしない）。
  */
-export function buildContactMethods(brief: StoreBrief): string[] {
-  const category = classifyIndustry(brief.industry);
-  switch (category) {
-    case "cafe":
-    case "izakaya":
-      return ["お電話で予約", "Instagramで見る", "Google マップで見る"];
-    case "hair_salon":
-      return ["LINEで予約", "お電話でのお問い合わせ"];
-    case "spa":
-      return ["ご予約はこちら", "お電話でのお問い合わせ"];
-    case "hotel":
-      return ["ご予約はこちら", "お電話でのお問い合わせ", "Google マップで見る"];
-    default: {
-      const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
-      return [
-        "お電話でのお問い合わせ",
-        /予約/.test(brief.websiteGoal) ? "オンライン予約フォーム" : "お問い合わせフォーム",
-        truncateJa(`SNSでのご相談（${angleHeadline}について）`, 40),
-      ];
-    }
-  }
+export function buildContactMethods(brief: StoreBrief): ContactMethod[] {
+  return buildContactMethodsWithRealLinks(brief);
 }
 
 export function buildCta(brief: StoreBrief): WebsiteCta {
-  const category = classifyIndustry(brief.industry);
-  const buttonLabel = (() => {
-    switch (category) {
-      case "cafe":
-      case "izakaya":
-        return "電話で予約する";
-      case "hair_salon":
-        return "LINEで予約する";
-      case "spa":
-      case "hotel":
-        return "今すぐ予約する";
-      default:
-        return /予約/.test(brief.websiteGoal) ? "今すぐ予約する" : "お問い合わせする";
-    }
-  })();
-
-  return {
-    headline: truncateJa(brief.offer, HERO_TITLE_MAX),
-    body: truncateJa(`${brief.websiteGoal}をお考えの方は、今すぐお気軽にご連絡ください。`, BODY_MAX),
-    buttonLabel,
-  };
+  const headline = truncateJa(brief.offer, HERO_TITLE_MAX);
+  const body = truncateJa(`${brief.websiteGoal}をお考えの方は、今すぐお気軽にご連絡ください。`, BODY_MAX);
+  return buildCtaWithRealLinks(headline, body, brief);
 }
 
 export function buildFaq(brief: StoreBrief, strategy: StrategyAnalysis): FaqItem[] {

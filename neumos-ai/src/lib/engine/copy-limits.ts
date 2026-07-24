@@ -72,6 +72,17 @@ export function truncateJa(text: string, maxLen: number): string {
   return slice.slice(0, maxLen - 1) + "…";
 }
 
+/**
+ * ハイフンを含む英字の店名（例: "BB-Coffee"）がヒーロー見出しの折り返しで
+ * 「BB-」/「Coffee」のように分断される不具合があった（`break-keep`は
+ * CJK文字の単語内改行は防ぐが、ハイフンは依然として改行可能点として
+ * 扱われるため）。半角ハイフンを改行不可のハイフン（U+2011）に置き換え、
+ * 見た目は変えずに店名の途中で折り返されないようにする。
+ */
+export function preventAwkwardBreaks(text: string): string {
+  return text.replace(/-/g, "‑");
+}
+
 function clampSection(section: WebsiteSection): WebsiteSection {
   return { ...section, body: truncateJa(section.body, BODY_MAX) };
 }
@@ -84,8 +95,8 @@ function clampSection(section: WebsiteSection): WebsiteSection {
 export function clampGeneratedContents(contents: GeneratedWebsiteContents): GeneratedWebsiteContents {
   return {
     ...contents,
-    heroTitle: truncateJa(contents.heroTitle, HERO_TITLE_MAX),
-    heroSubtitle: truncateJa(contents.heroSubtitle, HERO_SUBTITLE_MAX),
+    heroTitle: preventAwkwardBreaks(truncateJa(contents.heroTitle, HERO_TITLE_MAX)),
+    heroSubtitle: preventAwkwardBreaks(truncateJa(contents.heroSubtitle, HERO_SUBTITLE_MAX)),
     concept: truncateJa(contents.concept, BODY_MAX),
     sections: contents.sections.map(clampSection),
     access: { ...contents.access, addressHint: truncateJa(contents.access.addressHint, BODY_MAX) },

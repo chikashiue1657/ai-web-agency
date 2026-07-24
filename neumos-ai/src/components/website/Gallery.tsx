@@ -1,4 +1,5 @@
 import type { GalleryItem } from "@/lib/types";
+import { ImagePlaceholder } from "./ImagePlaceholder";
 
 const GRADIENTS = [
   "from-brand-500 to-purple-700",
@@ -24,20 +25,11 @@ export function Gallery({ items }: { items: GalleryItem[] }) {
         <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
           {items.map((item, i) => (
             <figure key={item.id} className="overflow-hidden rounded-2xl">
-              <div
-                role="img"
-                aria-label={item.altText}
-                className={`flex aspect-square items-center justify-center bg-gradient-to-br ${GRADIENTS[i % GRADIENTS.length]}`}
-              >
-                <svg viewBox="0 0 24 24" className="h-8 w-8 text-white/70 sm:h-10 sm:w-10" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 7h3l1.5-2h9L18 7h3v13H3V7z"
-                  />
-                  <circle cx="12" cy="13" r="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
+              <ImagePlaceholder
+                label={item.altText}
+                gradient={GRADIENTS[i % GRADIENTS.length]}
+                className="aspect-square"
+              />
               <figcaption className="mt-2 text-center text-xs text-gray-600 sm:text-sm">{item.caption}</figcaption>
             </figure>
           ))}

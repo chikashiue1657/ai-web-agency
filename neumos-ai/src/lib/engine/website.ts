@@ -11,14 +11,21 @@ import { GeneratedWebsiteContentsSchema } from "@/lib/validation";
 import { analyzeStrategy, generateWebsiteRuleBased } from "@/lib/engine/rule-based";
 import { buildWebsitePrompt, WEBSITE_SYSTEM_PROMPT } from "@/lib/engine/prompts";
 import { completeJson, isLlmAvailable } from "@/lib/llm/client";
+import { clampGeneratedContents, sanitizeBrief } from "@/lib/engine/copy-limits";
 
 export interface WebsiteGenerationResult {
   contents: GeneratedWebsiteContents;
   method: GenerationMethod;
 }
 
-export async function generateWebsiteContents(brief: StoreBrief): Promise<WebsiteGenerationResult> {
-  const ruleBased = generateWebsiteRuleBased(brief);
+export async function generateWebsiteContents(rawBrief: StoreBrief): Promise<WebsiteGenerationResult> {
+  // brief中の自由記述に社内向けの括弧書きメモ等が含まれることがあるため、
+  // ルールベース・LLMどちらの経路でも、まずsanitize済みのbriefだけを使う。
+  const brief = sanitizeBrief(rawBrief);
+
+  // ルールベース側は生成時点で文字数上限を守るが、LLMは目安文字数を超えて
+  // 出力することがあるため、どちらの経路でも最終的に同じ上限で正規化する。
+  const ruleBased = clampGeneratedContents(generateWebsiteRuleBased(brief));
 
   if (!isLlmAvailable()) {
     return { contents: ruleBased, method: "rule" };
@@ -44,5 +51,5 @@ export async function generateWebsiteContents(brief: StoreBrief): Promise<Websit
     return { contents: ruleBased, method: "rule" };
   }
 
-  return { contents: parsed.data, method: "rule+llm" };
+  return { contents: clampGeneratedContents(parsed.data), method: "rule+llm" };
 }

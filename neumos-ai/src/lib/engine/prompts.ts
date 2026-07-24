@@ -20,19 +20,20 @@ ${JSON.stringify(strategy, null, 2)}
 
 # 出力してほしいJSON schema
 {
-  "concept": string,               // サイトコンセプト（1〜2文）
-  "heroTitle": string,              // トップのキャッチコピー
-  "heroSubtitle": string,           // キャッチコピーを補足する一文
+  "concept": string,               // サイトコンセプト（1〜2文、150文字以内目安）
+  "heroTitle": string,              // トップのキャッチコピー。スマホでも2〜3行に収まる短い一文（36文字以内目安）。長い提案文をそのまま使わず、一番伝えたい価値だけに絞ること
+  "heroSubtitle": string,           // キャッチコピーを補足する一文（70文字以内目安）
   "sections": [{ "id": string, "kind": "about"|"service"|"feature", "heading": string, "body": string }],
     // Website Rendererが About/Service/Feature の3コンポーネントとして描画するため、
     // kind="about" / "service" / "feature" を最低1件ずつ、合計3〜6セクション含めること。
+    // 各bodyは100〜150文字程度に収め、長文の垂れ流しにしないこと。
   "gallery": [{ "id": string, "caption": string, "altText": string }], // 4〜6件。実写真は無い前提で、雰囲気が伝わる短いキャプションのみ
-  "access": { "areaLabel": string, "addressHint": string, "mapQuery": string }, // mapQueryは「店舗名 + エリア」等、地図検索に使える文字列
-  "contactMethods": string[], // 問い合わせ手段（電話/フォーム/SNS等）2〜3件
-  "cta": { "headline": string, "body": string, "buttonLabel": string },
+  "access": { "areaLabel": string, "addressHint": string, "mapQuery": string }, // addressHintは150文字以内目安。mapQueryは「店舗名 + エリア」等、地図検索に使える文字列
+  "contactMethods": string[], // 問い合わせ手段（電話/フォーム/SNS等）2〜3件。各項目は短い名詞句にすること
+  "cta": { "headline": string, "body": string, "buttonLabel": string }, // bodyは150文字以内目安
   "seoTitle": string,               // 60文字以内目安
   "metaDescription": string,        // 120文字以内目安
-  "faq": [{ "question": string, "answer": string }], // 3〜5件
+  "faq": [{ "question": string, "answer": string }], // 3〜5件。answerは質問に直接答え、150文字以内目安
   "instagramCaption": string,       // ハッシュタグ込みの投稿文
   "googleBusinessImprovement": string[], // Googleビジネスプロフィール改善案 3〜5件
   "strategy": {

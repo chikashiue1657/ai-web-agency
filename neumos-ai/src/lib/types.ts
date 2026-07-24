@@ -43,6 +43,29 @@ export interface StoreBrief {
   seoKeywords: string[];
   tone: string;
   offer: string;
+  /**
+   * Google ビジネスプロフィール等から取得できた実データ（任意）。
+   * MVP側がGoogle Placesから取得済みの場合のみ渡される。存在する項目のみ
+   * Website Rendererが店舗情報カード・ギャラリー等に反映し、無い項目は
+   * 表示しない（捏造しないため、値が無ければ非表示にする設計）。
+   */
+  realData?: StoreRealData;
+}
+
+/** Google ビジネスプロフィール等から取得できた実データ。全項目任意。 */
+export interface StoreRealData {
+  address?: string;
+  phone?: string;
+  /** 曜日ごとの営業時間表記（例: "月: 10:00–19:00"）。取得元の表記をそのまま使う。 */
+  openingHours?: string[];
+  /** 定休日の説明（例: "水曜定休"）。取得できなければ省略する。 */
+  closedDays?: string;
+  instagramUrl?: string;
+  /** Google の評価（0〜5）。 */
+  googleRating?: number;
+  googleReviewCount?: number;
+  /** 実写真のURL（表示可能な直リンク）。存在する分だけGallery/Aboutで使う。 */
+  photoUrls?: string[];
 }
 
 export interface GenerateRequest {

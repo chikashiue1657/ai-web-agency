@@ -1,4 +1,16 @@
-export function Footer({ storeName, area, industry }: { storeName: string; area: string; industry: string }) {
+import type { WebsiteTheme } from "@/lib/theme";
+
+export function Footer({
+  storeName,
+  area,
+  industry,
+  theme,
+}: {
+  storeName: string;
+  area: string;
+  industry: string;
+  theme: WebsiteTheme;
+}) {
   return (
     <footer className="border-t border-gray-100 bg-white py-10">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center sm:px-6 lg:px-8">
@@ -6,7 +18,7 @@ export function Footer({ storeName, area, industry }: { storeName: string; area:
         <p className="text-xs text-gray-500 sm:text-sm">
           {area} ・ {industry}
         </p>
-        <a href="#top" className="text-xs text-brand-600 hover:underline sm:text-sm">
+        <a href="#top" className={`text-xs hover:underline sm:text-sm ${theme.accentText}`}>
           ページの先頭へ戻る ↑
         </a>
         <p className="mt-4 text-xs text-gray-400">

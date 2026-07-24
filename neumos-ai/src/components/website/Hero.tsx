@@ -1,18 +1,22 @@
+import type { WebsiteTheme } from "@/lib/theme";
+
 export function Hero({
   heroTitle,
   heroSubtitle,
   ctaLabel,
   industry,
   area,
+  theme,
 }: {
   heroTitle: string;
   heroSubtitle: string;
   ctaLabel: string;
   industry: string;
   area: string;
+  theme: WebsiteTheme;
 }) {
   return (
-    <section id="top" className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-brand-500">
+    <section id="top" className={`relative overflow-hidden ${theme.heroGradient}`}>
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
 
@@ -20,13 +24,13 @@ export function Hero({
         <span className="mb-5 inline-flex items-center rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium text-white sm:text-sm">
           {area} ・ {industry}
         </span>
-        <h1 className="max-w-3xl text-3xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+        <h1 className={`max-w-3xl text-3xl leading-tight text-white sm:text-5xl lg:text-6xl ${theme.headingFont}`}>
           {heroTitle}
         </h1>
         <p className="mt-6 max-w-2xl text-base text-white/90 sm:text-lg">{heroSubtitle}</p>
         <a
           href="#contact"
-          className="mt-10 inline-flex items-center justify-center rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-brand-700 shadow-lg transition hover:bg-brand-50 sm:text-base"
+          className={`mt-10 inline-flex items-center justify-center rounded-full bg-white px-8 py-3.5 text-sm font-semibold shadow-lg transition hover:bg-white/90 sm:text-base ${theme.accentText}`}
         >
           {ctaLabel}
         </a>

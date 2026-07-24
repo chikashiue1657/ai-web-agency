@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import type { WebsiteTheme } from "@/lib/theme";
 
 const NAV_ITEMS = [
   { href: "#about", label: "About" },
@@ -11,19 +12,23 @@ const NAV_ITEMS = [
   { href: "#contact", label: "Contact" },
 ];
 
-export function Header({ storeName }: { storeName: string }) {
+export function Header({ storeName, theme }: { storeName: string; theme: WebsiteTheme }) {
   const [open, setOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        <a href="#top" className="text-base font-bold tracking-tight text-brand-700 sm:text-lg">
+        <a href="#top" className={`text-base font-bold tracking-tight sm:text-lg ${theme.accentText}`}>
           {storeName}
         </a>
 
         <nav className="hidden md:flex md:items-center md:gap-6">
           {NAV_ITEMS.map((item) => (
-            <a key={item.href} href={item.href} className="text-sm font-medium text-gray-600 transition hover:text-brand-700">
+            <a
+              key={item.href}
+              href={item.href}
+              className={`text-sm font-medium text-gray-600 transition ${theme.navHoverText}`}
+            >
               {item.label}
             </a>
           ))}
@@ -54,7 +59,7 @@ export function Header({ storeName }: { storeName: string }) {
                 <a
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className="block rounded-md px-2 py-2 text-sm font-medium text-gray-700 hover:bg-brand-50 hover:text-brand-700"
+                  className={`block rounded-md px-2 py-2 text-sm font-medium text-gray-700 ${theme.navHoverBg} ${theme.navHoverText}`}
                 >
                   {item.label}
                 </a>

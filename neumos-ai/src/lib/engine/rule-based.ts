@@ -18,7 +18,9 @@ import type {
   WebsiteCta,
   WebsiteSection,
 } from "@/lib/types";
-import { BODY_MAX, HERO_SUBTITLE_MAX, HERO_TITLE_MAX, sanitizeBrief, truncateJa } from "@/lib/engine/copy-limits";
+import { BODY_MAX, HERO_TITLE_MAX, sanitizeBrief, truncateJa } from "@/lib/engine/copy-limits";
+import { classifyIndustry } from "@/lib/engine/industry";
+import { buildHeroTitle, buildHeroSubtitle } from "@/lib/engine/hero-copy";
 
 const DEFAULT_PAGES = ["トップ", "お店の強み", "メニュー・サービス", "選ばれる理由", "アクセス", "よくある質問", "お問い合わせ"];
 
@@ -67,8 +69,24 @@ export function defineTargetPersona(brief: StoreBrief): string {
   return `${brief.area}エリアで${brief.industry}を探している${brief.targetCustomer}。${brief.mainProblem}という課題を抱えており、${brief.offer}に価値を感じやすい層。`;
 }
 
-export function defineDifferentiators(brief: StoreBrief, strengths: string[]): string[] {
-  return [...strengths, `${brief.websiteGoal}に特化した導線設計`];
+/**
+ * Feature（選ばれる理由）用の差別化ポイント。
+ * 以前はAboutの`strengths`をそのまま再掲していたため、About/Featureの内容が
+ * 重複していた。ここではbriefの別の側面（提案内容/実力/世界観/立地/顧客理解/
+ * サイトの目的）から独自に6項目を合成し、最低4件（可能なら6件）を返す。
+ */
+export function defineDifferentiators(brief: StoreBrief): string[] {
+  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
+  const offerHeadline = brief.offer.split(/[。／/]/)[0]?.trim() || brief.offer;
+  const items = [
+    `${offerHeadline}という他にはない提案`,
+    `${angleHeadline}に裏付けられた確かな実力`,
+    `${brief.area}エリアで通いやすい立地`,
+    `${brief.targetCustomer}に寄り添った接客・ご案内`,
+  ];
+  if (brief.tone) items.push(`「${brief.tone}」という一貫した世界観`);
+  items.push(`${brief.websiteGoal}につながる導線設計`);
+  return items;
 }
 
 export function buildConcept(brief: StoreBrief, strategy: StrategyAnalysis): string {
@@ -102,16 +120,15 @@ export function buildSeo(brief: StoreBrief): { seoTitle: string; metaDescription
 }
 
 /**
- * salesAngle/targetPersonaは営業提案としての説明文（複数文）であることが多く、
- * そのまま連結するとヒーローの見出しが90文字を超えるなど長文化しやすい。
- * 最初の一文（節）だけを見出しの元にし、最終的にはtruncateJaで上限まで丸める。
+ * ヒーロー見出しは「施策の説明」ではなく「店舗オーナーが伝えたい価値」を優先する
+ * （営業で契約率を上げる目的のため、SEOよりCV重視）。業種別のコピールールは
+ * `engine/hero-copy.ts` に分離している。
  */
 export function buildHeroCopy(brief: StoreBrief, strategy: StrategyAnalysis): { heroTitle: string; heroSubtitle: string } {
-  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
   const personaHeadline = strategy.targetPersona.split("。")[0]?.trim() || strategy.targetPersona;
   return {
-    heroTitle: truncateJa(`${brief.storeName} — ${angleHeadline}`, HERO_TITLE_MAX),
-    heroSubtitle: truncateJa(`${personaHeadline}へ。${brief.offer}`, HERO_SUBTITLE_MAX),
+    heroTitle: buildHeroTitle(brief),
+    heroSubtitle: buildHeroSubtitle(brief, personaHeadline),
   };
 }
 
@@ -173,19 +190,55 @@ export function buildAccess(brief: StoreBrief): AccessInfo {
   };
 }
 
+/**
+ * 業種によって顧客が実際に使う連絡手段は大きく異なる
+ * （飲食: 電話予約/Instagram/GoogleMap、美容: LINE予約/電話、整体: 予約/電話 等）。
+ * 汎用の「電話・フォーム・SNS」一律ではなく、業種ごとに優先手段を並べる。
+ */
 export function buildContactMethods(brief: StoreBrief): string[] {
-  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
-  const methods = ["お電話でのお問い合わせ"];
-  methods.push(/予約/.test(brief.websiteGoal) ? "オンライン予約フォーム" : "お問い合わせフォーム");
-  methods.push(truncateJa(`SNSでのご相談（${angleHeadline}について）`, 40));
-  return methods;
+  const category = classifyIndustry(brief.industry);
+  switch (category) {
+    case "cafe":
+    case "izakaya":
+      return ["お電話で予約", "Instagramで見る", "Google マップで見る"];
+    case "hair_salon":
+      return ["LINEで予約", "お電話でのお問い合わせ"];
+    case "spa":
+      return ["ご予約はこちら", "お電話でのお問い合わせ"];
+    case "hotel":
+      return ["ご予約はこちら", "お電話でのお問い合わせ", "Google マップで見る"];
+    default: {
+      const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
+      return [
+        "お電話でのお問い合わせ",
+        /予約/.test(brief.websiteGoal) ? "オンライン予約フォーム" : "お問い合わせフォーム",
+        truncateJa(`SNSでのご相談（${angleHeadline}について）`, 40),
+      ];
+    }
+  }
 }
 
 export function buildCta(brief: StoreBrief): WebsiteCta {
+  const category = classifyIndustry(brief.industry);
+  const buttonLabel = (() => {
+    switch (category) {
+      case "cafe":
+      case "izakaya":
+        return "電話で予約する";
+      case "hair_salon":
+        return "LINEで予約する";
+      case "spa":
+      case "hotel":
+        return "今すぐ予約する";
+      default:
+        return /予約/.test(brief.websiteGoal) ? "今すぐ予約する" : "お問い合わせする";
+    }
+  })();
+
   return {
     headline: truncateJa(brief.offer, HERO_TITLE_MAX),
     body: truncateJa(`${brief.websiteGoal}をお考えの方は、今すぐお気軽にご連絡ください。`, BODY_MAX),
-    buttonLabel: /予約/.test(brief.websiteGoal) ? "今すぐ予約する" : "お問い合わせする",
+    buttonLabel,
   };
 }
 
@@ -227,12 +280,11 @@ export function buildGoogleBusinessImprovement(brief: StoreBrief, strategy: Stra
 }
 
 export function analyzeStrategy(brief: StoreBrief): StrategyAnalysis {
-  const strengths = analyzeStrengths(brief);
   return {
-    strengths,
+    strengths: analyzeStrengths(brief),
     challenges: analyzeChallenges(brief),
     targetPersona: defineTargetPersona(brief),
-    differentiators: defineDifferentiators(brief, strengths),
+    differentiators: defineDifferentiators(brief),
   };
 }
 

@@ -163,6 +163,28 @@ export interface NeumosBrief {
   tone: string; // トーン&マナー
   offer: string; // 提案オファー
   generationType: GenerationType;
+  /**
+   * Google ビジネスプロフィール等から取得できた実データ（任意）。
+   * storeにGoogle Places由来のデータがある場合のみ`buildStoreRealData`で埋める。
+   * Neumos AI側は存在する項目のみ店舗情報カード・ギャラリーに反映し、
+   * 無い項目は表示しない（捏造防止のため、値が無ければ省略する設計）。
+   */
+  realData?: StoreRealData;
+}
+
+/** Google ビジネスプロフィール等から取得できた実データ。全項目任意。 */
+export interface StoreRealData {
+  address?: string;
+  phone?: string;
+  /** 曜日ごとの営業時間表記（例: "月曜日: 10:00~19:00"）。取得元の表記をそのまま使う。 */
+  openingHours?: string[];
+  closedDays?: string;
+  instagramUrl?: string;
+  /** Google の評価（0〜5）。 */
+  googleRating?: number;
+  googleReviewCount?: number;
+  /** 実写真のURL（表示可能な直リンク）。存在する分だけGallery/Aboutで使う。 */
+  photoUrls?: string[];
 }
 
 /** generationType を除いた再利用可能なブリーフ核（StoreStrategy が保持）。 */

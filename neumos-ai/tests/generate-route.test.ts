@@ -42,7 +42,8 @@ describe("POST /api/generate", () => {
     expect(json.status).toBe("preview");
     expect(json.previewUrl).toContain(`/preview/${json.requestId}`);
     expect(json.publishedUrl).toBeNull();
-    expect(json.generatedContents.heroTitle).toContain(brief.storeName);
+    // 業種別のヒーローコピー（CV重視）はstoreNameを含むとは限らない
+    expect(json.generatedContents.heroTitle.length).toBeGreaterThan(0);
   });
 
   it("returns 400 for an invalid brief", async () => {

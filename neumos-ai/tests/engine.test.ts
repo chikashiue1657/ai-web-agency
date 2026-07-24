@@ -27,7 +27,11 @@ describe("engine dispatcher", () => {
   it("generates website contents via the rule-based path when no LLM key is configured", async () => {
     const result = await runGeneration("website", brief);
     expect(result.method).toBe("rule");
-    expect(result.contents.heroTitle).toContain(brief.storeName);
+    // 業種別のヒーローコピー（CV重視）はstoreNameを含むとは限らない
+    // （例: 美容室は「あなた史上最高の髪へ」）。店名は必ずヘッダー/フッターに出るため、
+    // ここではヒーローが空でなく上限内であることだけを検証する。
+    expect(result.contents.heroTitle.length).toBeGreaterThan(0);
+    expect(result.contents.heroTitle.length).toBeLessThanOrEqual(HERO_TITLE_MAX);
   });
 
   it("briefのsalesAngle/targetCustomerが長文でも、ヒーローの見出し・補足は短く収まる（本番実例の回帰テスト）", async () => {

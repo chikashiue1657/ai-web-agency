@@ -5,8 +5,30 @@
  * Next.js版（`src/components/website/WebsiteRenderer.tsx`）と同じセクション構成
  * （Hero/About/Service/Feature/Gallery/FAQ/Access/Contact/Footer）を持つ、
  * 静的エクスポート用の書き出し先。
+ *
+ * 配色はTailwind版と同じ業種分類（`classifyIndustry`）を使い、CSSはインライン
+ * なのでここでは16進カラーで持つ（Tailwindのクラス名とは別管理になるが、
+ * ビルド非依存の単体HTMLという制約上、CSS変数側で独自に持つのが最も単純）。
  */
 import type { GeneratedWebsiteContents, StoreBrief } from "@/lib/types";
+import { classifyIndustry, type IndustryCategory } from "@/lib/engine/industry";
+
+interface HtmlTheme {
+  heroFrom: string;
+  heroTo: string;
+  accent: string;
+  cardBg: string;
+  cardBorder: string;
+}
+
+const HTML_THEMES: Record<IndustryCategory, HtmlTheme> = {
+  cafe: { heroFrom: "#b45309", heroTo: "#f97316", accent: "#b45309", cardBg: "#fffbeb", cardBorder: "#fde68a" },
+  hair_salon: { heroFrom: "#be123c", heroTo: "#ec4899", accent: "#be123c", cardBg: "#fff1f2", cardBorder: "#fecdd3" },
+  spa: { heroFrom: "#0f766e", heroTo: "#10b981", accent: "#0f766e", cardBg: "#f0fdfa", cardBorder: "#99f6e4" },
+  izakaya: { heroFrom: "#991b1b", heroTo: "#ea580c", accent: "#991b1b", cardBg: "#fef2f2", cardBorder: "#fecaca" },
+  hotel: { heroFrom: "#1e293b", heroTo: "#312e81", accent: "#312e81", cardBg: "#f8fafc", cardBorder: "#e2e8f0" },
+  general: { heroFrom: "#4c1d95", heroTo: "#6d28d9", accent: "#4c1d95", cardBg: "#faf9ff", cardBorder: "#ede9fe" },
+};
 
 function escapeHtml(input: string): string {
   return input
@@ -22,6 +44,8 @@ function nl2br(input: string): string {
 }
 
 export function renderWebsitePreviewHtml(brief: StoreBrief, contents: GeneratedWebsiteContents): string {
+  const theme = HTML_THEMES[classifyIndustry(brief.industry)];
+
   const aboutHtml = contents.sections
     .filter((s) => s.kind === "about")
     .map((s) => `<p>${nl2br(s.body)}</p>`)
@@ -70,25 +94,25 @@ export function renderWebsitePreviewHtml(brief: StoreBrief, contents: GeneratedW
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif; color: #1f2330; background: #fafafa; line-height: 1.8; }
-  .hero { padding: 72px 24px; text-align: center; background: linear-gradient(135deg, #4c1d95, #6d28d9); color: #fff; }
+  .hero { padding: 72px 24px; text-align: center; background: linear-gradient(135deg, ${theme.heroFrom}, ${theme.heroTo}); color: #fff; }
   .hero h1 { font-size: clamp(28px, 5vw, 44px); margin: 0 0 16px; }
   .hero p { font-size: 18px; opacity: 0.92; margin: 0; }
   .concept { max-width: 720px; margin: 32px auto; padding: 0 24px; text-align: center; color: #4b5563; }
   main { max-width: 960px; margin: 0 auto; padding: 0 24px 64px; }
   .section { margin: 40px 0; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  .section h2 { margin-top: 0; color: #4c1d95; }
+  .section h2 { margin-top: 0; color: ${theme.accent}; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
-  .card { padding: 16px; border-radius: 10px; background: #faf9ff; border: 1px solid #ede9fe; }
+  .card { padding: 16px; border-radius: 10px; background: ${theme.cardBg}; border: 1px solid ${theme.cardBorder}; }
   .card h3 { margin: 0 0 8px; font-size: 16px; }
   .gallery-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 16px; }
-  .tile { margin: 0; aspect-ratio: 1 / 1; border-radius: 12px; background: linear-gradient(135deg, #6d28d9, #a855f7); display: flex; align-items: flex-end; justify-content: center; padding: 8px; }
+  .tile { margin: 0; aspect-ratio: 1 / 1; border-radius: 12px; background: linear-gradient(135deg, ${theme.heroFrom}, ${theme.heroTo}); display: flex; align-items: flex-end; justify-content: center; padding: 8px; }
   .tile figcaption { font-size: 12px; color: #fff; text-align: center; }
   .access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
   .access-grid iframe { width: 100%; height: 100%; min-height: 240px; border: 0; border-radius: 10px; }
-  .cta { max-width: 960px; margin: 0 auto 64px; padding: 40px 24px; text-align: center; background: #ede9fe; border-radius: 16px; }
+  .cta { max-width: 960px; margin: 0 auto 64px; padding: 40px 24px; text-align: center; background: ${theme.cardBg}; border-radius: 16px; }
   .cta h3 { margin: 0 0 8px; font-size: 24px; }
-  .cta .btn { display: inline-block; margin-top: 16px; padding: 12px 32px; background: #5b21b6; color: #fff; border-radius: 999px; text-decoration: none; font-weight: 600; }
-  .pill { display: inline-block; margin: 4px; padding: 6px 14px; border-radius: 999px; border: 1px solid #ddd6fe; font-size: 12px; color: #4c1d95; }
+  .cta .btn { display: inline-block; margin-top: 16px; padding: 12px 32px; background: ${theme.accent}; color: #fff; border-radius: 999px; text-decoration: none; font-weight: 600; }
+  .pill { display: inline-block; margin: 4px; padding: 6px 14px; border-radius: 999px; border: 1px solid ${theme.cardBorder}; font-size: 12px; color: ${theme.accent}; }
   .faq-item { margin-bottom: 16px; }
   .faq-q { font-weight: 700; margin: 0 0 4px; }
   .faq-a { margin: 0; color: #4b5563; }

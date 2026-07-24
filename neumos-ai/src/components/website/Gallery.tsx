@@ -1,38 +1,51 @@
 import type { GalleryItem } from "@/lib/types";
+import type { WebsiteTheme } from "@/lib/theme";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 
-const GRADIENTS = [
-  "from-brand-500 to-purple-700",
-  "from-fuchsia-500 to-brand-700",
-  "from-indigo-500 to-brand-600",
-  "from-brand-600 to-pink-600",
-  "from-purple-600 to-brand-500",
-  "from-violet-500 to-brand-700",
-];
+export function Gallery({
+  items,
+  theme,
+  photoUrls,
+}: {
+  items: GalleryItem[];
+  theme: WebsiteTheme;
+  /** Googleの実写真URL。あるものはプレースホルダーの代わりにそのまま使う。 */
+  photoUrls?: string[];
+}) {
+  const hasRealPhotos = (photoUrls?.length ?? 0) > 0;
 
-export function Gallery({ items }: { items: GalleryItem[] }) {
   return (
-    <section id="gallery" className="bg-gray-50 py-16 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+    <section id="gallery" className={theme.altSectionBg}>
+      <div className={`mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 ${theme.sectionPadding}`}>
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-brand-600">Gallery</p>
-          <h2 className="mt-3 text-2xl font-bold text-gray-900 sm:text-3xl">ギャラリー</h2>
-          <p className="mt-4 text-sm text-gray-500">
-            ※実際の店舗写真に差し替えてご利用ください（現在はイメージ枠を表示しています）。
-          </p>
+          <p className={`text-sm font-semibold uppercase tracking-widest ${theme.accentText}`}>Gallery</p>
+          <h2 className={`mt-3 text-2xl text-gray-900 sm:text-3xl ${theme.headingFont}`}>ギャラリー</h2>
+          {!hasRealPhotos && (
+            <p className="mt-4 text-sm text-gray-500">
+              ※実際の店舗写真に差し替えてご利用ください（現在はイメージ枠を表示しています）。
+            </p>
+          )}
         </div>
 
         <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
-          {items.map((item, i) => (
-            <figure key={item.id} className="overflow-hidden rounded-2xl">
-              <ImagePlaceholder
-                label={item.altText}
-                gradient={GRADIENTS[i % GRADIENTS.length]}
-                className="aspect-square"
-              />
-              <figcaption className="mt-2 text-center text-xs text-gray-600 sm:text-sm">{item.caption}</figcaption>
-            </figure>
-          ))}
+          {items.map((item, i) => {
+            const photoUrl = photoUrls?.[i];
+            return (
+              <figure key={item.id} className={`overflow-hidden ${theme.radius}`}>
+                {photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photoUrl} alt={item.altText} className="aspect-square w-full object-cover" />
+                ) : (
+                  <ImagePlaceholder
+                    label={item.altText}
+                    gradient={theme.galleryGradients[i % theme.galleryGradients.length]}
+                    className="aspect-square"
+                  />
+                )}
+                <figcaption className="mt-2 text-center text-xs text-gray-600 sm:text-sm">{item.caption}</figcaption>
+              </figure>
+            );
+          })}
         </div>
       </div>
     </section>

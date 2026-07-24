@@ -4,6 +4,18 @@ import { z } from "zod";
  * 入力検証。`brief` は AI集客支援MVP側 `NeumosBrief` をそのまま渡しても動くように、
  * 未知フィールド（例: brief.generationType の重複）は無視する（strictにしない）。
  */
+/** Googleビジネスプロフィール等から取得できた実データ（任意、無ければ全て省略可）。 */
+export const StoreRealDataSchema = z.object({
+  address: z.string().optional(),
+  phone: z.string().optional(),
+  openingHours: z.array(z.string()).optional(),
+  closedDays: z.string().optional(),
+  instagramUrl: z.string().optional(),
+  googleRating: z.number().optional(),
+  googleReviewCount: z.number().optional(),
+  photoUrls: z.array(z.string()).optional(),
+});
+
 export const StoreBriefSchema = z.object({
   storeName: z.string().min(1, "storeName is required"),
   industry: z.string().min(1, "industry is required"),
@@ -17,6 +29,7 @@ export const StoreBriefSchema = z.object({
   seoKeywords: z.array(z.string()).default([]),
   tone: z.string().min(1, "tone is required"),
   offer: z.string().min(1, "offer is required"),
+  realData: StoreRealDataSchema.optional(),
 });
 
 export const GenerationTypeSchema = z.enum([

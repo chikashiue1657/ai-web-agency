@@ -79,8 +79,23 @@ describe("rule-based marketing engine", () => {
     expect(kinds.has("feature")).toBe(true);
   });
 
-  it("picks a reservation-oriented CTA label when websiteGoal mentions 予約", () => {
+  it("業種別のCTAラベルを使う（カフェ=電話予約）", () => {
     const contents = generateWebsiteRuleBased(brief);
+    expect(contents.cta.buttonLabel).toBe("電話で予約する");
+  });
+
+  it("業種未分類の場合はwebsiteGoalの「予約」有無でCTAラベルを決める（フォールバック）", () => {
+    const genericBrief: StoreBrief = { ...brief, industry: "ジム" };
+    const contents = generateWebsiteRuleBased(genericBrief);
     expect(contents.cta.buttonLabel).toBe("今すぐ予約する");
+
+    const noReservationBrief: StoreBrief = { ...brief, industry: "ジム", websiteGoal: "問い合わせ増加" };
+    const contents2 = generateWebsiteRuleBased(noReservationBrief);
+    expect(contents2.cta.buttonLabel).toBe("お問い合わせする");
+  });
+
+  it("業種別のFeatureは最低4件生成される", () => {
+    const contents = generateWebsiteRuleBased(brief);
+    expect(contents.strategy.differentiators.length).toBeGreaterThanOrEqual(4);
   });
 });

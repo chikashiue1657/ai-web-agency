@@ -4,6 +4,7 @@ import {
   clampGeneratedContents,
   stripAsides,
   sanitizeBrief,
+  preventAwkwardBreaks,
   HERO_TITLE_MAX,
   HERO_SUBTITLE_MAX,
   BODY_MAX,
@@ -27,6 +28,19 @@ describe("truncateJa", () => {
     const result = truncateJa(text, 20);
     expect(result.length).toBeLessThanOrEqual(20);
     expect(result.endsWith("…")).toBe(true);
+  });
+});
+
+describe("preventAwkwardBreaks", () => {
+  it("半角ハイフンを改行不可のハイフン（U+2011）に置き換える（見た目は同じだが店名の途中で改行されない）", () => {
+    const result = preventAwkwardBreaks("毎日通いたくなるBB-Coffee");
+    expect(result).not.toContain("-");
+    expect(result).toContain("‑");
+    expect(result.replace(/‑/g, "-")).toBe("毎日通いたくなるBB-Coffee");
+  });
+
+  it("ハイフンが無い文はそのまま返す", () => {
+    expect(preventAwkwardBreaks("あなた史上最高の髪へ")).toBe("あなた史上最高の髪へ");
   });
 });
 
@@ -76,7 +90,7 @@ describe("clampGeneratedContents", () => {
       gallery: [],
       access: { areaLabel: "エリア", addressHint: "あ".repeat(300), mapQuery: "store area" },
       contactMethods: [],
-      cta: { headline: "見出し", body: "あ".repeat(300), buttonLabel: "予約する" },
+      cta: { headline: "見出し", body: "あ".repeat(300), buttonLabel: "予約する", href: "#contact" },
       seoTitle: "title",
       metaDescription: "description",
       faq: [{ question: "Q", answer: "あ".repeat(300) }],

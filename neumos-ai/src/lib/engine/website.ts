@@ -12,6 +12,7 @@ import { analyzeStrategy, generateWebsiteRuleBased } from "@/lib/engine/rule-bas
 import { buildWebsitePrompt, WEBSITE_SYSTEM_PROMPT } from "@/lib/engine/prompts";
 import { completeJson, isLlmAvailable } from "@/lib/llm/client";
 import { clampGeneratedContents, sanitizeBrief } from "@/lib/engine/copy-limits";
+import { buildCtaWithRealLinks, buildContactMethodsWithRealLinks } from "@/lib/engine/real-data-links";
 
 export interface WebsiteGenerationResult {
   contents: GeneratedWebsiteContents;
@@ -51,5 +52,18 @@ export async function generateWebsiteContents(rawBrief: StoreBrief): Promise<Web
     return { contents: ruleBased, method: "rule" };
   }
 
-  return { contents: clampGeneratedContents(parsed.data), method: "rule+llm" };
+  const clamped = clampGeneratedContents(parsed.data);
+  // LLMはcta.buttonLabel/contactMethodsに「LINEで予約する」等、実データが無くても
+  // それらしい文言を書いてしまうことがある。プロンプトで禁止してはいるが、
+  // クリックしても機能しないボタンを表示しないことを保証するため、
+  // headline/bodyの創作コピーは活かしつつ、button/連絡手段はbrief.realDataに
+  // 基づく実際に機能するリンクへ必ず上書きする。
+  return {
+    contents: {
+      ...clamped,
+      cta: buildCtaWithRealLinks(clamped.cta.headline, clamped.cta.body, brief),
+      contactMethods: buildContactMethodsWithRealLinks(brief),
+    },
+    method: "rule+llm",
+  };
 }

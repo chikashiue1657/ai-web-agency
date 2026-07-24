@@ -50,9 +50,11 @@ ${JSON.stringify(strategy, null, 2)}
     // （About と同じ内容の言い換えにしないこと）。
   "gallery": [{ "id": string, "caption": string, "altText": string }], // 4〜6件。実写真は無い前提で、雰囲気が伝わる短いキャプションのみ
   "access": { "areaLabel": string, "addressHint": string, "mapQuery": string }, // addressHintは150文字以内目安。mapQueryは「店舗名 + エリア」等、地図検索に使える文字列
-  "contactMethods": string[], // 問い合わせ手段。業種に合わせて優先順位をつけること
-    // （例: 飲食は電話予約/Instagram/GoogleMap、美容はLINE予約/電話、整体は予約/電話）。2〜3件、各項目は短い名詞句にすること
-  "cta": { "headline": string, "body": string, "buttonLabel": string }, // bodyは150文字以内目安。buttonLabelも業種に合わせる（例: 美容室なら「LINEで予約する」）
+  "contactMethods": string[], // 見出し的なラベルのみでよい（実際にどの連絡手段を載せるかは
+    // brief.realDataの有無に応じてシステム側が最終決定するため、ここでは1〜2件で十分）
+  "cta": { "headline": string, "body": string, "buttonLabel": string }, // headline/bodyのみ使用する。
+    // buttonLabelは参考程度（実際のボタン文言・リンク先はbrief.realDataの有無に応じて
+    // システム側が決定するため、「LINEで予約する」等realDataに無い連絡手段を書いても反映されない）
   "seoTitle": string,               // 60文字以内目安
   "metaDescription": string,        // 120文字以内目安
   "faq": [{ "question": string, "answer": string }], // 3〜5件。answerは質問に直接答え、150文字以内目安

@@ -6,14 +6,15 @@ import type { WebsiteTheme } from "@/lib/theme";
  * カード表示する。実データ（Google等から取得できた項目）が無い場合は
  * カードごと非表示にし、一部の項目だけ無い場合はその項目だけ省略する
  * （取得できない情報を捏造しないため）。
+ * 電話番号は tel: リンクとして表示し、実際にタップして発信できるようにする。
  */
 export function StoreInfoCard({ realData, theme }: { realData?: StoreRealData; theme: WebsiteTheme }) {
   if (!realData) return null;
 
-  const rows: { label: string; value: string }[] = [];
+  const rows: { label: string; value: string; href?: string }[] = [];
   if (realData.openingHours?.length) rows.push({ label: "営業時間", value: realData.openingHours.join(" / ") });
   if (realData.closedDays) rows.push({ label: "定休日", value: realData.closedDays });
-  if (realData.phone) rows.push({ label: "電話番号", value: realData.phone });
+  if (realData.phone) rows.push({ label: "電話番号", value: realData.phone, href: `tel:${realData.phone}` });
   if (realData.address) rows.push({ label: "住所", value: realData.address });
   if (typeof realData.googleRating === "number") {
     const reviewSuffix = realData.googleReviewCount ? `（${realData.googleReviewCount}件のレビュー）` : "";
@@ -31,7 +32,15 @@ export function StoreInfoCard({ realData, theme }: { realData?: StoreRealData; t
         {rows.map((row) => (
           <div key={row.label} className="flex gap-4 text-sm sm:text-base">
             <dt className="w-24 shrink-0 font-medium text-gray-500">{row.label}</dt>
-            <dd className="text-gray-800">{row.value}</dd>
+            <dd className="break-keep text-gray-800">
+              {row.href ? (
+                <a href={row.href} className={`font-medium ${theme.accentText} hover:underline`}>
+                  {row.value}
+                </a>
+              ) : (
+                row.value
+              )}
+            </dd>
           </div>
         ))}
       </dl>

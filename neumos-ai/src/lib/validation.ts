@@ -79,12 +79,21 @@ export const GeneratedWebsiteContentsSchema = z.object({
     addressHint: z.string().min(1),
     mapQuery: z.string().min(1),
   }),
-  contactMethods: z.array(z.string().min(1)).min(1),
-  cta: z.object({
-    headline: z.string().min(1),
-    body: z.string().min(1),
-    buttonLabel: z.string().min(1),
-  }),
+  // contactMethods/cta.hrefは実際に機能するリンク（tel:/https://等）かどうかを
+  // brief.realDataの有無で厳密に決める必要があるため、LLMにはシンプルな
+  // ラベル文字列だけを出力させ、`engine/real-data-links.ts`のapplyRealDataLinksが
+  // 生成方式に依らず必ず上書きする（ここではプレースホルダーの形だけ整える）。
+  contactMethods: z
+    .array(z.string().min(1))
+    .min(1)
+    .transform((labels) => labels.map((label) => ({ label }))),
+  cta: z
+    .object({
+      headline: z.string().min(1),
+      body: z.string().min(1),
+      buttonLabel: z.string().min(1),
+    })
+    .transform((cta) => ({ ...cta, href: "#contact" })),
   seoTitle: z.string().min(1),
   metaDescription: z.string().min(1),
   faq: z

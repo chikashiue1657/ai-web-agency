@@ -45,7 +45,7 @@ export function toLegacyGeneratedContents(
     {
       type: "contact",
       title: contents.cta.headline,
-      body: `${contents.cta.body}\n${contents.contactMethods.join(" / ")}`,
+      body: `${contents.cta.body}\n${contents.contactMethods.map((m) => m.label).join(" / ")}`,
       meta: { cta: contents.cta, contactMethods: contents.contactMethods },
     },
     {

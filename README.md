@@ -126,7 +126,15 @@ blog_post / faq / seo_content / copywriting（以降は近日対応）。
    storeName / industry / area / targetCustomer / mainProblem / salesAngle /
    websiteGoal / siteConcept / recommendedPages / seoKeywords / tone / offer / generationType。
    `StoreStrategy.generationBrief`（種別非依存の核）に `generationType` を付与して生成。
+   加えて任意項目 `realData`（`StoreRealData`）を持てる。Google Places由来の
+   address/phone/opening_hours/rating/review_count/instagram_url/写真が
+   storeに存在する場合のみ `buildStoreRealData(store)`（`src/lib/neumos/store-real-data.ts`）
+   が埋める。Neumos AI側は存在する項目だけ店舗情報カード・ギャラリーへ反映し、
+   無い項目は表示しない（捏造防止のため、無ければ省略する設計）。
+   写真は `/api/places/photo` プロキシ経由のURLにして渡すため、
+   Neumos AI側はGoogle APIキーを持たずに済む。
 2. **ブリーフ組み立て `buildNeumosBrief(strategy, type)`**（`src/lib/neumos/neumos-brief.ts`, 純関数・テスト済み）
+   + `requestContentGeneration()` が `buildStoreRealData()` の結果をマージする。
 3. **アダプタ `src/lib/neumos/client.ts`（実接続）**
 
 ### Neumos API 連携（実接続）

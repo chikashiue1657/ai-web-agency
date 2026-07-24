@@ -25,6 +25,7 @@ import { refineOutreachWithLlm } from "@/lib/outreach/llm";
 import { diagnoseStore } from "@/lib/neumos/strategy";
 import { enrichStrategyWithLlm } from "@/lib/neumos/strategy-llm";
 import { buildNeumosBrief } from "@/lib/neumos/neumos-brief";
+import { buildStoreRealData } from "@/lib/neumos/store-real-data";
 import {
   submitContentGeneration,
   getContentGenerationStatus,
@@ -356,6 +357,16 @@ export async function requestContentGeneration(
     brief = buildNeumosBrief(strategy, generationType);
   } catch (err) {
     throw await persistPipelineFailure(repo, storeId, generationType, null, err);
+  }
+
+  // Google Places由来の実データ（住所/電話/営業時間/評価/写真等）があれば付与する。
+  // 取得できなくても生成自体は続行する（無ければブリーフ無しの従来通りの生成になるだけ）。
+  try {
+    const detail = await repo.getStoreDetail(storeId);
+    const realData = detail ? buildStoreRealData(detail.store) : undefined;
+    if (realData) brief = { ...brief, realData };
+  } catch (err) {
+    logger.warn("failed to enrich brief with store real data", { store_id: storeId, error: String(err) });
   }
 
   // 3) ノイモスAIへ投入（未接続なら not_configured=下書き）

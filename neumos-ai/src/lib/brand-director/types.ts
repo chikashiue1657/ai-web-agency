@@ -34,7 +34,7 @@ export interface EvidenceItem {
 export interface PhotoAssignment {
   photoUrl: string;
   role: PhotoRole;
-  /** 0〜1。写真そのものの質・使いやすさの評価。 */
+  /** 0〜100。写真そのものの質・使いやすさの評価。 */
   qualityScore: number;
   /** role="reject"の場合の理由。それ以外はnull。 */
   rejectionReason: string | null;
@@ -86,6 +86,7 @@ export interface PhotoAnalysis {
   containsInterior: boolean;
   textSafeArea: "top" | "bottom" | "left" | "right" | "center" | "none";
   recommendedRole: PhotoRole;
+  /** 0〜100。 */
   qualityScore: number;
   rejectionReason: string | null;
 }

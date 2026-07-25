@@ -9,6 +9,10 @@ import { classifyIndustry, type IndustryCategory } from "@/lib/engine/industry";
 import type { StoreBrief } from "@/lib/types";
 import type { BrandDirectionProvider } from "./provider";
 import type { BrandDirectionInput, BrandDirectionResult, BrandPlan, EvidenceItem, PhotoAnalysis, PhotoAssignment } from "./types";
+import { BRAND_PLAN_BOUNDS } from "./schema";
+
+/** qualityScoreの中立値（写真を見て評価していないことを表す、0〜100スケールの中央値）。 */
+const NEUTRAL_QUALITY_SCORE = 50;
 
 function archetypeForIndustry(category: IndustryCategory): BrandPlan["brandArchetype"] {
   switch (category) {
@@ -49,11 +53,11 @@ function safeMoodKeywords(brief: StoreBrief, category: string): string[] {
 
 /** 写真が有る場合は先頭をhero、2枚目をstory、残りをgalleryへ（既存photo-strategy.tsと同じ位置ベース割当て）。 */
 function positionalPhotoAssignments(photoUrls: string[]): PhotoAssignment[] {
-  const deduped = Array.from(new Set(photoUrls));
+  const deduped = Array.from(new Set(photoUrls)).slice(0, BRAND_PLAN_BOUNDS.photoAssignments.max);
   return deduped.map((photoUrl, i) => ({
     photoUrl,
     role: i === 0 ? "hero" : i === 1 ? "story" : "gallery",
-    qualityScore: 0.5, // 写真を見て評価していないため中立値
+    qualityScore: NEUTRAL_QUALITY_SCORE,
     rejectionReason: null,
   }));
 }
@@ -104,7 +108,7 @@ export const ruleBrandDirectionProvider: BrandDirectionProvider = {
       },
       layoutVariant: layoutForIndustry(category),
       photoAssignments: photoAnalyses && photoAnalyses.length > 0
-        ? photoAnalyses.map((p) => ({
+        ? photoAnalyses.slice(0, BRAND_PLAN_BOUNDS.photoAssignments.max).map((p) => ({
             photoUrl: p.photoUrl,
             role: p.recommendedRole,
             qualityScore: p.qualityScore,
@@ -154,7 +158,7 @@ export const ruleBrandDirectionProvider: BrandDirectionProvider = {
       containsInterior: false,
       textSafeArea: "none",
       recommendedRole: "gallery",
-      qualityScore: 0.5,
+      qualityScore: NEUTRAL_QUALITY_SCORE,
       rejectionReason: null,
     }));
   },

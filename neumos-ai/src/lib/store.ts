@@ -18,6 +18,7 @@ import type {
   StoreBrief,
   StoredGenerationRecord,
 } from "@/lib/types";
+import type { BrandPlan } from "@/lib/brand-director/types";
 
 const globalForStore = globalThis as unknown as {
   __neumosStore?: Map<string, StoredGenerationRecord>;
@@ -47,6 +48,8 @@ interface ContentGenerationRequestRow {
   preview_url: string;
   published_url: string | null;
   created_at: string;
+  /** カフェ業態のみ生成時に一度だけ作成されるBrandPlan（nullable・後方互換）。 */
+  brand_plan: BrandPlan | null;
 }
 
 function rowToRecord(row: ContentGenerationRequestRow): StoredGenerationRecord {
@@ -61,6 +64,8 @@ function rowToRecord(row: ContentGenerationRequestRow): StoredGenerationRecord {
     previewUrl: row.preview_url,
     publishedUrl: row.published_url,
     createdAt: row.created_at,
+    // 旧レコード（列追加前に作成された行）はnullのため、undefinedへ揃える。
+    brandPlan: row.brand_plan ?? undefined,
   };
 }
 
@@ -76,6 +81,7 @@ function recordToRow(record: StoredGenerationRecord): ContentGenerationRequestRo
     preview_url: record.previewUrl,
     published_url: record.publishedUrl,
     created_at: record.createdAt,
+    brand_plan: record.brandPlan ?? null,
   };
 }
 

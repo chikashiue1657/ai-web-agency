@@ -8,6 +8,14 @@ import { extractErrorDetail } from "@/lib/error-detail";
  * 組み直す独立ルートとして追加する。生成ロジック（brief/contents）は
  * v1と完全に同一のものを使うため、比較検証は同じrequestIdで
  * `/preview/{id}`と`/preview/{id}/v2`を見比べるだけで行える。
+ *
+ * 重要: BrandDirectorはここ（GETリクエスト・レンダリング時）では絶対に呼ばない。
+ * BrandPlanは`generate.ts`の`performGeneration()`が生成時に一度だけ作成し
+ * `record.brandPlan`として永続化済みのものを、そのままWebsiteRendererV2へ渡すだけ。
+ * こうしないと、このページを開く・再読み込みするたびにOpenAI課金が発生してしまう
+ * （force-dynamic・revalidate=0のためNext.jsのキャッシュにも乗らない）。
+ * 過去に生成されたレコードで`brandPlan`が無い（旧レコード・カフェ以外）場合は
+ * `undefined`のまま渡され、WebsiteRendererV2は従来通りBrandPlan無しで描画する。
  */
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -43,5 +51,5 @@ export default async function PreviewV2Page({ params }: { params: { requestId: s
     );
   }
 
-  return <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} />;
+  return <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} brandPlan={record.brandPlan} />;
 }

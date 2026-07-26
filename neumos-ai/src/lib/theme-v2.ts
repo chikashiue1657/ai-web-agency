@@ -44,6 +44,41 @@ export const CAFE_THEME_V2: CafeThemeV2 = {
   ctaBg: "bg-stone-900",
 };
 
-export function resolveCafeThemeV2(): CafeThemeV2 {
-  return CAFE_THEME_V2;
+/**
+ * Brand Director接続用の任意上書き（PaletteHint/TypographyTone）。
+ * 引数を渡さない既存の呼び出しは`CAFE_THEME_V2`と値が完全に一致するオブジェクトを
+ * 返すため、既存の見た目には一切影響しない。
+ *
+ * "warm"（現行の既定色味）・"neutral"（rule-providerの既定値）・
+ * "editorial-serif"（現行の既定書体）は上書き対象が無いため、そのまま
+ * CAFE_THEME_V2の値を使う。他の値のみ、axe-coreで確認済みの既定と同等以上の
+ * コントラスト（いずれも900番台・黒）を確保した値へ上書きする。
+ */
+type PaletteHint = "warm" | "cool" | "neutral" | "high-contrast";
+type TypographyTone = "editorial-serif" | "clean-sans" | "bold-display";
+
+const PALETTE_OVERRIDES: Partial<Record<PaletteHint, Partial<CafeThemeV2>>> = {
+  cool: {
+    accentText: "text-sky-900",
+    accentTextSoft: "text-sky-800",
+    ctaBg: "bg-slate-900",
+  },
+  "high-contrast": {
+    accentText: "text-black",
+    accentTextSoft: "text-stone-900",
+    ctaBg: "bg-black",
+  },
+};
+
+const TYPOGRAPHY_OVERRIDES: Partial<Record<TypographyTone, Partial<CafeThemeV2>>> = {
+  "clean-sans": { displayFont: "font-sans tracking-tight" },
+  "bold-display": { displayFont: "font-sans font-bold tracking-tight" },
+};
+
+export function resolveCafeThemeV2(paletteHint?: PaletteHint, typographyTone?: TypographyTone): CafeThemeV2 {
+  return {
+    ...CAFE_THEME_V2,
+    ...(paletteHint ? PALETTE_OVERRIDES[paletteHint] : undefined),
+    ...(typographyTone ? TYPOGRAPHY_OVERRIDES[typographyTone] : undefined),
+  };
 }

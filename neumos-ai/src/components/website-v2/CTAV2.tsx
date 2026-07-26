@@ -6,16 +6,45 @@ import type { CafeThemeV2 } from "@/lib/theme-v2";
  * `buildContactMethodsWithRealLinks`が既に確定させた値をそのまま使う
  * （このコンポーネントではリンク生成ロジックに一切触れない）。
  * ページ全体で唯一、明確な行動喚起として中央寄せを使う。
+ *
+ * `variant`はBrand Director接続用の任意拡張（省略時は既定の"primary"で
+ * 従来と完全に同一のマークアップ）。BrandPlan.ctaStrategy.placementが
+ * "after-story"の場合のみ、storyの直後にも控えめな"compact"版を追加で
+ * 表示する（既存の文末CTAはそのまま残す＝削除しない）。`urgency`は
+ * BrandPlan.ctaStrategy.urgencyをそのままボタンの視覚的な強さへ反映する
+ * （新しい文言は作らない。捏造した緊急性の煽り文句は追加しない）。
  */
 export function CTAV2({
   cta,
   contactMethods,
   theme,
+  variant = "primary",
+  urgency = "medium",
 }: {
   cta: WebsiteCta;
   contactMethods: ContactMethod[];
   theme: CafeThemeV2;
+  variant?: "primary" | "compact";
+  urgency?: "low" | "medium" | "high";
 }) {
+  if (variant === "compact") {
+    const buttonClass =
+      urgency === "high"
+        ? `mt-6 inline-flex items-center justify-center rounded-full ${theme.ctaBg} px-8 py-3 text-sm font-medium text-white transition hover:opacity-90 sm:text-base`
+        : urgency === "low"
+        ? `mt-6 inline-flex w-fit items-center gap-2 border-b ${theme.bodyText} pb-1 text-sm font-medium transition hover:gap-3`
+        : `mt-6 inline-flex items-center justify-center rounded-full border ${theme.bodyText} border-current px-8 py-3 text-sm font-medium transition hover:opacity-70 sm:text-base`;
+
+    return (
+      <section className={`${theme.paperRaisedBg} px-5 py-16 text-center sm:py-20`}>
+        <h2 className={`text-xl ${theme.bodyText} ${theme.displayFont} sm:text-2xl`}>{cta.headline}</h2>
+        <a href={cta.href} className={buttonClass}>
+          {cta.buttonLabel}
+        </a>
+      </section>
+    );
+  }
+
   return (
     <section id="contact" className={`${theme.ctaBg}`}>
       <div className="mx-auto flex max-w-2xl flex-col items-center px-5 py-32 text-center sm:py-40">

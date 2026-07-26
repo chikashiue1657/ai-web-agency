@@ -99,7 +99,11 @@ export const ruleBrandDirectionProvider: BrandDirectionProvider = {
       valueProposition: brief.salesAngle,
       visualDirection: {
         paletteHint: "neutral",
-        typographyTone: category === "hotel" ? "editorial-serif" : "clean-sans",
+        // cafeは既存v2デザインエンジン（theme-v2.ts）が既にfont-serifを採用済みのため、
+        // ここで"clean-sans"を返すとBrand Director接続後にcafeサイトの書体が
+        // 無条件で変わってしまう（実際にv2へ接続して初めて判明した不整合）。
+        // v2が実在する見た目に合わせ、hotelと同じくeditorial-serifを既定にする。
+        typographyTone: category === "hotel" || category === "cafe" ? "editorial-serif" : "clean-sans",
         photoTreatment: photoUrls.length > 0 ? "full-bleed" : "framed",
       },
       copyDirection: {

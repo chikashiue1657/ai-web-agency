@@ -1,6 +1,7 @@
 import { getGenerationRecord } from "@/lib/store";
 import { WebsiteRendererV2 } from "@/components/website-v2/WebsiteRendererV2";
 import { extractErrorDetail } from "@/lib/error-detail";
+import { resolveBrandPlanForV2 } from "@/lib/brand-director/v2-connector";
 
 /**
  * v2デザインエンジンのプレビュー。既存の`/preview/[requestId]`（v1）は
@@ -43,5 +44,9 @@ export default async function PreviewV2Page({ params }: { params: { requestId: s
     );
   }
 
-  return <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} />;
+  // Brand Directorはv2生成時のみ呼び出す（v1経路・generate.ts/engine/website.tsは無関係・無改修）。
+  // 失敗時は必ずundefinedになり、WebsiteRendererV2は従来通りBrandPlan無しで描画する。
+  const brandPlan = await resolveBrandPlanForV2(record.brief, record.requestId);
+
+  return <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} brandPlan={brandPlan} />;
 }

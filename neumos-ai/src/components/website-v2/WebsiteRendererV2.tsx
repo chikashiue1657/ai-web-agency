@@ -5,6 +5,8 @@ import { resolveTheme } from "@/lib/theme";
 import { resolveCafeThemeV2 } from "@/lib/theme-v2";
 import { buildCafeV2Plan, type CafeV2BlockId } from "@/lib/engine/section-plan-v2";
 import { getSectionGapClass } from "@/lib/engine/section-rhythm-v2";
+import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
+import type { BrandPlan } from "@/lib/brand-director/types";
 import { splitBulletLines } from "@/components/website/utils";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 import { Footer } from "@/components/website/Footer";
@@ -18,6 +20,13 @@ import { TrustV2 } from "./TrustV2";
 import { AccessHoursV2 } from "./AccessHoursV2";
 import { CTAV2 } from "./CTAV2";
 
+/** storyの直後へblockIdを1件挿入する（既に存在する場合や対象が無い場合は何もしない）。 */
+function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): CafeV2BlockId[] {
+  const storyIndex = blocks.indexOf("story");
+  if (storyIndex === -1 || blocks.includes(blockId)) return blocks;
+  return [...blocks.slice(0, storyIndex + 1), blockId, ...blocks.slice(storyIndex + 1)];
+}
+
 /**
  * カフェ業態限定の新デザインエンジン（v2）。
  *
@@ -25,8 +34,22 @@ import { CTAV2 } from "./CTAV2";
  * コンポーネントは新規ルート`/preview/[requestId]/v2`からのみ呼ばれる。
  * カフェ以外の業種でこのルートにアクセスした場合は、まだ対応していない旨を
  * 明示した上でv1の描画へフォールバックする（他業種を勝手にv2化しない）。
+ *
+ * `brandPlan`は任意（省略時は既存動作と完全に同一）。Brand Directorが実際に
+ * 呼ばれるのは`brand-director/v2-connector.ts`経由でこのpropが渡された場合のみで、
+ * 取得できなかった場合（未設定・失敗・スキーマ不正等）は呼び出し元が必ず
+ * undefinedを渡すため、このコンポーネント自身はBrandPlanの有無にかかわらず
+ * 安全に描画できる。
  */
-export function WebsiteRendererV2({ brief, contents }: { brief: StoreBrief; contents: GeneratedWebsiteContents }) {
+export function WebsiteRendererV2({
+  brief,
+  contents,
+  brandPlan,
+}: {
+  brief: StoreBrief;
+  contents: GeneratedWebsiteContents;
+  brandPlan?: BrandPlan;
+}) {
   const category = classifyIndustry(brief.industry);
 
   if (category !== "cafe") {
@@ -40,8 +63,16 @@ export function WebsiteRendererV2({ brief, contents }: { brief: StoreBrief; cont
     );
   }
 
-  const theme = resolveCafeThemeV2();
-  const plan = buildCafeV2Plan(brief, contents);
+  const theme = resolveCafeThemeV2(brandPlan?.visualDirection.paletteHint, brandPlan?.visualDirection.typographyTone);
+  const overridePhotoPlan = brandPlan
+    ? derivePhotoPlanFromBrandPlan(brandPlan, brief.realData?.photoUrls ?? [])
+    : undefined;
+  const basePlan = buildCafeV2Plan(brief, contents, {
+    photoPlan: overridePhotoPlan,
+    layoutVariant: brandPlan?.layoutVariant,
+  });
+  const showEarlyCta = brandPlan?.ctaStrategy.placement === "after-story";
+  const plan = showEarlyCta ? { ...basePlan, blocks: insertAfterStory(basePlan.blocks, "ctaEarly") } : basePlan;
   const aboutSections = contents.sections.filter((s) => s.kind === "about");
   const featureSections = contents.sections.filter((s) => s.kind === "feature");
   const serviceSections = contents.sections.filter((s) => s.kind === "service");
@@ -87,6 +118,15 @@ export function WebsiteRendererV2({ brief, contents }: { brief: StoreBrief; cont
       <AccessHoursV2 storeName={brief.storeName} access={contents.access} realData={brief.realData} theme={theme} />
     ),
     cta: <CTAV2 cta={contents.cta} contactMethods={contents.contactMethods} theme={theme} />,
+    ctaEarly: (
+      <CTAV2
+        cta={contents.cta}
+        contactMethods={contents.contactMethods}
+        theme={theme}
+        variant="compact"
+        urgency={brandPlan?.ctaStrategy.urgency}
+      />
+    ),
   };
 
   return (
@@ -96,7 +136,7 @@ export function WebsiteRendererV2({ brief, contents }: { brief: StoreBrief; cont
         {plan.blocks.map((block, i) => {
           const prevBlock = i === 0 ? null : plan.blocks[i - 1];
           return (
-            <div key={block} className={getSectionGapClass(prevBlock, block)}>
+            <div key={`${block}-${i}`} className={getSectionGapClass(prevBlock, block)}>
               {blockRenderer[block]}
             </div>
           );

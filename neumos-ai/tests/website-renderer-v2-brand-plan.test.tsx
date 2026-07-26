@@ -113,8 +113,8 @@ describe("WebsiteRendererV2: ctaStrategyの反映", () => {
     const brandPlan = makeBrandPlan({ ctaStrategy: { placement: "end-only", urgency: "low" } });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
     const occurrences = html.split(contents.cta.buttonLabel).length - 1;
-    // Heroの単一CTA + 末尾CTA = 2箇所のみ。
-    expect(occurrences).toBe(2);
+    // Heroの単一CTA + 末尾CTA + モバイル下部固定CTA = 3箇所（早期CTAは追加されない）。
+    expect(occurrences).toBe(3);
   });
 });
 
@@ -160,5 +160,111 @@ describe("WebsiteRendererV2: v1経路への非影響", () => {
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={salonBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("v2デザインエンジンは現在カフェ業態のみ対応しています");
     expect(html).toContain('id="gallery"');
+  });
+});
+
+describe("WebsiteRendererV2: Hero構図の切り替え", () => {
+  const photoBrief: StoreBrief = { ...cafeBrief, realData: { photoUrls: ["https://example.com/a.jpg"] } };
+
+  it("layoutVariant=immersiveかつ写真ありの場合、full-bleed構図（h-dvh）で描画する", () => {
+    const contents = generateWebsiteRuleBased(photoBrief);
+    const brandPlan = makeBrandPlan({ layoutVariant: "immersive" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
+    expect(html).toContain("h-dvh");
+  });
+
+  it("layoutVariant=editorialかつ写真ありの場合、split構図（grid）で描画する", () => {
+    const contents = generateWebsiteRuleBased(photoBrief);
+    const brandPlan = makeBrandPlan({ layoutVariant: "editorial" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
+    expect(html).toContain('id="top"');
+    expect(html).not.toContain("h-dvh");
+  });
+
+  it("写真0枚の場合、layoutVariantに関わらず破綻せずtypographic構図で描画する", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    for (const layoutVariant of ["immersive", "editorial", "direct"] as const) {
+      const brandPlan = makeBrandPlan({ layoutVariant });
+      const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
+      expect(html).toContain('id="top"');
+      expect(html).toContain(contents.heroTitle);
+    }
+  });
+
+  it("写真が多数(4枚以上)ある場合も破綻しない", () => {
+    const manyPhotoBrief: StoreBrief = {
+      ...cafeBrief,
+      realData: {
+        photoUrls: [
+          "https://example.com/a.jpg",
+          "https://example.com/b.jpg",
+          "https://example.com/c.jpg",
+          "https://example.com/d.jpg",
+          "https://example.com/e.jpg",
+        ],
+      },
+    };
+    const contents = generateWebsiteRuleBased(manyPhotoBrief);
+    const brandPlan = makeBrandPlan({ layoutVariant: "direct" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={manyPhotoBrief} contents={contents} brandPlan={brandPlan} />);
+    expect(html).toContain('id="photo-story"');
+    expect(html).toContain('src="https://example.com/a.jpg"');
+  });
+});
+
+describe("WebsiteRendererV2: モバイル下部固定CTA", () => {
+  it("PC/モバイル共通で下部固定CTAバー（sm:hiddenでモバイル限定）が描画される", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} />);
+    expect(html).toContain("sm:hidden");
+    expect(html).toContain("safe-area-inset-bottom");
+  });
+
+  it("ctaStyleに応じてモバイル固定CTAのボタン強度が変わる（solid-bold時はtheme.ctaBgを含む）", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    const brandPlan = makeBrandPlan({ ctaStrategy: { placement: "hero", urgency: "high" } });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
+    expect(html).toContain("bg-stone-900");
+  });
+});
+
+describe("WebsiteRendererV2: 再描画の安定性（同一入力なら同一HTML）", () => {
+  it("同じbrief・contents・brandPlanなら、複数回レンダリングしても完全に同じHTMLになる", () => {
+    const photoBrief: StoreBrief = {
+      ...cafeBrief,
+      realData: { photoUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg", "https://example.com/c.jpg"] },
+    };
+    const contents = generateWebsiteRuleBased(photoBrief);
+    const brandPlan = makeBrandPlan({ layoutVariant: "editorial", brandArchetype: "luxury-quiet" });
+
+    const html1 = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
+    const html2 = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
+    const html3 = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
+
+    expect(html1).toBe(html2);
+    expect(html2).toBe(html3);
+  });
+});
+
+describe("WebsiteRendererV2: imageTreatmentの反映", () => {
+  const manyPhotoBrief: StoreBrief = {
+    ...cafeBrief,
+    realData: {
+      photoUrls: [
+        "https://example.com/a.jpg",
+        "https://example.com/b.jpg",
+        "https://example.com/c.jpg",
+        "https://example.com/d.jpg",
+      ],
+    },
+  };
+
+  it("photoTreatment=mixedの場合、先頭写真が大きく残りが小さめグリッドになる（aspect-square要素を含む）", () => {
+    const contents = generateWebsiteRuleBased(manyPhotoBrief);
+    const brandPlan = makeBrandPlan({
+      visualDirection: { paletteHint: "neutral", typographyTone: "editorial-serif", photoTreatment: "mixed" },
+    });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={manyPhotoBrief} contents={contents} brandPlan={brandPlan} />);
+    expect(html).toContain("aspect-square");
   });
 });

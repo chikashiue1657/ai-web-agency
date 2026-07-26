@@ -5,9 +5,9 @@ import { RevealV2 } from "./RevealV2";
 /**
  * Googleの評価を信頼材料として見せるセクション。
  * ratingかreviewCountのどちらかが実際に取得できている場合のみ描画される
- * （section-plan-v2側でガード済み）。カード枠は使わず、左に大きな数字、
- * 右にレビュー本文（取得できた場合のみ）という非対称の2カラムにする
- * （ページ内で唯一まとまった中央揃えのCTA以外は、ここも中央に寄せない）。
+ * （section-plan-v2側でガード済み）。左に大きな数字、右にレビュー本文
+ * （取得できた場合のみ）という非対称の2カラムで、レビューは証言らしく
+ * 引用符付きの大きめの文字とsurfaceStyleに応じた区切りで見せる。
  *
  * reviewsは現時点でMVP側にGoogle Places APIからレビュー本文を取得する処理が
  * 無いため、実データが来たときにだけ表示される（無ければ従来通り数字のみ）。
@@ -48,14 +48,20 @@ export function TrustV2({
         </RevealV2>
 
         {hasReviews && (
-          <ul className="flex flex-col gap-6 sm:gap-8">
+          <ul className="flex flex-col gap-8 sm:gap-10">
             {reviews!.slice(0, 3).map((review, i) => (
-              <li key={i}>
+              <li key={i} className="border-l border-white/20 pl-5 sm:pl-6">
                 <RevealV2 variant="fade-up" delayMs={i * 100}>
-                  <p className="max-w-[48ch] break-words text-sm leading-relaxed text-white/85 sm:text-base">
+                  <p
+                    className={`max-w-[46ch] break-words text-lg leading-relaxed text-white/90 sm:text-xl ${theme.displayFont}`}
+                  >
                     “{review.text}”
                   </p>
-                  {review.authorName && <p className="mt-2 text-xs text-white/50">{review.authorName}</p>}
+                  {review.authorName && (
+                    <p className="mt-3 text-xs font-medium uppercase tracking-[0.15em] text-white/50">
+                      {review.authorName}
+                    </p>
+                  )}
                 </RevealV2>
               </li>
             ))}

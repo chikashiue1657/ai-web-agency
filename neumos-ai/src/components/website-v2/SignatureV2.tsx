@@ -1,4 +1,5 @@
 import type { CafeThemeV2 } from "@/lib/theme-v2";
+import type { SurfaceClasses } from "@/lib/engine/v2-design-system";
 import { RevealV2 } from "./RevealV2";
 
 /**
@@ -6,7 +7,15 @@ import { RevealV2 } from "./RevealV2";
  * v1のFeatureのような同幅カードの反復は行わず、写真を挟まないテキスト主体の
  * セクションとして、前後の写真主体セクションとリズムを作る。
  */
-export function SignatureV2({ items, theme }: { items: string[]; theme: CafeThemeV2 }) {
+export function SignatureV2({
+  items,
+  theme,
+  surface,
+}: {
+  items: string[];
+  theme: CafeThemeV2;
+  surface: SurfaceClasses;
+}) {
   if (items.length === 0) return null;
   const [lead, ...rest] = items;
 
@@ -26,7 +35,7 @@ export function SignatureV2({ items, theme }: { items: string[]; theme: CafeThem
             </p>
           </RevealV2>
           {rest.length > 0 && (
-            <ul className="mt-8 flex max-w-xl flex-col gap-3 border-t border-stone-200 pt-6">
+            <ul className={`mt-8 flex max-w-xl flex-col gap-3 border-t pt-6 ${surface.divider}`}>
               {rest.map((line, i) => (
                 <li key={i} className={`text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
                   {line}

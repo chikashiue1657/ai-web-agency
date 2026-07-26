@@ -5,6 +5,7 @@ import { resolveTheme } from "@/lib/theme";
 import { resolveCafeThemeV2 } from "@/lib/theme-v2";
 import { buildCafeV2Plan, type CafeV2BlockId } from "@/lib/engine/section-plan-v2";
 import { getSectionGapClass } from "@/lib/engine/section-rhythm-v2";
+import { resolveSurfaceClasses, resolveTypographyClasses, resolveV2DesignTokens } from "@/lib/engine/v2-design-system";
 import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
 import type { BrandPlan } from "@/lib/brand-director/types";
 import { splitBulletLines } from "@/components/website/utils";
@@ -19,6 +20,7 @@ import { MenuV2 } from "./MenuV2";
 import { TrustV2 } from "./TrustV2";
 import { AccessHoursV2 } from "./AccessHoursV2";
 import { CTAV2 } from "./CTAV2";
+import { MobileStickyCtaV2 } from "./MobileStickyCtaV2";
 
 /** storyの直後へblockIdを1件挿入する（既に存在する場合や対象が無い場合は何もしない）。 */
 function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): CafeV2BlockId[] {
@@ -28,7 +30,7 @@ function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): Cafe
 }
 
 /**
- * カフェ業態限定の新デザインエンジン（v2）。
+ * カフェ業態限定の新デザインエンジン（v2・「旗艦プレミアムデザイン」）。
  *
  * v1の`WebsiteRenderer`（9セクション固定・カード多用）は一切変更せず、この
  * コンポーネントは新規ルート`/preview/[requestId]/v2`からのみ呼ばれる。
@@ -36,10 +38,17 @@ function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): Cafe
  * 明示した上でv1の描画へフォールバックする（他業種を勝手にv2化しない）。
  *
  * `brandPlan`は任意（省略時は既存動作と完全に同一）。Brand Directorが実際に
- * 呼ばれるのは`brand-director/v2-connector.ts`経由でこのpropが渡された場合のみで、
- * 取得できなかった場合（未設定・失敗・スキーマ不正等）は呼び出し元が必ず
- * undefinedを渡すため、このコンポーネント自身はBrandPlanの有無にかかわらず
- * 安全に描画できる。
+ * 呼ばれるのは`generate.ts`の生成時（performGeneration内で1回だけ）であり、
+ * このコンポーネント（レンダリング時）はBrand Directorを一切呼ばない。
+ * 取得できなかった場合（未設定・失敗・スキーマ不正・旧レコード等）は
+ * `record.brandPlan`がundefinedになるため、このコンポーネント自身はBrandPlanの
+ * 有無にかかわらず安全に描画できる（`resolveV2DesignTokens`がDEFAULT_TOKENSへ
+ * フォールバックする）。
+ *
+ * デザインの7軸（hero composition / section rhythm / image treatment /
+ * typography scale / surface style / CTA style / color balance）は
+ * `resolveV2DesignTokens`がBrandPlanと写真枚数から決定論的に導出する
+ * （同じrequestId・同じBrandPlanなら常に同じ結果になる）。
  */
 export function WebsiteRendererV2({
   brief,
@@ -63,7 +72,6 @@ export function WebsiteRendererV2({
     );
   }
 
-  const theme = resolveCafeThemeV2(brandPlan?.visualDirection.paletteHint, brandPlan?.visualDirection.typographyTone);
   const overridePhotoPlan = brandPlan
     ? derivePhotoPlanFromBrandPlan(brandPlan, brief.realData?.photoUrls ?? [])
     : undefined;
@@ -73,6 +81,12 @@ export function WebsiteRendererV2({
   });
   const showEarlyCta = brandPlan?.ctaStrategy.placement === "after-story";
   const plan = showEarlyCta ? { ...basePlan, blocks: insertAfterStory(basePlan.blocks, "ctaEarly") } : basePlan;
+
+  const tokens = resolveV2DesignTokens(brandPlan, plan.photoPlan.tier);
+  const theme = resolveCafeThemeV2(tokens.colorBalance, tokens.typographyScale);
+  const surface = resolveSurfaceClasses(tokens.surfaceStyle);
+  const typography = resolveTypographyClasses(tokens.typographyScale);
+
   const aboutSections = contents.sections.filter((s) => s.kind === "about");
   const featureSections = contents.sections.filter((s) => s.kind === "feature");
   const serviceSections = contents.sections.filter((s) => s.kind === "service");
@@ -90,11 +104,19 @@ export function WebsiteRendererV2({
         ctaLabel={contents.cta.buttonLabel}
         ctaHref={contents.cta.href}
         theme={theme}
+        composition={tokens.heroComposition}
+        heroTitleClass={typography.heroTitle}
       />
     ),
-    signature: <SignatureV2 items={signatureItems} theme={theme} />,
+    signature: <SignatureV2 items={signatureItems} theme={theme} surface={surface} />,
     photoStory: (
-      <PhotoStoryV2 storeName={brief.storeName} photoUrls={plan.photoPlan.galleryPhotoUrls} theme={theme} />
+      <PhotoStoryV2
+        storeName={brief.storeName}
+        photoUrls={plan.photoPlan.galleryPhotoUrls}
+        theme={theme}
+        treatment={tokens.imageTreatment}
+        surface={surface}
+      />
     ),
     story: (
       <StoryV2
@@ -103,9 +125,18 @@ export function WebsiteRendererV2({
         sections={aboutSections}
         photoUrl={plan.photoPlan.storyPhotoUrl}
         theme={theme}
+        surface={surface}
       />
     ),
-    menu: <MenuV2 sections={serviceSections} offer={brief.offer} theme={theme} />,
+    menu: (
+      <MenuV2
+        sections={serviceSections}
+        offer={brief.offer}
+        theme={theme}
+        surface={surface}
+        sectionHeadingClass={typography.sectionHeading}
+      />
+    ),
     trust: (
       <TrustV2
         googleRating={brief.realData?.googleRating}
@@ -115,16 +146,22 @@ export function WebsiteRendererV2({
       />
     ),
     accessHours: (
-      <AccessHoursV2 storeName={brief.storeName} access={contents.access} realData={brief.realData} theme={theme} />
+      <AccessHoursV2
+        storeName={brief.storeName}
+        access={contents.access}
+        realData={brief.realData}
+        theme={theme}
+        surface={surface}
+      />
     ),
-    cta: <CTAV2 cta={contents.cta} contactMethods={contents.contactMethods} theme={theme} />,
+    cta: <CTAV2 cta={contents.cta} contactMethods={contents.contactMethods} theme={theme} ctaStyle={tokens.ctaStyle} />,
     ctaEarly: (
       <CTAV2
         cta={contents.cta}
         contactMethods={contents.contactMethods}
         theme={theme}
         variant="compact"
-        urgency={brandPlan?.ctaStrategy.urgency}
+        ctaStyle={tokens.ctaStyle}
       />
     ),
   };
@@ -132,17 +169,18 @@ export function WebsiteRendererV2({
   return (
     <div className={theme.paperBg}>
       <HeaderV2 storeName={brief.storeName} blocks={plan.blocks} />
-      <main>
+      <main className="pb-24 sm:pb-0">
         {plan.blocks.map((block, i) => {
           const prevBlock = i === 0 ? null : plan.blocks[i - 1];
           return (
-            <div key={`${block}-${i}`} className={getSectionGapClass(prevBlock, block)}>
+            <div key={`${block}-${i}`} className={getSectionGapClass(prevBlock, block, tokens.sectionRhythm)}>
               {blockRenderer[block]}
             </div>
           );
         })}
       </main>
       <Footer storeName={brief.storeName} area={brief.area} industry={brief.industry} theme={resolveTheme(brief.industry)} />
+      <MobileStickyCtaV2 cta={contents.cta} theme={theme} surface={surface} ctaStyle={tokens.ctaStyle} />
     </div>
   );
 }

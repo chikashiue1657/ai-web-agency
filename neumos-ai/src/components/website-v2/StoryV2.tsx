@@ -1,5 +1,6 @@
 import type { WebsiteSection } from "@/lib/types";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
+import type { SurfaceClasses } from "@/lib/engine/v2-design-system";
 import { splitBulletLines } from "@/components/website/utils";
 import { RevealV2 } from "./RevealV2";
 import { ParallaxImageV2 } from "./ParallaxImageV2";
@@ -38,12 +39,14 @@ export function StoryV2({
   sections,
   photoUrl,
   theme,
+  surface,
 }: {
   storeName: string;
   concept: string;
   sections: WebsiteSection[];
   photoUrl?: string;
   theme: CafeThemeV2;
+  surface: SurfaceClasses;
 }) {
   const points = sections.flatMap((s) => splitBulletLines(s.body));
 
@@ -75,7 +78,7 @@ export function StoryV2({
               </p>
             </RevealV2>
             {points.length > 0 && (
-              <ul className="mt-6 flex flex-col gap-3 border-t border-stone-200 pt-6">
+              <ul className={`mt-6 flex flex-col gap-3 border-t pt-6 ${surface.divider}`}>
                 {points.slice(0, 3).map((point, i) => (
                   <li key={i} className={`text-sm leading-relaxed ${theme.bodyTextSoft}`}>
                     {point}
@@ -150,7 +153,7 @@ export function StoryV2({
         </RevealV2>
 
         {points.length > 0 && (
-          <ul className="mt-10 flex flex-col gap-5 border-t border-stone-200 pt-8">
+          <ul className={`mt-10 flex flex-col gap-5 border-t pt-8 ${surface.divider}`}>
             {points.map((point, i) => (
               <li key={i} className={`flex gap-4 text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
                 <span className={`shrink-0 text-xs ${theme.accentTextSoft}`}>{String(i + 1).padStart(2, "0")}</span>

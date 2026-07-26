@@ -31,7 +31,12 @@ create table if not exists neumos_content_generation_requests (
   preview_html       text not null,                  -- 静的書き出し用の単体HTML
   preview_url        text not null,
   published_url      text,
-  created_at         timestamptz not null default now()
+  created_at         timestamptz not null default now(),
+  -- カフェ業態のみ、生成時（performGeneration）に一度だけ作成されるBrandPlan。
+  -- v2プレビュー（/preview/[requestId]/v2）のレンダリング時には絶対にOpenAIを
+  -- 呼ばないため、ここに保存された値をそのまま読むだけにする。nullable
+  -- （カフェ以外の業種・列追加前に作成された旧レコードはnull）。
+  brand_plan         jsonb
 );
 
 create index if not exists neumos_content_gen_requests_created_idx
@@ -53,6 +58,8 @@ alter table neumos_content_generation_requests
   add column if not exists method text not null default 'rule';
 alter table neumos_content_generation_requests
   add column if not exists published_url text;
+alter table neumos_content_generation_requests
+  add column if not exists brand_plan jsonb;
 
 -- ============================================================
 -- RLS（雛形）: v1はservice role経由のサーバアクセス前提。今は無効のまま。

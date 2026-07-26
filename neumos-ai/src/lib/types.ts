@@ -220,4 +220,12 @@ export interface StoredGenerationRecord {
   previewUrl: string;
   publishedUrl: string | null;
   createdAt: string;
+  /**
+   * v2デザインエンジン（カフェ業態専用）が使うBrandPlan。生成時（performGeneration）に
+   * 一度だけ作成してここへ保存し、v2プレビューを開く・更新するたびにOpenAIを
+   * 再実行しないようにする。カフェ以外の業種・生成時点でBrand Directorが
+   * 使えなかった場合・過去に生成された旧レコードはundefined（v2はBrandPlan無しの
+   * 従来表示へ安全にフォールバックする）。
+   */
+  brandPlan?: import("@/lib/brand-director/types").BrandPlan;
 }

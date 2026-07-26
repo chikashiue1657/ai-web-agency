@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { runGeneration } from "@/lib/engine";
 import { renderWebsitePreviewHtml } from "@/lib/preview/render";
 import { saveGenerationRecord } from "@/lib/store";
+import { resolveBrandPlanForV2 } from "@/lib/brand-director/v2-connector";
 import type { GenerationType, StoreBrief, StoredGenerationRecord } from "@/lib/types";
 
 /** `/api/generate` と MVP互換の `/api/v1/contents` から共有される生成本体。 */
@@ -16,6 +17,13 @@ export async function performGeneration(
   const previewHtml = renderWebsitePreviewHtml(brief, contents);
   const previewUrl = `${origin}/preview/${requestId}`;
 
+  // v2デザインエンジン（カフェ業態専用）が使うBrandPlanは、ここ（生成処理中）で
+  // 一度だけ作成しrecordへ保存する。v2プレビューを開く・更新するたびにOpenAIを
+  // 再実行しないようにするため（レンダリング時には絶対に呼ばない）。
+  // resolveBrandPlanForV2はカフェ以外なら即undefined、失敗時も例外を投げず
+  // undefinedを返す設計のため、ここで失敗してもrecordの保存自体は継続する。
+  const brandPlan = await resolveBrandPlanForV2(brief, requestId);
+
   const record: StoredGenerationRecord = {
     requestId,
     generationType,
@@ -27,6 +35,7 @@ export async function performGeneration(
     previewUrl,
     publishedUrl: null,
     createdAt: new Date().toISOString(),
+    brandPlan,
   };
   await saveGenerationRecord(record);
   return record;

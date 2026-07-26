@@ -1,8 +1,10 @@
 import { randomUUID } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { isDiagnosticAuthorized } from "@/lib/brand-director/diagnostics/auth";
+import { NextRequest } from "next/server";
+import { checkDiagnosticAuth } from "@/lib/brand-director/diagnostics/auth";
+import { diagnosticEmpty, diagnosticJson } from "@/lib/brand-director/diagnostics/http";
+import { isRateLimited } from "@/lib/brand-director/diagnostics/rate-limit";
 import { redactPlanPhotoUrls } from "@/lib/brand-director/diagnostics/redact-plan";
+import { DiagnosticRequestBodySchema, MAX_DIAGNOSTIC_BODY_BYTES } from "@/lib/brand-director/diagnostics/request-schema";
 import { openaiBrandDirectionProvider } from "@/lib/brand-director/openai-provider";
 import { BrandPlanSchema } from "@/lib/brand-director/schema";
 import type { StoreBrief } from "@/lib/types";
@@ -14,19 +16,27 @@ import type { StoreBrief } from "@/lib/types";
  * 一時的な診断エンドポイント。既存のv1/v2生成経路（/api/generate, /v1/contents）
  * からは呼ばれず、既存の生成挙動には一切影響しない。
  *
- * x-diagnostic-tokenヘッダーがBRAND_DIRECTOR_DIAGNOSTIC_TOKENと一致しない限り401。
+ * 認可はcheckDiagnosticAuth（fail-closed。トークン未設定なら404、不一致なら401）。
+ * 写真URLは受け付けない（第三者URLをOpenAIへ送信させないため、初回疎通は
+ * 写真なしのBrandPlan生成のみに限定。DiagnosticRequestBodySchemaにphotoUrl
+ * フィールド自体が存在せず、.strict()により送っても400になる）。
+ * Content-Type・body上限・スキーマ検証を経てから初めてOpenAIを呼ぶため、
+ * 不正な巨大入力でOpenAI APIを呼ぶことはない。
+ *
  * OpenAI呼び出し自体はopenaiBrandDirectionProviderにそのまま委譲するため、
  * モデル未設定・タイムアウト・スキーマ不一致等はこれまで通りrule-providerへ
- * 安全にフォールバックする（この診断ルート自体が例外で落ちることはない）。
+ * 安全にフォールバックする（この診断ルート自体が例外で落ちることはない。
+ * 1リクエストあたりの呼び出し回数は既存のMAX_RETRIES=1により初回+再試行1回まで）。
  *
- * レスポンスにAPIキー・Authorizationヘッダー・OpenAIレスポンス全文・
- * 写真URLの生値・内部プロンプト全文は含めない
+ * レスポンスにAPIキー・診断トークン・Authorizationヘッダー・OpenAIレスポンス全文・
+ * 写真URLの生値・内部プロンプト全文・stack traceは含めない
  * （photoAssignments[].photoUrlはphoto#1等のラベルへ置き換える）。
  *
  * 診断が不要になったら、このファイルを含む src/app/api/admin/brand-director/ と
  * src/lib/brand-director/diagnostics/ をまとめて削除すること。
  */
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const DEFAULT_DIAGNOSTIC_BRIEF: StoreBrief = {
   storeName: "診断用ダミー店舗",
@@ -43,57 +53,50 @@ const DEFAULT_DIAGNOSTIC_BRIEF: StoreBrief = {
   offer: "本日の一杯",
 };
 
-const RequestBodySchema = z.object({
-  brief: z
-    .object({
-      storeName: z.string().min(1).optional(),
-      industry: z.string().min(1).optional(),
-      area: z.string().min(1).optional(),
-      targetCustomer: z.string().min(1).optional(),
-      mainProblem: z.string().min(1).optional(),
-      salesAngle: z.string().min(1).optional(),
-      websiteGoal: z.string().min(1).optional(),
-      siteConcept: z.string().min(1).optional(),
-      recommendedPages: z.array(z.string()).optional(),
-      seoKeywords: z.array(z.string()).optional(),
-      tone: z.string().min(1).optional(),
-      offer: z.string().min(1).optional(),
-    })
-    .optional(),
-  photoUrl: z.string().url().optional(),
-});
-
 export async function POST(req: NextRequest) {
-  if (!isDiagnosticAuthorized(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const auth = checkDiagnosticAuth(req);
+  if (!auth.authorized) {
+    return auth.status === 404 ? diagnosticEmpty(404) : diagnosticJson({ error: "unauthorized" }, 401);
+  }
+  if (isRateLimited(auth.token)) {
+    return diagnosticJson({ error: "rate_limited" }, 429);
   }
 
-  let rawBody: unknown;
-  try {
-    rawBody = await req.json();
-  } catch {
-    rawBody = {};
+  const contentType = req.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    return diagnosticJson({ error: "unsupported_media_type" }, 415);
   }
 
-  const parsedBody = RequestBodySchema.safeParse(rawBody);
+  const rawBody = await req.text();
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_DIAGNOSTIC_BODY_BYTES) {
+    return diagnosticJson({ error: "payload_too_large" }, 413);
+  }
+
+  let parsedJson: unknown = {};
+  if (rawBody.trim().length > 0) {
+    try {
+      parsedJson = JSON.parse(rawBody);
+    } catch {
+      return diagnosticJson({ error: "invalid_json" }, 400);
+    }
+  }
+
+  const parsedBody = DiagnosticRequestBodySchema.safeParse(parsedJson);
   if (!parsedBody.success) {
-    return NextResponse.json({ error: "invalid_request_body" }, { status: 400 });
+    return diagnosticJson({ error: "invalid_request_body" }, 400);
   }
 
-  const { brief: briefOverride, photoUrl } = parsedBody.data;
   const requestId = randomUUID();
   const brief: StoreBrief = {
     ...DEFAULT_DIAGNOSTIC_BRIEF,
-    ...briefOverride,
-    realData: photoUrl ? { photoUrls: [photoUrl] } : undefined,
+    ...parsedBody.data.brief,
   };
   const input = { requestId, brief };
 
-  const photoAnalyses = photoUrl ? await openaiBrandDirectionProvider.analyzePhotos([photoUrl], input) : undefined;
-  const result = await openaiBrandDirectionProvider.analyzeBrand(input, photoAnalyses);
+  const result = await openaiBrandDirectionProvider.analyzeBrand(input);
   const schemaValid = BrandPlanSchema.safeParse(result.plan).success;
 
-  return NextResponse.json({
+  return diagnosticJson({
     requestId,
     method: "diagnostic",
     provider: result.usage.provider,

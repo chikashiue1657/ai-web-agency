@@ -176,13 +176,17 @@ describe("WebsiteRendererV2: Hero構図の切り替え", () => {
     const contents = generateWebsiteRuleBased(photoBrief);
     const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "immersive" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
-    expect(html).toContain("h-dvh");
-    // full-bleed-center構図はh-dvh(画面いっぱいの縦長)のため、モバイルで
-    // 横長写真をobject-coverすると左右が大きく切り取られ被写体が画面外へ
-    // 出ることがある(実写真検証で確認)。モバイルだけobject-containへ切り替え、
-    // sm:以上は従来通りobject-coverのフルブリードに戻すことを確認する。
-    expect(html).toContain("object-contain");
-    expect(html).toContain("sm:object-cover");
+    // full-bleed-center構図はsm:以上でだけh-dvh(画面いっぱいの縦長)にする。
+    // モバイルは通常フローのaspect-[4/3]ブロックに写真を収める構成にして
+    // いるため("h-dvh"はsm:以上にのみ付き、素の"h-dvh"としては出ない)。
+    expect(html).toContain("sm:h-dvh");
+    // モバイルの写真ブロックはaspect-[4/3]、sm:以上でabsolute inset-0の
+    // フルブリードに戻ることを確認する(以前試したobject-containは、この
+    // h-dvhの縦長コンテナ内で写真が中央の細い帯になり上下に巨大な
+    // レターボックスができる不具合を起こしたため採用していない)。
+    expect(html).toContain("aspect-[4/3]");
+    expect(html).not.toContain("object-contain");
+    expect(html).toContain("object-cover");
   });
 
   it("layoutVariant=editorialかつ写真ありの場合、split構図（grid）で描画する", () => {
@@ -391,6 +395,19 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
       );
       expect(html).toContain("Google マップで見る");
       expect(html).toContain(`href="https://www.google.com/maps?q=`);
+    }
+  });
+
+  it("AccessHoursはiframeを一切使わない(埋め込み失敗時のブラウザ既定「壊れたファイル」アイコンをそもそも発生させないため)", () => {
+    // iframeのonErrorはブラウザによって信頼できず、失敗時に壊れたアイコンだけが
+    // 残ることを実機検証で確認した。そのため地図はiframe埋め込みをやめ、
+    // 常に成功する外部リンク(Google マップで見る)だけに一本化した。
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    for (const brandArchetype of ["modern-minimal", "luxury-quiet", "artisan"] as const) {
+      const html = renderToStaticMarkup(
+        <WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={makeBrandPlan({ brandArchetype })} />
+      );
+      expect(html).not.toContain("<iframe");
     }
   });
 

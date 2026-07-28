@@ -142,6 +142,17 @@ function EyebrowLabel({ area, industry, tone, theme }: { area: string; industry:
  * テキストは写真から独立した半透明の面（チップ）にだけ乗せ、写真自体は
  * ほぼそのまま見せる。チップは文字の分だけの大きさに留め、写真全体を
  * 覆う暗幕にはしない。
+ *
+ * モバイルとdesktop(sm:以上)で構造そのものを分ける:
+ *  - desktop: 従来通りsectionをh-dvhにし、写真を絶対配置でフルブリード、
+ *    テキストのチップを下部に重ねる。
+ *  - mobile: h-dvhにしない。写真をaspect-[4/3]の通常フローブロックとして
+ *    上に置き(object-cover。被写体は多少trimmされ得るが、h-dvhの縦長箱に
+ *    object-containで収めた場合のような巨大なレターボックスは発生しない)、
+ *    その直下に暗色のテキストパネルを続ける縦積み構成にする（実写真検証で、
+ *    object-containがモバイルの縦長ビューポートで写真を中央の細い帯にし、
+ *    上下に巨大な黒帯を作ってしまう不具合を確認したための変更）。
+ *    写真ごとの被写体位置の推測(Vision等)は行わない。
  */
 function FullBleedCenterHero({
   storeName,
@@ -156,22 +167,18 @@ function FullBleedCenterHero({
   onHeroPhotoFail,
 }: HeroV2Props & { photoUrl: string; onHeroPhotoFail: () => void }) {
   return (
-    <section id="top" className="relative h-dvh min-h-[640px] w-full overflow-hidden bg-stone-950">
-      {/*
-        mobileFit="contain": このHeroはh-dvh(画面いっぱいの縦長)なので、横長写真を
-        モバイルでobject-coverすると左右が大きく切り取られ被写体が画面外へ
-        出ることがある（実写真検証で確認）。モバイルだけ全体を見せ、余白は
-        このsectionの背景色(bg-stone-950)でレターボックスする。
-      */}
-      <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} mobileFit="contain" />
+    <section id="top" className="relative w-full overflow-hidden bg-stone-950 sm:h-dvh sm:min-h-[640px]">
+      <div className="relative aspect-[4/3] w-full sm:absolute sm:inset-0 sm:aspect-auto sm:h-full">
+        <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
+      </div>
 
       {/*
         pb-28: モバイルの下部固定CTAバー(概ね64〜90px、safe-area込み)にHero自身の
         CTA・本文が隠れないための余白。sm以上は固定CTAバー自体が出ないため
         通常の余白に戻す。
       */}
-      <div className="relative flex h-full w-full flex-col justify-end px-5 pb-28 sm:px-10 sm:pb-12 lg:px-16 lg:pb-16">
-        <div className="w-fit max-w-[92vw] rounded-sm bg-stone-950/75 px-5 py-6 backdrop-blur-sm sm:max-w-lg sm:px-8 sm:py-8">
+      <div className="relative flex w-full flex-col bg-stone-950 px-5 pb-28 pt-8 sm:absolute sm:inset-0 sm:h-full sm:justify-end sm:bg-transparent sm:px-10 sm:pb-12 sm:pt-0 lg:px-16 lg:pb-16">
+        <div className="sm:w-fit sm:max-w-[92vw] sm:rounded-sm sm:bg-stone-950/75 sm:px-8 sm:py-8 sm:backdrop-blur-sm sm:max-w-lg">
           <span className="mb-4 block w-fit text-[11px] font-medium tracking-wide text-white/80 sm:text-xs">
             {area} ・ {industry}
           </span>

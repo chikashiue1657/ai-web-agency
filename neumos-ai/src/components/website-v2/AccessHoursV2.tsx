@@ -9,20 +9,19 @@ import type { ArtDirection, SurfaceClasses } from "@/lib/engine/v2-design-system
  *
  * artDirectionごとにレイアウトそのものを変える。
  *  - japanese-editorial: 本の奥付（colophon）のような、中央寄せの静かな
- *    1カラム。地図は控えめな小さな面として添える。
- *  - sensory-immersive: 写真セクションから続く暗色の情報帯として構成し、
- *    地図はその上に置く控えめな面にする（小さなカードが巨大な空白に
- *    浮くのではなく、帯自体が実質的な情報量を持つ）。
- *  - warm-craft: テキスト側を狭く・地図側を広くした非対称の2分割。
+ *    1カラム。
+ *  - sensory-immersive: 写真セクションから続く暗色の情報帯として構成する。
+ *  - warm-craft: テキスト側を狭く・装飾側を広くした非対称の2分割。
  *
- * 地図(Google Maps iframe)はネットワーク制限・広告ブロッカー等で読み込みに
- * 失敗することがあり、失敗してもブラウザ既定の「壊れたファイル」アイコン
- * 以外に何も残らない（実際に検証で確認した）。この失敗はJSで確実に検知
- * できないため、次の2点で対応する。
- *  1. 地図の高さを大きく取りすぎない（失敗時に残る面を小さく保つ）
- *  2. 地図の成否に関わらず、住所・営業時間・アクセス説明・地図リンクを
- *     まとめた実用的な情報パネルをセクションの主役として常に表示する
- *     （地図はその補助という位置づけにする）
+ * Google Mapsのiframe埋め込みは、ネットワーク制限・広告ブロッカー等で
+ * 読み込みに失敗した場合にブラウザ既定の「壊れたファイル」アイコンが
+ * 残ってしまい、これはonErrorだけでは確実に検知・抑制できない（実写真での
+ * 検証でこの壊れたアイコンが実際に表示され続けることを確認した）。
+ * 販売品質としてこれを許容できないため、iframeそのものを一切使わず、
+ * 住所・アクセス説明・営業時間・Google Mapsへの外部リンクだけで
+ * アクセス要件を満たす構成に統一した。地図の代わりとなる図形は、実在しない
+ * 地図画像・道路情報を捏造することは絶対にせず、方向ごとの見た目の違いは
+ * 構造・タイポグラフィ・（warm-craftのみ）非地図の装飾要素で作る。
  */
 const ROW_ICON: Record<"営業時間" | "定休日" | "電話" | "住所", string> = {
   営業時間: "M12 7v5l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -70,14 +69,12 @@ function ColophonAccessHours({
   storeName,
   access,
   rows,
-  mapSrc,
   theme,
   surface,
 }: {
   storeName: string;
   access: AccessInfo;
   rows: Row[];
-  mapSrc: string;
   theme: CafeThemeV2;
   surface: SurfaceClasses;
 }) {
@@ -113,20 +110,11 @@ function ColophonAccessHours({
 
         <div className={`mx-auto mt-10 w-10 border-t ${surface.divider}`} />
 
-        <div className="mt-8 overflow-hidden rounded-sm">
-          <iframe
-            title={`${storeName}の地図`}
-            src={mapSrc}
-            className="h-48 w-full grayscale sm:h-56"
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-        </div>
         <a
           href={mapLinkHref(access.mapQuery)}
           target="_blank"
           rel="noreferrer"
-          className={`mt-4 inline-flex items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-xs font-medium ${theme.accentText} ${surface.divider} hover:bg-black/[0.03]`}
+          className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-xs font-medium ${theme.accentText} ${surface.divider} hover:bg-black/[0.03]`}
         >
           Google マップで見る
           <span aria-hidden>→</span>
@@ -138,37 +126,24 @@ function ColophonAccessHours({
 
 /**
  * sensory-immersive: 写真セクションから続く暗色の情報帯として構成する。
- * 地図の高さは控えめにし（読み込み失敗時に残る面を小さくするため）、
- * 情報帯自体を主役として十分な情報量・幅を持たせる（地図が失敗しても
- * 「小さなカードが巨大な空白に浮く」状態にならないようにする）。
+ * 地図(iframe)を廃止した分、情報帯自体を主役として十分な情報量・余白を
+ * 持たせ、外部リンクを大きめのボタンとして扱う。
  */
 function ImmersiveAccessHours({
   storeName,
   access,
   rows,
-  mapSrc,
   theme,
 }: {
   storeName: string;
   access: AccessInfo;
   rows: Row[];
-  mapSrc: string;
   theme: CafeThemeV2;
 }) {
   return (
     <section id="access" className="w-full bg-stone-950">
-      <div className="relative h-64 w-full sm:h-80">
-        <iframe
-          title={`${storeName}の地図`}
-          src={mapSrc}
-          className="h-full w-full"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-stone-950 to-transparent" />
-      </div>
-      <div className="mx-auto max-w-4xl px-5 py-10 text-white sm:px-10 sm:py-14 lg:px-16">
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+      <div className="mx-auto max-w-4xl px-5 py-16 text-white sm:px-10 sm:py-24 lg:px-16">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 sm:gap-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Access</p>
             <p className={`mt-3 text-xl sm:text-2xl ${theme.displayFont}`}>{storeName}</p>
@@ -200,7 +175,7 @@ function ImmersiveAccessHours({
               href={mapLinkHref(access.mapQuery)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/40 px-5 py-2.5 text-xs font-medium text-white transition hover:bg-white/10"
+              className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/40 px-6 py-3 text-xs font-medium text-white transition hover:bg-white/10"
             >
               Google マップで見る
               <span aria-hidden>→</span>
@@ -212,19 +187,22 @@ function ImmersiveAccessHours({
   );
 }
 
-/** warm-craft: テキスト側を狭く・地図側を広くした非対称の2分割（従来の構成）。 */
+/**
+ * warm-craft: テキスト側を狭く・右側を広くした非対称の2分割（従来の構成）。
+ * 右側は以前Google Mapsのiframeだったが、壊れたアイコン対策として廃止し、
+ * 実在しない地図画像・道路情報を捏造しない範囲の非地図装飾（ピン風の印と
+ * エリア名）へ差し替えた。
+ */
 function CraftAccessHours({
   storeName,
   access,
   rows,
-  mapSrc,
   theme,
   surface,
 }: {
   storeName: string;
   access: AccessInfo;
   rows: Row[];
-  mapSrc: string;
   theme: CafeThemeV2;
   surface: SurfaceClasses;
 }) {
@@ -276,14 +254,26 @@ function CraftAccessHours({
           </a>
         </div>
 
-        <div className="relative min-h-[260px] lg:col-span-3">
-          <iframe
-            title={`${storeName}の地図`}
-            src={mapSrc}
-            className="h-full min-h-[260px] w-full grayscale-[15%]"
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
+        <div
+          className={`relative flex min-h-[220px] flex-col items-center justify-center gap-4 px-8 py-14 lg:col-span-3 lg:min-h-[320px] ${theme.paperBg}`}
+        >
+          <div className={`flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed ${surface.divider}`}>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.4}
+              className={`h-9 w-9 ${theme.accentTextSoft}`}
+              aria-hidden
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 21c-4.418-4.03-7-7.686-7-11a7 7 0 1114 0c0 3.314-2.582 6.97-7 11z M12 11a2 2 0 100-4 2 2 0 000 4z"
+              />
+            </svg>
+          </div>
+          <p className={`text-sm font-medium ${theme.bodyText}`}>{access.areaLabel}</p>
         </div>
       </div>
     </section>
@@ -305,16 +295,15 @@ export function AccessHoursV2({
   surface: SurfaceClasses;
   artDirection: ArtDirection;
 }) {
-  const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(access.mapQuery)}&output=embed`;
   // 必要最低限だけ表示する：営業時間と定休日は別々の行にせず1行にまとめる
   // （営業時間・定休日・電話・住所の4行がすべて並ぶと情報過多に見えるため）。
   const rows = buildRows(realData);
 
   if (artDirection === "japanese-editorial") {
-    return <ColophonAccessHours storeName={storeName} access={access} rows={rows} mapSrc={mapSrc} theme={theme} surface={surface} />;
+    return <ColophonAccessHours storeName={storeName} access={access} rows={rows} theme={theme} surface={surface} />;
   }
   if (artDirection === "sensory-immersive") {
-    return <ImmersiveAccessHours storeName={storeName} access={access} rows={rows} mapSrc={mapSrc} theme={theme} />;
+    return <ImmersiveAccessHours storeName={storeName} access={access} rows={rows} theme={theme} />;
   }
-  return <CraftAccessHours storeName={storeName} access={access} rows={rows} mapSrc={mapSrc} theme={theme} surface={surface} />;
+  return <CraftAccessHours storeName={storeName} access={access} rows={rows} theme={theme} surface={surface} />;
 }

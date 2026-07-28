@@ -177,6 +177,12 @@ describe("WebsiteRendererV2: Hero構図の切り替え", () => {
     const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "immersive" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("h-dvh");
+    // full-bleed-center構図はh-dvh(画面いっぱいの縦長)のため、モバイルで
+    // 横長写真をobject-coverすると左右が大きく切り取られ被写体が画面外へ
+    // 出ることがある(実写真検証で確認)。モバイルだけobject-containへ切り替え、
+    // sm:以上は従来通りobject-coverのフルブリードに戻すことを確認する。
+    expect(html).toContain("object-contain");
+    expect(html).toContain("sm:object-cover");
   });
 
   it("layoutVariant=editorialかつ写真ありの場合、split構図（grid）で描画する", () => {
@@ -235,6 +241,18 @@ describe("WebsiteRendererV2: モバイル下部固定CTA", () => {
     const brandPlan = makeBrandPlan({ ctaStrategy: { placement: "hero", urgency: "high" } });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("bg-stone-900");
+  });
+
+  it("固定CTAバーの高さ分の安全余白(pb-24)はページ最外側に付与し、Footerの後にも確保する(以前は<main>だけに付いておりFooterがバーの下に隠れ続ける不具合があった)", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} />);
+    // 最外側の<div>がpb-24を持ち、<footer>より後ろに閉じることを確認する。
+    const outerDivEnd = html.indexOf(">");
+    const outerDivOpenTag = html.slice(0, outerDivEnd + 1);
+    expect(outerDivOpenTag).toContain("pb-24 sm:pb-0");
+    const footerIndex = html.indexOf("<footer");
+    const mainCloseIndex = html.indexOf("</main>");
+    expect(footerIndex).toBeGreaterThan(mainCloseIndex);
   });
 });
 
@@ -325,28 +343,41 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
     const menuHtml = extractMenuSectionHtml(html);
     expect(menuHtml).toContain('">01</span>');
     expect(menuHtml).not.toContain(">Featured<");
-    expect(html).toContain("h-64 w-full grayscale");
+    // Access: 中央寄せの奥付風。地図は控えめな高さに留め、bg-stone-950(immersive)の
+    // 暗色情報帯は使わない。
+    expect(html).toContain('id="access" class="bg-stone-50"');
+    expect(html).not.toContain('id="access" class="w-full bg-stone-950"');
   });
 
-  it("sensory-immersive: Menuは先頭品目をFeaturedカード化、AccessHoursは写真/地図と一体化(70vh)", () => {
+  it("sensory-immersive: Menuは先頭品目をFeaturedカード化、AccessHoursは暗色の情報帯として写真と連続させる", () => {
     const contents = generateWebsiteRuleBased(menuBrief);
     const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={menuBrief} contents={contents} brandPlan={brandPlan} />);
     const menuHtml = extractMenuSectionHtml(html);
     expect(menuHtml).toContain(">Featured<");
     expect(menuHtml).not.toContain('">01</span>');
-    expect(html).toContain("h-[70vh] min-h-[480px]");
+    expect(html).toContain('id="access" class="w-full bg-stone-950"');
   });
 
-  it("warm-craft: Menuは番号無しの通しリスト、AccessHoursは元のカード構成", () => {
+  it("warm-craft: Menuは番号無しの通しリスト、AccessHoursは元の非対称2分割カード構成", () => {
     const contents = generateWebsiteRuleBased(menuBrief);
     const brandPlan = makeBrandPlan({ brandArchetype: "artisan" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={menuBrief} contents={contents} brandPlan={brandPlan} />);
     const menuHtml = extractMenuSectionHtml(html);
     expect(menuHtml).not.toContain('">01</span>');
     expect(menuHtml).not.toContain(">Featured<");
-    expect(html).not.toContain("h-[70vh] min-h-[480px]");
-    expect(html).not.toContain("h-64 w-full grayscale");
+    expect(html).not.toContain('id="access" class="w-full bg-stone-950"');
+    expect(html).not.toContain('id="access" class="bg-stone-50"');
+  });
+
+  it("AccessHoursは3方向すべてでaddressHint(事実に基づく説明文)を必ず表示する(地図の成否に関わらずセクションが空虚に見えないため)", () => {
+    const contents = generateWebsiteRuleBased(menuBrief);
+    for (const brandArchetype of ["modern-minimal", "luxury-quiet", "artisan"] as const) {
+      const html = renderToStaticMarkup(
+        <WebsiteRendererV2 brief={menuBrief} contents={contents} brandPlan={makeBrandPlan({ brandArchetype })} />
+      );
+      expect(html).toContain(contents.access.addressHint);
+    }
   });
 
   it("AccessHoursのGoogle地図iframeには、埋め込み失敗時にも機能する実リンク(新規タブでGoogleマップを開く)が3方向すべてに併記される", () => {

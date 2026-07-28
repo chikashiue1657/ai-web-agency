@@ -12,6 +12,17 @@ import { useEffect, useRef, useState } from "react";
  * 決め打ちした値であり、Vision等による焦点情報が無い以上は推測に過ぎない
  * （捏造禁止の方針を写真の切り取り位置にも適用し、中央固定へ変更した）。
  *
+ * `mobileFit="contain"`: full-bleed-center構図はHeroをh-dvh(画面いっぱいの
+ * 縦長)にするため、横長写真をobject-coverで敷くと、狭いモバイル画面では
+ * 左右が大きく切り取られ被写体が画面外へ出ることがある（実写真での検証で
+ * 確認した）。これは「特定の写真の被写体位置を推測する」のではなく、
+ * 「full-bleed-centerというHero構図そのものが、モバイルの縦長ビューポートと
+ * 横長写真の組み合わせで原理的に起こす過剰トリミング」を、写真の内容に
+ * 関係なく一律で緩和する対応。モバイル時だけ`object-contain`
+ * （切り取らず全体を見せ、余白はHero自体の背景色でレターボックスする）へ
+ * 切り替え、`sm:`以上（横長ビューポートが前提）では従来通り
+ * `object-cover`のフルブリードに戻す。写真ごとの被写体推測は一切行わない。
+ *
  * 画像の読み込みに失敗した場合は壊れた画像アイコンのまま見せず、罫線1本の
  * 最小限の面へ差し替える。SSRしたHTMLは`<img src="...">`が最初から
  * マークアップに含まれるため、ブラウザはReactのhydration完了より前に
@@ -25,7 +36,17 @@ import { useEffect, useRef, useState } from "react";
  * （このコンポーネント自身の罫線フォールバックだけでは、Heroという
  * ページで最も目立つ領域に中途半端な空面が残ってしまうため）。
  */
-export function ParallaxImageV2({ src, alt, onFail }: { src: string; alt: string; onFail?: () => void }) {
+export function ParallaxImageV2({
+  src,
+  alt,
+  onFail,
+  mobileFit = "cover",
+}: {
+  src: string;
+  alt: string;
+  onFail?: () => void;
+  mobileFit?: "cover" | "contain";
+}) {
   const ref = useRef<HTMLImageElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -42,6 +63,10 @@ export function ParallaxImageV2({ src, alt, onFail }: { src: string; alt: string
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const el = ref.current;
     if (!el) return;
+    // object-contain中は写真全体を見せる前提のため、cover用の1.08倍拡大
+    // （パララックスで動かした際に端の隙間を隠すための下地）を適用しない。
+    // sm:以上はmobileFitに関わらず常にobject-coverへ戻るため1.08倍を維持する。
+    const isMobileContain = () => mobileFit === "contain" && !window.matchMedia("(min-width: 640px)").matches;
 
     let ticking = false;
     const update = () => {
@@ -50,7 +75,8 @@ export function ParallaxImageV2({ src, alt, onFail }: { src: string; alt: string
       if (!rect) return;
       // スクロール量の12%だけ動かす微細なパララックス。上下±40pxに制限する。
       const offset = Math.max(-40, Math.min(40, rect.top * 0.12));
-      el.style.transform = `translate3d(0, ${offset}px, 0) scale(1.08)`;
+      const scale = isMobileContain() ? 1 : 1.08;
+      el.style.transform = `translate3d(0, ${offset}px, 0) scale(${scale})`;
     };
     const onScroll = () => {
       if (!ticking) {
@@ -60,8 +86,12 @@ export function ParallaxImageV2({ src, alt, onFail }: { src: string; alt: string
     };
     update();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [mobileFit]);
 
   if (failed) {
     // onFailが渡されている場合、呼び出し側（HeroV2）がこの写真の失敗を
@@ -85,7 +115,11 @@ export function ParallaxImageV2({ src, alt, onFail }: { src: string; alt: string
         setFailed(true);
         onFail?.();
       }}
-      className="absolute inset-0 h-full w-full scale-[1.08] object-cover object-center will-change-transform"
+      className={`absolute inset-0 h-full w-full object-center will-change-transform ${
+        mobileFit === "contain"
+          ? "scale-100 object-contain sm:scale-[1.08] sm:object-cover"
+          : "scale-[1.08] object-cover"
+      }`}
     />
   );
 }

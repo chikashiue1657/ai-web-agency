@@ -101,16 +101,19 @@ describe("v2: Trustセクションは実データが無ければ何も表示し�
 });
 
 describe("v2: Menuセクションは実メニューが無ければ商品名・価格を捏造しない", () => {
-  it("realData.menuItemsが無い場合、生成コピーによる紹介文として表示し、価格の一覧は出さない", () => {
+  it("realData.menuItemsが無い場合、brief自身の事実情報(提供内容/こだわり/こんな方に)による編集的パネルとして表示し、価格の一覧は出さない", () => {
     const contents = generateWebsiteRuleBased(cafeBrief);
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} />);
     expect(html).toContain('id="menu"');
-    expect(html).toContain("サービスについて");
-    expect(html).toContain("紹介文（AI生成）");
+    expect(html).toContain("提供内容とこだわり");
+    expect(html).toContain("提供内容");
+    expect(html).toContain("こだわり");
+    expect(html).toContain("こんな方に");
+    expect(html).toContain(cafeBrief.offer);
     expect(html).not.toContain("tabular-nums");
   });
 
-  it("realData.menuItemsがある場合、実際の品名・価格を表示し、AI生成ラベルは出ない", () => {
+  it("realData.menuItemsがある場合、実際の品名・価格を表示し、事実情報パネルの見出しは出ない", () => {
     const brief: StoreBrief = {
       ...cafeBrief,
       realData: {
@@ -126,20 +129,18 @@ describe("v2: Menuセクションは実メニューが無ければ商品名・�
     expect(html).toContain("600円");
     expect(html).toContain("自家製シフォンケーキ");
     expect(html).toContain("450円");
-    expect(html).not.toContain("紹介文（AI生成）");
-    expect(html).not.toContain("サービスについて");
+    expect(html).not.toContain("提供内容とこだわり");
   });
 
   it("brief.offerの文字列はメニューの品目・価格としては描画されない（自由記述のままでは商品化しない）", () => {
     const brief: StoreBrief = { ...cafeBrief, offer: "本日の一杯 500円〜" };
     const contents = generateWebsiteRuleBased(brief);
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={brief} contents={contents} />);
-    // offer由来の文言が本文中に一切現れないことまでは要求しない(Signature等の
-    // 生成コピーには含まれ得る)。ここではMenuV2がRealMenuList(価格をtabular-numsで
-    // 右寄せする専用マークアップ)を使わず、生成コピーであることが分かる
-    // ラベル付きの紹介文として再構成されていることだけを確認する。
-    expect(html).toContain("紹介文（AI生成）");
-    expect(html).toContain("サービスについて");
+    // MenuV2がRealMenuList(価格をtabular-numsで右寄せする専用マークアップ)を
+    // 使わず、事実情報(提供内容=brief.offerそのもの)として再構成されている
+    // ことだけを確認する。商品名・価格の一覧としては描画されない。
+    expect(html).toContain("提供内容とこだわり");
+    expect(html).toContain(brief.offer);
     expect(html).not.toContain("tabular-nums");
   });
 });

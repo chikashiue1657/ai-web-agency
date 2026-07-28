@@ -157,6 +157,9 @@ export function WebsiteRendererV2({
       <MenuV2
         sections={serviceSections}
         menuItems={brief.realData?.menuItems}
+        offer={brief.offer}
+        salesAngle={brief.salesAngle}
+        targetCustomer={brief.targetCustomer}
         theme={theme}
         surface={surface}
         sectionHeadingClass={typography.sectionHeading}
@@ -204,13 +207,17 @@ export function WebsiteRendererV2({
   };
 
   return (
-    <div className={theme.paperBg}>
+    // pb-24: モバイル固定CTAバーの高さ+safe-area分の下余白。以前はこの余白を
+    // <main>だけに付けていたため、<main>の外にあるFooterがバーの下に隠れ、
+    // スクロールし切ってもFooter末尾が絶対に見えない不具合があった（実際に
+    // 発生を確認した）。ページ全体の末尾に対して確保する。
+    <div className={`pb-24 sm:pb-0 ${theme.paperBg}`}>
       <HeaderV2
         storeName={brief.storeName}
         blocks={plan.blocks}
         theme={deriveHeaderTheme(tokens.artDirection, tokens.heroComposition)}
       />
-      <main className="pb-24 sm:pb-0">
+      <main>
         {plan.blocks.map((block, i) => {
           const prevBlock = i === 0 ? null : plan.blocks[i - 1];
           return (

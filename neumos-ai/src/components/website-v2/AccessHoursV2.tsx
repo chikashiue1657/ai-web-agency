@@ -9,11 +9,20 @@ import type { ArtDirection, SurfaceClasses } from "@/lib/engine/v2-design-system
  *
  * artDirectionごとにレイアウトそのものを変える。
  *  - japanese-editorial: 本の奥付（colophon）のような、中央寄せの静かな
- *    1カラム。地図は控えめに小さく添えるだけに留める。
- *  - sensory-immersive: 地図を主役級の大きな面として扱い、情報カードを
- *    その上に重ねて一体化させる。
- *  - warm-craft: これまで通り、テキスト側を狭く・地図側を広くした
- *    非対称の2分割。
+ *    1カラム。地図は控えめな小さな面として添える。
+ *  - sensory-immersive: 写真セクションから続く暗色の情報帯として構成し、
+ *    地図はその上に置く控えめな面にする（小さなカードが巨大な空白に
+ *    浮くのではなく、帯自体が実質的な情報量を持つ）。
+ *  - warm-craft: テキスト側を狭く・地図側を広くした非対称の2分割。
+ *
+ * 地図(Google Maps iframe)はネットワーク制限・広告ブロッカー等で読み込みに
+ * 失敗することがあり、失敗してもブラウザ既定の「壊れたファイル」アイコン
+ * 以外に何も残らない（実際に検証で確認した）。この失敗はJSで確実に検知
+ * できないため、次の2点で対応する。
+ *  1. 地図の高さを大きく取りすぎない（失敗時に残る面を小さく保つ）
+ *  2. 地図の成否に関わらず、住所・営業時間・アクセス説明・地図リンクを
+ *     まとめた実用的な情報パネルをセクションの主役として常に表示する
+ *     （地図はその補助という位置づけにする）
  */
 const ROW_ICON: Record<"営業時間" | "定休日" | "電話" | "住所", string> = {
   営業時間: "M12 7v5l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -37,13 +46,6 @@ function RowIcon({ label, className }: { label: RowLabel; className: string }) {
   );
 }
 
-/**
- * 地図埋め込み(iframe)は広告ブロッカーやネットワーク制限で読み込みに失敗
- * すると、ブラウザ既定の壊れたファイルアイコンだけが残る（実際に検証環境で
- * 発生を確認した）。iframeの読み込み失敗はJSで確実に検知できないため、
- * 埋め込みが失敗してもアクセス手段が失われないよう、常にGoogleマップを
- * 新規タブで開く実リンクを併記する（埋め込みが正常な場合は単なる補助リンク）。
- */
 function mapLinkHref(mapQuery: string): string {
   return `https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}`;
 }
@@ -81,16 +83,19 @@ function ColophonAccessHours({
 }) {
   return (
     <section id="access" className={theme.paperBg}>
-      <div className="mx-auto max-w-xl px-5 py-20 text-center sm:px-10 sm:py-28">
+      <div className="mx-auto max-w-xl px-5 py-16 text-center sm:px-10 sm:py-20">
         <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${theme.accentText}`}>Access</p>
         <div className={`mx-auto mt-6 w-10 border-t ${surface.divider}`} />
         <p className={`mt-6 text-lg sm:text-xl ${theme.displayFont} ${theme.bodyText}`}>{storeName}</p>
         <p className={`mt-1 text-sm ${theme.bodyTextSoft}`}>{access.areaLabel}</p>
+        <p className={`mx-auto mt-4 max-w-[34ch] [overflow-wrap:normal] text-sm leading-relaxed ${theme.bodyTextSoft}`}>
+          {access.addressHint}
+        </p>
 
         {rows.length > 0 && (
-          <dl className="mt-8 flex flex-col items-center gap-3">
+          <dl className={`mx-auto mt-8 flex max-w-xs flex-col gap-3 border-t pt-6 ${surface.divider}`}>
             {rows.map((row) => (
-              <div key={row.label} className="flex items-baseline gap-3 text-sm">
+              <div key={row.label} className="flex items-baseline justify-between gap-3 text-sm">
                 <dt className={`text-xs tracking-[0.15em] ${theme.bodyTextSoft}`}>{row.label}</dt>
                 <dd className="[overflow-wrap:normal]">
                   {row.href ? (
@@ -112,7 +117,7 @@ function ColophonAccessHours({
           <iframe
             title={`${storeName}の地図`}
             src={mapSrc}
-            className="h-64 w-full grayscale"
+            className="h-48 w-full grayscale sm:h-56"
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
           />
@@ -121,16 +126,22 @@ function ColophonAccessHours({
           href={mapLinkHref(access.mapQuery)}
           target="_blank"
           rel="noreferrer"
-          className={`mt-3 inline-block text-xs ${theme.accentText} hover:underline`}
+          className={`mt-4 inline-flex items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-xs font-medium ${theme.accentText} ${surface.divider} hover:bg-black/[0.03]`}
         >
-          Google マップで見る →
+          Google マップで見る
+          <span aria-hidden>→</span>
         </a>
       </div>
     </section>
   );
 }
 
-/** sensory-immersive: 地図を主役級に大きく扱い、情報カードを重ねて一体化させる。 */
+/**
+ * sensory-immersive: 写真セクションから続く暗色の情報帯として構成する。
+ * 地図の高さは控えめにし（読み込み失敗時に残る面を小さくするため）、
+ * 情報帯自体を主役として十分な情報量・幅を持たせる（地図が失敗しても
+ * 「小さなカードが巨大な空白に浮く」状態にならないようにする）。
+ */
 function ImmersiveAccessHours({
   storeName,
   access,
@@ -145,8 +156,8 @@ function ImmersiveAccessHours({
   theme: CafeThemeV2;
 }) {
   return (
-    <section id="access" className="relative w-full">
-      <div className="relative h-[70vh] min-h-[480px] w-full">
+    <section id="access" className="w-full bg-stone-950">
+      <div className="relative h-64 w-full sm:h-80">
         <iframe
           title={`${storeName}の地図`}
           src={mapSrc}
@@ -154,38 +165,48 @@ function ImmersiveAccessHours({
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-stone-950/70 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-stone-950 to-transparent" />
       </div>
-      <div className="relative z-10 mx-4 -mt-24 max-w-md rounded-sm bg-stone-950/85 px-6 py-8 text-white backdrop-blur-sm sm:mx-10 sm:px-10 sm:py-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Access</p>
-        <p className={`mt-3 text-xl sm:text-2xl ${theme.displayFont}`}>{storeName}</p>
-        <p className="mt-1 text-sm text-white/70">{access.areaLabel}</p>
-        {rows.length > 0 && (
-          <dl className="mt-6 flex flex-col gap-3 border-t border-white/20 pt-6">
-            {rows.map((row) => (
-              <div key={row.label} className="flex items-start gap-3 text-sm">
-                <RowIcon label={row.label} className="mt-0.5 h-4 w-4 shrink-0 text-white/50" />
-                <dd className="[overflow-wrap:normal] text-white/85">
-                  {row.href ? (
-                    <a href={row.href} className="hover:underline">
-                      {row.value}
-                    </a>
-                  ) : (
-                    row.value
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        <a
-          href={mapLinkHref(access.mapQuery)}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-6 inline-block text-xs text-white/70 hover:text-white hover:underline"
-        >
-          Google マップで見る →
-        </a>
+      <div className="mx-auto max-w-4xl px-5 py-10 text-white sm:px-10 sm:py-14 lg:px-16">
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Access</p>
+            <p className={`mt-3 text-xl sm:text-2xl ${theme.displayFont}`}>{storeName}</p>
+            <p className="mt-1 text-sm text-white/70">{access.areaLabel}</p>
+            <p className="mt-3 max-w-[34ch] [overflow-wrap:normal] text-sm leading-relaxed text-white/70">
+              {access.addressHint}
+            </p>
+          </div>
+          <div className="flex flex-col gap-6 sm:border-l sm:border-white/15 sm:pl-8">
+            {rows.length > 0 && (
+              <dl className="flex flex-col gap-3 border-t border-white/20 pt-6 sm:border-t-0 sm:pt-0">
+                {rows.map((row) => (
+                  <div key={row.label} className="flex items-start gap-3 text-sm">
+                    <RowIcon label={row.label} className="mt-0.5 h-4 w-4 shrink-0 text-white/50" />
+                    <dd className="[overflow-wrap:normal] text-white/85">
+                      {row.href ? (
+                        <a href={row.href} className="hover:underline">
+                          {row.value}
+                        </a>
+                      ) : (
+                        row.value
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            <a
+              href={mapLinkHref(access.mapQuery)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/40 px-5 py-2.5 text-xs font-medium text-white transition hover:bg-white/10"
+            >
+              Google マップで見る
+              <span aria-hidden>→</span>
+            </a>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -243,24 +264,26 @@ function CraftAccessHours({
               ))}
             </dl>
           )}
-        </div>
 
-        <div className="relative min-h-[320px] lg:col-span-3">
-          <iframe
-            title={`${storeName}の地図`}
-            src={mapSrc}
-            className="h-full min-h-[320px] w-full grayscale-[15%]"
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
           <a
             href={mapLinkHref(access.mapQuery)}
             target="_blank"
             rel="noreferrer"
-            className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-stone-800 shadow-sm hover:bg-white"
+            className={`mt-2 inline-flex w-fit items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-xs font-medium ${theme.accentText} ${surface.divider} hover:bg-black/[0.03]`}
           >
-            Google マップで見る →
+            Google マップで見る
+            <span aria-hidden>→</span>
           </a>
+        </div>
+
+        <div className="relative min-h-[260px] lg:col-span-3">
+          <iframe
+            title={`${storeName}の地図`}
+            src={mapSrc}
+            className="h-full min-h-[260px] w-full grayscale-[15%]"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
         </div>
       </div>
     </section>

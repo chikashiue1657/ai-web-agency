@@ -133,44 +133,62 @@ function RealMenuList(props: RealMenuListProps & { artDirection: ArtDirection })
 }
 
 /**
- * 実メニューデータが無い場合の代替表示。`brief.offer`由来の生成コピー
- * (`sections`のkind="service")はあくまでAIが書いた紹介文であり、実在する
- * 商品名・価格の一覧ではないため、「メニュー」を名乗らず・価格列を持たず、
- * 生成コピーであることが分かるラベルを添えて紹介文として見せる。
+ * 実メニューデータが無い場合の代替表示。
+ *
+ * 以前は`sections`(kind="service"、AIが書いた紹介文)だけを「紹介文（AI生成）」
+ * という単独カードで見せていたが、これは内容が一般的になりがちで弱く見える
+ * という指摘を受けた。ここではまず、brief自身に実在する事実（提供内容・
+ * こだわり・想定客層）を「提供内容」「こだわり」「こんな方に」という
+ * 事実ベースの見出しつきで並べる編集的なパネルを主役にし、AIが書いた
+ * 紹介文(`sections`)はその補足として下に添える（無ければ表示しない）。
+ * 価格列や商品名の一覧は一切作らない（架空の商品・価格は出さない）。
  */
 function GeneratedServiceOverview({
+  offer,
+  salesAngle,
+  targetCustomer,
   sections,
   theme,
   surface,
   sectionHeadingClass,
 }: {
+  offer: string;
+  salesAngle: string;
+  targetCustomer: string;
   sections: WebsiteSection[];
   theme: CafeThemeV2;
   surface: SurfaceClasses;
   sectionHeadingClass: string;
 }) {
-  const [featured, ...rest] = sections;
-  // 補足セクション(rest)が無い場合は文字量が少なく、既定の縦padding(py-16/24)
+  // 補足コピー(sections)が無い場合は文字量が少なく、既定の縦padding(py-16/24)
   // だと内容量に対して余白ばかりが目立つため、その分だけ詰める。
-  const verticalPadding = rest.length > 0 ? "py-16 sm:py-24" : "py-12 sm:py-16";
+  const verticalPadding = sections.length > 0 ? "py-16 sm:py-24" : "py-12 sm:py-16";
+  const facts: { label: string; value: string }[] = [
+    { label: "提供内容", value: offer },
+    { label: "こだわり", value: salesAngle },
+    { label: "こんな方に", value: targetCustomer },
+  ];
 
   return (
     <section id="menu" className={theme.paperBg}>
       <div className={`mx-auto max-w-4xl px-5 sm:px-10 lg:px-16 ${verticalPadding}`}>
         <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>About the service</p>
-        <h2 className={`mt-4 ${sectionHeadingClass} ${theme.displayFont} ${theme.bodyText}`}>サービスについて</h2>
+        <h2 className={`mt-4 ${sectionHeadingClass} ${theme.displayFont} ${theme.bodyText}`}>提供内容とこだわり</h2>
 
         <RevealV2
           variant="fade-up"
-          className={`mt-10 ${surface.cardBg} ${surface.cardBorder} px-6 py-8 sm:mt-12 sm:px-10 sm:py-10`}
+          className={`mt-10 grid grid-cols-1 gap-6 sm:mt-12 sm:grid-cols-3 sm:gap-8 ${surface.cardBg} ${surface.cardBorder} px-6 py-8 sm:px-10 sm:py-10`}
         >
-          <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${theme.accentTextSoft}`}>
-            紹介文（AI生成）
-          </p>
-          <h3 className={`mt-3 text-2xl sm:text-3xl ${theme.displayFont} ${theme.bodyText}`}>{featured.heading}</h3>
-          <p className={`mt-3 whitespace-pre-line text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
-            {featured.body}
-          </p>
+          {facts.map((fact) => (
+            <div key={fact.label}>
+              <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${theme.accentTextSoft}`}>
+                {fact.label}
+              </p>
+              <p className={`mt-2 [overflow-wrap:normal] text-sm leading-relaxed sm:text-base ${theme.bodyText}`}>
+                {fact.value}
+              </p>
+            </div>
+          ))}
         </RevealV2>
 
         {/*
@@ -179,9 +197,9 @@ function GeneratedServiceOverview({
           違反として実際に検出された）。<li>自体はプレーンな直接の子のままにし、
           reveal演出は<li>の中身だけに適用する。
         */}
-        {rest.length > 0 && (
-          <ul className={`mt-4 border-t ${surface.divider}`}>
-            {rest.map((s, i) => (
+        {sections.length > 0 && (
+          <ul className={`mt-10 border-t ${surface.divider}`}>
+            {sections.map((s, i) => (
               <li key={s.id} className={`border-b py-7 last:border-b-0 ${surface.divider}`}>
                 <RevealV2
                   variant="fade-up"
@@ -204,13 +222,18 @@ function GeneratedServiceOverview({
 
 /**
  * 実メニュー(`menuItems`)がある場合だけ品名+価格の実際のメニュー表を出す。
- * 無い場合は`brief.offer`を商品一覧・価格へ変換したりせず、生成コピーによる
- * 「サービスについて」の紹介文へ再構成する（架空の商品・価格は一切出さない）。
- * どちらの元データも無ければ何も描画しない。
+ * 無い場合は`brief.offer`を商品一覧・価格へ変換したりせず、brief自身の
+ * 事実情報（提供内容・こだわり・想定客層）による編集的なパネルへ
+ * 再構成する（架空の商品・価格は一切出さない）。offer/salesAngle/
+ * targetCustomerはStoreBriefのバリデーションで必須(min(1))のため、
+ * この代替表示が空虚になることはない。
  */
 export function MenuV2({
   sections,
   menuItems,
+  offer,
+  salesAngle,
+  targetCustomer,
   theme,
   surface,
   sectionHeadingClass,
@@ -218,6 +241,9 @@ export function MenuV2({
 }: {
   sections: WebsiteSection[];
   menuItems?: RealMenuItem[];
+  offer: string;
+  salesAngle: string;
+  targetCustomer: string;
   theme: CafeThemeV2;
   surface: SurfaceClasses;
   sectionHeadingClass: string;
@@ -234,9 +260,11 @@ export function MenuV2({
       />
     );
   }
-  if (sections.length === 0) return null;
   return (
     <GeneratedServiceOverview
+      offer={offer}
+      salesAngle={salesAngle}
+      targetCustomer={targetCustomer}
       sections={sections}
       theme={theme}
       surface={surface}

@@ -157,7 +157,13 @@ function FullBleedCenterHero({
 }: HeroV2Props & { photoUrl: string; onHeroPhotoFail: () => void }) {
   return (
     <section id="top" className="relative h-dvh min-h-[640px] w-full overflow-hidden bg-stone-950">
-      <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
+      {/*
+        mobileFit="contain": このHeroはh-dvh(画面いっぱいの縦長)なので、横長写真を
+        モバイルでobject-coverすると左右が大きく切り取られ被写体が画面外へ
+        出ることがある（実写真検証で確認）。モバイルだけ全体を見せ、余白は
+        このsectionの背景色(bg-stone-950)でレターボックスする。
+      */}
+      <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} mobileFit="contain" />
 
       {/*
         pb-28: モバイルの下部固定CTAバー(概ね64〜90px、safe-area込み)にHero自身の

@@ -12,13 +12,20 @@ import type { CtaStyle, SurfaceClasses } from "@/lib/engine/v2-design-system";
  * ノッチ付き端末で画面最下部の安全領域に食い込まないよう、
  * `env(safe-area-inset-bottom)`をpaddingへ加える。
  *
- * 最終CTAセクション（`#contact`）が画面内に入ったら、このバーを隠す。
+ * 最終CTAセクション（`#contact`）に到達したら、このバーを隠す。
  * 最終CTAには既にこのバーと同じ操作（お問い合わせ）を行う大きなボタンが
  * あるため、両方を同時に見せると重複感が生まれる（実際に指摘された問題）。
- * IntersectionObserverでの検知のため、非表示への切り替えはアニメーションを
- * 伴うが、位置そのものは動かさず不透明度と`pointer-events`だけを切り替える
- * ため`prefers-reduced-motion`でも問題にならない（動きの量ではなく状態の
- * 変化）。念のためtransition-durationだけ短縮する。
+ *
+ * IntersectionObserverで`#contact`の可視状態だけを見ると、`#contact`を
+ * 通り過ぎてFooterへ入った瞬間に`isIntersecting`がfalseへ戻り、バーが
+ * 再表示されてFooter本文に重なる不具合があった（実際に発生を確認した）。
+ * `#contact`の上端がビューポート内に入って以降はページ末尾まで隠れたままに
+ * したいため、intersection(在/不在)ではなく`#contact`の上端の画面上の位置を
+ * 見て判定する（一度隠れたら、上にスクロールして`#contact`より前へ戻るまで
+ * 再表示しない）。
+ * 非表示への切り替えはアニメーションを伴うが、位置そのものは動かさず
+ * 不透明度と`pointer-events`だけを切り替えるため`prefers-reduced-motion`でも
+ * 問題にならない（動きの量ではなく状態の変化）。念のためtransition-durationだけ短縮する。
  */
 export function MobileStickyCtaV2({
   cta,
@@ -36,11 +43,23 @@ export function MobileStickyCtaV2({
   useEffect(() => {
     const target = document.getElementById("contact");
     if (!target) return;
-    const observer = new IntersectionObserver(([entry]) => setNearFinalCta(entry.isIntersecting), {
-      rootMargin: "0px 0px -10% 0px",
-    });
-    observer.observe(target);
-    return () => observer.disconnect();
+    let ticking = false;
+    const check = () => {
+      ticking = false;
+      setNearFinalCta(target.getBoundingClientRect().top <= window.innerHeight);
+    };
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
   const buttonClass =

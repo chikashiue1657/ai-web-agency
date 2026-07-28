@@ -56,9 +56,12 @@ describe("WebsiteRendererV2: brandPlan省略時（既存動作の回帰確認）
 });
 
 describe("WebsiteRendererV2: visualDirectionの反映", () => {
-  it("paletteHint=high-contrastの場合、accentTextがtext-blackになる", () => {
+  it("paletteHint=high-contrastの場合、accentTextがtext-blackになる（sensory-immersive方向はhigh-contrastをクランプしない）", () => {
     const contents = generateWebsiteRuleBased(cafeBrief);
-    const brandPlan = makeBrandPlan({ visualDirection: { paletteHint: "high-contrast", typographyTone: "editorial-serif", photoTreatment: "framed" } });
+    const brandPlan = makeBrandPlan({
+      brandArchetype: "energetic-casual",
+      visualDirection: { paletteHint: "high-contrast", typographyTone: "editorial-serif", photoTreatment: "framed" },
+    });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("text-black");
     expect(html).not.toContain("text-amber-900");
@@ -190,7 +193,11 @@ describe("WebsiteRendererV2: Hero構図の切り替え", () => {
       const brandPlan = makeBrandPlan({ layoutVariant });
       const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
       expect(html).toContain('id="top"');
-      expect(html).toContain(contents.heroTitle);
+      // heroTitleはstoreName部分だけ独立したspanで囲むため(HeroTitle参照)、
+      // 文字列全体が1つの連続した部分文字列としては現れない。前半・storeName
+      // それぞれが含まれていることを確認する。
+      expect(html).toContain("毎日通いたくなる");
+      expect(html).toContain(cafeBrief.storeName);
     }
   });
 
@@ -269,5 +276,88 @@ describe("WebsiteRendererV2: imageTreatmentの反映", () => {
     const brandPlan = makeBrandPlan({ brandArchetype: "energetic-casual" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={manyPhotoBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("aspect-square");
+  });
+});
+
+describe("WebsiteRendererV2: Hero見出しでstoreNameが独立したspanに分離される", () => {
+  it("heroTitleにstoreNameが含まれる場合、storeName部分だけがfont-sansの別spanになる", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    expect(contents.heroTitle).toContain(cafeBrief.storeName);
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={makeBrandPlan()} />);
+    expect(html).toContain(`<span class="font-sans text-[0.5em] font-medium tracking-tight">${cafeBrief.storeName}</span>`);
+    // ナビの店名リンクとHero見出し内のspanの2箇所だけに収め、他の場所へ店名を撒き散らさない。
+    const occurrences = html.split(cafeBrief.storeName).length - 1;
+    expect(occurrences).toBeGreaterThanOrEqual(2);
+  });
+
+  it("英字のみ・ハイフン入り・日本語+英字混在の店名でも、生成されたheroTitleにstoreNameがそのまま(破壊されず)含まれる", () => {
+    for (const storeName of ["The Wholesome Roastery", "Mugi-no-Ka Coffee Roasters", "麦の香 Coffee Roasters"]) {
+      const brief: StoreBrief = { ...cafeBrief, storeName };
+      const contents = generateWebsiteRuleBased(brief);
+      expect(contents.heroTitle).toContain(storeName);
+    }
+  });
+});
+
+describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのものが変わる", () => {
+  const menuBrief: StoreBrief = {
+    ...cafeBrief,
+    realData: {
+      menuItems: [
+        { name: "ブレンドコーヒー", price: "500円" },
+        { name: "本日の焼き菓子", price: "350円" },
+      ],
+    },
+  };
+
+  // Story側の箇条書き(01/02/03)は方向に関わらず常に出るため、"01"の有無だけでは
+  // Menuのノンブルと区別できない。id="menu"セクションだけを切り出して判定する。
+  function extractMenuSectionHtml(html: string): string {
+    const start = html.indexOf('id="menu"');
+    const end = html.indexOf('id="access"', start);
+    return html.slice(start, end === -1 ? undefined : end);
+  }
+
+  it("japanese-editorial: Menuはノンブル付き1カラムリスト、AccessHoursは中央寄せ誌面風、CTAは中央寄せ+罫線", () => {
+    const contents = generateWebsiteRuleBased(menuBrief);
+    const brandPlan = makeBrandPlan({ brandArchetype: "modern-minimal" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={menuBrief} contents={contents} brandPlan={brandPlan} />);
+    const menuHtml = extractMenuSectionHtml(html);
+    expect(menuHtml).toContain('">01</span>');
+    expect(menuHtml).not.toContain(">Featured<");
+    expect(html).toContain("h-64 w-full grayscale");
+  });
+
+  it("sensory-immersive: Menuは先頭品目をFeaturedカード化、AccessHoursは写真/地図と一体化(70vh)", () => {
+    const contents = generateWebsiteRuleBased(menuBrief);
+    const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={menuBrief} contents={contents} brandPlan={brandPlan} />);
+    const menuHtml = extractMenuSectionHtml(html);
+    expect(menuHtml).toContain(">Featured<");
+    expect(menuHtml).not.toContain('">01</span>');
+    expect(html).toContain("h-[70vh] min-h-[480px]");
+  });
+
+  it("warm-craft: Menuは番号無しの通しリスト、AccessHoursは元のカード構成", () => {
+    const contents = generateWebsiteRuleBased(menuBrief);
+    const brandPlan = makeBrandPlan({ brandArchetype: "artisan" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={menuBrief} contents={contents} brandPlan={brandPlan} />);
+    const menuHtml = extractMenuSectionHtml(html);
+    expect(menuHtml).not.toContain('">01</span>');
+    expect(menuHtml).not.toContain(">Featured<");
+    expect(html).not.toContain("h-[70vh] min-h-[480px]");
+    expect(html).not.toContain("h-64 w-full grayscale");
+  });
+
+  it("CTA(variant=primary)は方向ごとにレイアウトが変わる(sensory-immersiveだけlg:flex-rowの左右分割)", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    const immersiveHtml = renderToStaticMarkup(
+      <WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={makeBrandPlan({ brandArchetype: "energetic-casual" })} />
+    );
+    const warmHtml = renderToStaticMarkup(
+      <WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={makeBrandPlan({ brandArchetype: "artisan" })} />
+    );
+    expect(immersiveHtml).toContain("lg:flex-row lg:items-center lg:justify-between");
+    expect(warmHtml).not.toContain("lg:flex-row lg:items-center lg:justify-between");
   });
 });

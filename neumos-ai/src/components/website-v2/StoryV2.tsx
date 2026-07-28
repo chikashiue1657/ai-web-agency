@@ -1,3 +1,5 @@
+"use client";
+import { useState } from "react";
 import type { WebsiteSection } from "@/lib/types";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { SurfaceClasses } from "@/lib/engine/v2-design-system";
@@ -49,16 +51,21 @@ export function StoryV2({
   surface: SurfaceClasses;
 }) {
   const points = sections.flatMap((s) => splitBulletLines(s.body));
+  // 写真の読み込みに失敗した場合、aspect-ratio分の空面(壊れた画像の痕跡)を
+  // 残さないよう、写真なしのエディトリアル構成(下のisThin分岐)へ丸ごと切り替える。
+  const [photoFailed, setPhotoFailed] = useState(false);
 
-  if (photoUrl) {
+  if (photoUrl && !photoFailed) {
     const textOnRight = hashSide(storeName) === "right";
     return (
       <section id="story" className={`w-full ${theme.paperBg}`}>
         <div className="relative w-full overflow-hidden">
           <SafeImageV2
             src={photoUrl}
-            alt={`${storeName}の世界観`}
+            alt={`${storeName}の写真`}
             className="aspect-[4/3] w-full object-cover sm:aspect-[16/9]"
+            collapseOnFail
+            onFail={() => setPhotoFailed(true)}
           />
         </div>
         <div
@@ -70,7 +77,7 @@ export function StoryV2({
             <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Story</p>
             <RevealV2>
               <p
-                className={`mt-6 max-w-[34ch] break-keep break-words text-xl leading-relaxed sm:max-w-none sm:text-2xl sm:leading-[1.7] ${theme.displayFont} ${theme.bodyText} ${textOnRight ? "lg:ml-auto" : ""}`}
+                className={`mt-6 max-w-[34ch] [overflow-wrap:normal] text-xl leading-relaxed sm:max-w-none sm:text-2xl sm:leading-[1.7] ${theme.displayFont} ${theme.bodyText} ${textOnRight ? "lg:ml-auto" : ""}`}
               >
                 {concept}
               </p>
@@ -99,7 +106,7 @@ export function StoryV2({
         <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Story</p>
         <RevealV2>
           <p
-            className={`mt-6 max-w-[34ch] break-keep break-words text-xl leading-relaxed sm:max-w-none sm:text-2xl sm:leading-[1.7] ${theme.displayFont} ${theme.bodyText}`}
+            className={`mt-6 max-w-[34ch] [overflow-wrap:normal] text-xl leading-relaxed sm:max-w-none sm:text-2xl sm:leading-[1.7] ${theme.displayFont} ${theme.bodyText}`}
           >
             {concept}
           </p>

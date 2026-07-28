@@ -19,8 +19,13 @@ import { useEffect, useRef, useState } from "react";
  * アタッチされておらずイベントを取りこぼす（実際にこの取りこぼしで壊れた
  * 画像アイコンが表示され続ける不具合を確認した）ため、mount時にも
  * `img.complete && naturalWidth===0`を明示的にチェックする。
+ *
+ * `onFail`（任意）は、この写真がHeroの主写真である場合に使う。呼び出し側
+ * （HeroV2）はこれを受けてコンポジション全体をno-photo構成へ切り替える
+ * （このコンポーネント自身の罫線フォールバックだけでは、Heroという
+ * ページで最も目立つ領域に中途半端な空面が残ってしまうため）。
  */
-export function ParallaxImageV2({ src, alt }: { src: string; alt: string }) {
+export function ParallaxImageV2({ src, alt, onFail }: { src: string; alt: string; onFail?: () => void }) {
   const ref = useRef<HTMLImageElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -28,7 +33,9 @@ export function ParallaxImageV2({ src, alt }: { src: string; alt: string }) {
     const el = ref.current;
     if (el && el.complete && el.naturalWidth === 0) {
       setFailed(true);
+      onFail?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -57,6 +64,10 @@ export function ParallaxImageV2({ src, alt }: { src: string; alt: string }) {
   }, []);
 
   if (failed) {
+    // onFailが渡されている場合、呼び出し側（HeroV2）がこの写真の失敗を
+    // 検知してコンポジション全体をno-photo構成へ切り替えるため、ここでは
+    // 何も描画しない（中途半端な罫線面をHeroの目立つ領域に残さない）。
+    if (onFail) return null;
     return (
       <div role="img" aria-label={alt} className="absolute inset-0 flex items-center justify-center bg-stone-100">
         <span className="h-px w-10 bg-stone-300" aria-hidden />
@@ -70,7 +81,10 @@ export function ParallaxImageV2({ src, alt }: { src: string; alt: string }) {
       ref={ref}
       src={src}
       alt={alt}
-      onError={() => setFailed(true)}
+      onError={() => {
+        setFailed(true);
+        onFail?.();
+      }}
       className="absolute inset-0 h-full w-full scale-[1.08] object-cover object-center will-change-transform"
     />
   );

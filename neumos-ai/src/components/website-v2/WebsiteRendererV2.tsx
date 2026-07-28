@@ -5,7 +5,13 @@ import { resolveTheme } from "@/lib/theme";
 import { resolveCafeThemeV2 } from "@/lib/theme-v2";
 import { buildCafeV2Plan, type CafeV2BlockId } from "@/lib/engine/section-plan-v2";
 import { getSectionGapClass } from "@/lib/engine/section-rhythm-v2";
-import { resolveSurfaceClasses, resolveTypographyClasses, resolveV2DesignTokens } from "@/lib/engine/v2-design-system";
+import {
+  deriveArtDirection,
+  deriveHeaderTheme,
+  resolveSurfaceClasses,
+  resolveTypographyClasses,
+  resolveV2DesignTokens,
+} from "@/lib/engine/v2-design-system";
 import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
 import type { BrandPlan } from "@/lib/brand-director/types";
 import { splitBulletLines } from "@/components/website/utils";
@@ -72,12 +78,17 @@ export function WebsiteRendererV2({
     );
   }
 
+  // artDirectionはbrandArchetypeだけから決まるため、写真tier依存の
+  // resolveV2DesignTokens()より前に単独で導出できる（buildCafeV2Plan自体が
+  // artDirectionに応じたセクション構成・写真の前後分割を必要とするため）。
+  const artDirection = brandPlan ? deriveArtDirection(brandPlan.brandArchetype) : "warm-craft";
   const overridePhotoPlan = brandPlan
     ? derivePhotoPlanFromBrandPlan(brandPlan, brief.realData?.photoUrls ?? [])
     : undefined;
   const basePlan = buildCafeV2Plan(brief, contents, {
     photoPlan: overridePhotoPlan,
     layoutVariant: brandPlan?.layoutVariant,
+    artDirection,
   });
   const showEarlyCta = brandPlan?.ctaStrategy.placement === "after-story";
   const plan = showEarlyCta ? { ...basePlan, blocks: insertAfterStory(basePlan.blocks, "ctaEarly") } : basePlan;
@@ -113,10 +124,23 @@ export function WebsiteRendererV2({
     photoStory: (
       <PhotoStoryV2
         storeName={brief.storeName}
-        photoUrls={plan.photoPlan.galleryPhotoUrls}
+        photoUrls={plan.gallerySplit.first}
         theme={theme}
         treatment={tokens.imageTreatment}
         surface={surface}
+      />
+    ),
+    // sensory-immersive方向・写真4枚以上の場合のみ存在する2箇所目のフォト
+    // セクション（"写真→商品情報→写真"のリズムを作る。他の方向・写真が
+    // 少ない場合はplan.blocksに"photoStory2"自体が含まれない）。
+    photoStory2: (
+      <PhotoStoryV2
+        storeName={brief.storeName}
+        photoUrls={plan.gallerySplit.second}
+        theme={theme}
+        treatment={tokens.imageTreatment}
+        surface={surface}
+        sectionId="photo-story-2"
       />
     ),
     story: (
@@ -136,6 +160,7 @@ export function WebsiteRendererV2({
         theme={theme}
         surface={surface}
         sectionHeadingClass={typography.sectionHeading}
+        artDirection={tokens.artDirection}
       />
     ),
     trust: (
@@ -154,9 +179,18 @@ export function WebsiteRendererV2({
         realData={brief.realData}
         theme={theme}
         surface={surface}
+        artDirection={tokens.artDirection}
       />
     ),
-    cta: <CTAV2 cta={contents.cta} contactMethods={contents.contactMethods} theme={theme} ctaStyle={tokens.ctaStyle} />,
+    cta: (
+      <CTAV2
+        cta={contents.cta}
+        contactMethods={contents.contactMethods}
+        theme={theme}
+        ctaStyle={tokens.ctaStyle}
+        artDirection={tokens.artDirection}
+      />
+    ),
     ctaEarly: (
       <CTAV2
         cta={contents.cta}
@@ -164,13 +198,18 @@ export function WebsiteRendererV2({
         theme={theme}
         variant="compact"
         ctaStyle={tokens.ctaStyle}
+        artDirection={tokens.artDirection}
       />
     ),
   };
 
   return (
     <div className={theme.paperBg}>
-      <HeaderV2 storeName={brief.storeName} blocks={plan.blocks} />
+      <HeaderV2
+        storeName={brief.storeName}
+        blocks={plan.blocks}
+        theme={deriveHeaderTheme(tokens.artDirection, tokens.heroComposition)}
+      />
       <main className="pb-24 sm:pb-0">
         {plan.blocks.map((block, i) => {
           const prevBlock = i === 0 ? null : plan.blocks[i - 1];

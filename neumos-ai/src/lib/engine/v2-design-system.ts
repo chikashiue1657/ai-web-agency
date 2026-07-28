@@ -14,9 +14,10 @@
  *  - typographyScale   : 見出しの書体・サイズ（artDirectionごとに固定、一部archetypeで微調整）
  *  - surfaceStyle      : カード・背景の質感（artDirectionごとに固定）
  *  - ctaStyle          : CTAボタンの強さ（urgency由来の値をartDirectionの許容範囲へクランプ）
- *  - colorBalance      : 配色（BrandPlan.visualDirection.paletteHintをそのまま使う。
- *                         色相はブランド固有の情報であり、方向の一貫性を壊さないため
- *                         クランプしない）
+ *  - colorBalance      : 配色（BrandPlan.visualDirection.paletteHint由来の値を
+ *                         artDirectionごとの許容範囲へ決定論的にクランプする。
+ *                         例えばWarm Craft方向でcoolがそのまま通ると「温かい手仕事」
+ *                         という方向性と矛盾するため、方向ごとに変換表を持つ）
  *
  * 同じBrandPlan・同じphotoTierを渡せば必ず同じ結果を返す（Math.random/Date.now等は
  * 一切使わない）。これはBrandPlanが生成時に一度だけ作られて記録へ保存される設計
@@ -137,6 +138,25 @@ function clampCtaStyle(raw: CtaStyle, artDirection: ArtDirection): CtaStyle {
   return allowed[distances.indexOf(Math.min(...distances))];
 }
 
+/**
+ * artDirectionごとのcolorBalance変換表。方向の一貫性を壊す組み合わせ
+ * （例: 「温かい手仕事」を掲げるWarm Craftにcoolを許す等）を決定論的に
+ * 別の値へ変換する。既に方向と調和する値はそのまま通す。
+ *  - Japanese Editorial: neutral/warmを中心。cool/high-contrastはneutralへ。
+ *  - Sensory Immersive: neutral/cool/warm/high-contrastをすべて許可
+ *    （写真主役の方向は配色の幅を狭めすぎない方が世界観を表現しやすいため）。
+ *  - Warm Craft: warm/neutralのみ。cool/high-contrastはwarmへ。
+ */
+const COLOR_BALANCE_CLAMP: Record<ArtDirection, Record<ColorBalance, ColorBalance>> = {
+  "japanese-editorial": { warm: "warm", neutral: "neutral", cool: "neutral", "high-contrast": "neutral" },
+  "sensory-immersive": { warm: "warm", neutral: "neutral", cool: "cool", "high-contrast": "high-contrast" },
+  "warm-craft": { warm: "warm", neutral: "neutral", cool: "warm", "high-contrast": "warm" },
+};
+
+function clampColorBalance(raw: ColorBalance, artDirection: ArtDirection): ColorBalance {
+  return COLOR_BALANCE_CLAMP[artDirection][raw];
+}
+
 export const DEFAULT_TOKENS: V2DesignTokens = {
   artDirection: "warm-craft",
   heroComposition: "overlap-editorial",
@@ -161,7 +181,7 @@ export function resolveV2DesignTokens(brandPlan: BrandPlan | undefined, photoTie
     typographyScale: resolveTypographyScale(artDirection, brandPlan.brandArchetype),
     surfaceStyle: SURFACE_STYLE_BY_DIRECTION[artDirection],
     ctaStyle: clampCtaStyle(CTA_STYLE_BY_URGENCY[brandPlan.ctaStrategy.urgency], artDirection),
-    colorBalance: brandPlan.visualDirection.paletteHint,
+    colorBalance: clampColorBalance(brandPlan.visualDirection.paletteHint, artDirection),
   };
 
   // 写真が無い場合、split/overlap/full-bleedのような写真前提の構図は成立しないため、
@@ -222,4 +242,25 @@ const TYPOGRAPHY_CLASSES: Record<TypographyScale, TypographyClasses> = {
 
 export function resolveTypographyClasses(scale: TypographyScale): TypographyClasses {
   return TYPOGRAPHY_CLASSES[scale];
+}
+
+/**
+ * ヘッダー（スクロール前・Heroの上に重なっている間）を明背景/暗背景の
+ * どちらの前提で描くかを決定論的に決める。Heroの実際のピクセルを解析することは
+ * できないため、「そのartDirection×heroCompositionなら、Hero最上部は
+ * 写真で覆われているか・paperBg等の明るい色面か」という構造的な事実から決める。
+ *  - "light": Hero最上部が写真（暗さが不定）で覆われている想定 → 白文字を使う
+ *  - "dark" : Hero最上部が明るい色面（paperBg等）の想定 → 濃色文字を使う
+ * どちらの場合もHeaderV2側でさらに背景に半透明スクリムを敷き、写真の明暗に
+ * 関わらずコントラストを確保する（テキスト色の分岐だけに頼らない）。
+ */
+export type HeaderTheme = "light" | "dark";
+
+export function deriveHeaderTheme(artDirection: ArtDirection, composition: HeroComposition): HeaderTheme {
+  if (composition === "full-bleed-center") return "light";
+  if (composition === "overlap-editorial") return "dark";
+  if (composition === "split-frame") return "dark";
+  // typographic（写真0枚）: no-photo背景の明暗はartDirectionごとに固定なので、
+  // その背景色に合わせる（sensory-immersiveだけ暗色背景）。
+  return artDirection === "sensory-immersive" ? "light" : "dark";
 }

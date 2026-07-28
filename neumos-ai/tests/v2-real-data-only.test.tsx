@@ -53,22 +53,29 @@ describe("v2: Trustセクションは実データが無ければ何も表示し�
     expect(html).not.toContain("★");
   });
 
-  it("ratingのみ存在する場合、★の数字だけ表示しレビュー件数文言は出ない", () => {
+  it("ratingのみ存在する場合、Google評価ブロックは表示しない（件数の裏付けが無いため）", () => {
     const brief: StoreBrief = { ...cafeBrief, realData: { googleRating: 4.8 } };
+    const contents = generateWebsiteRuleBased(brief);
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={brief} contents={contents} />);
+    expect(html).not.toContain('id="trust"');
+    expect(html).not.toContain("★");
+  });
+
+  it("reviewCountのみ存在する場合、Google評価ブロックは表示しない（評価値そのものが無いため）", () => {
+    const brief: StoreBrief = { ...cafeBrief, realData: { googleReviewCount: 52 } };
+    const contents = generateWebsiteRuleBased(brief);
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={brief} contents={contents} />);
+    expect(html).not.toContain('id="trust"');
+    expect(html).not.toContain("件のレビューより");
+  });
+
+  it("ratingとreviewCountの両方が揃った場合だけGoogle評価ブロックを表示する", () => {
+    const brief: StoreBrief = { ...cafeBrief, realData: { googleRating: 4.8, googleReviewCount: 33 } };
     const contents = generateWebsiteRuleBased(brief);
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={brief} contents={contents} />);
     expect(html).toContain('id="trust"');
     expect(html).toContain("★4.8");
-    expect(html).not.toContain("件のレビューより");
-  });
-
-  it("reviewCountのみ存在する場合、件数だけ表示し★の数字は出ない", () => {
-    const brief: StoreBrief = { ...cafeBrief, realData: { googleReviewCount: 52 } };
-    const contents = generateWebsiteRuleBased(brief);
-    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={brief} contents={contents} />);
-    expect(html).toContain('id="trust"');
-    expect(html).toContain("52件のレビューより");
-    expect(html).not.toContain("★");
+    expect(html).toContain("33件のレビューより");
   });
 
   it("instagramUrlのみ存在する場合、Google評価が無くてもTrustセクションが代替信頼要素として表示される", () => {

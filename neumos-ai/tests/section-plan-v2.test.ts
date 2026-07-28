@@ -63,12 +63,27 @@ describe("buildCafeV2Plan", () => {
     expect(plan.blocks).toContain("menu");
   });
 
-  it("googleRatingがあれば trust を表示する", () => {
-    const plan = buildCafeV2Plan(makeBrief({ realData: { googleRating: 4.6 } }), makeContents());
+  it("googleRatingとgoogleReviewCountが両方揃えば trust を表示する", () => {
+    const plan = buildCafeV2Plan(
+      makeBrief({ realData: { googleRating: 4.6, googleReviewCount: 12 } }),
+      makeContents()
+    );
     expect(plan.blocks).toContain("trust");
   });
 
-  it("googleRatingもreviewCountも無ければ trust を表示しない", () => {
+  it("googleRatingだけ・googleReviewCountだけでは trust を表示しない（片方だけの評価は出さない）", () => {
+    const ratingOnly = buildCafeV2Plan(makeBrief({ realData: { googleRating: 4.6 } }), makeContents());
+    expect(ratingOnly.blocks).not.toContain("trust");
+    const countOnly = buildCafeV2Plan(makeBrief({ realData: { googleReviewCount: 12 } }), makeContents());
+    expect(countOnly.blocks).not.toContain("trust");
+  });
+
+  it("instagramUrlがあれば trust を表示する（Google評価が無くても可）", () => {
+    const plan = buildCafeV2Plan(makeBrief({ realData: { instagramUrl: "https://instagram.com/x" } }), makeContents());
+    expect(plan.blocks).toContain("trust");
+  });
+
+  it("googleRating/googleReviewCount/instagramUrlのいずれも無ければ trust を表示しない", () => {
     const plan = buildCafeV2Plan(makeBrief(), makeContents());
     expect(plan.blocks).not.toContain("trust");
   });
@@ -107,5 +122,54 @@ describe("buildCafeV2Plan", () => {
     expect(plan.blocks).toContain("story");
     expect(plan.blocks).toContain("accessHours");
     expect(plan.blocks.at(-1)).toBe("cta");
+  });
+
+  describe("gallerySplit / photoStory2 (sensory-immersiveの写真→商品情報→写真リズム)", () => {
+    const sixPhotos = [
+      "https://example.com/1.jpg",
+      "https://example.com/2.jpg",
+      "https://example.com/3.jpg",
+      "https://example.com/4.jpg",
+      "https://example.com/5.jpg",
+      "https://example.com/6.jpg",
+    ];
+
+    it("sensory-immersiveでGallery用写真が4枚以上ならphotoStory2を挿入し、前半/後半へ分割する", () => {
+      const plan = buildCafeV2Plan(makeBrief({ realData: { photoUrls: sixPhotos } }), makeContents(), {
+        artDirection: "sensory-immersive",
+      });
+      // hero:1枚 + story:1枚 を除いた残り4枚がgallery用(sixPhotos[2..5])。
+      expect(plan.photoPlan.galleryPhotoUrls).toHaveLength(4);
+      expect(plan.blocks).toContain("photoStory");
+      expect(plan.blocks).toContain("photoStory2");
+      expect(plan.gallerySplit.first.length).toBeGreaterThan(0);
+      expect(plan.gallerySplit.second.length).toBeGreaterThan(0);
+      expect([...plan.gallerySplit.first, ...plan.gallerySplit.second]).toEqual(plan.photoPlan.galleryPhotoUrls);
+      // photoStory2はphotoStoryの後(menuを挟んだ位置)に来る。
+      expect(plan.blocks.indexOf("photoStory2")).toBeGreaterThan(plan.blocks.indexOf("photoStory"));
+    });
+
+    it("warm-craft/japanese-editorialでは同じ写真枚数でもphotoStory2を挿入しない(分割リズムはsensory-immersive限定)", () => {
+      const warmPlan = buildCafeV2Plan(makeBrief({ realData: { photoUrls: sixPhotos } }), makeContents(), {
+        artDirection: "warm-craft",
+      });
+      expect(warmPlan.blocks).not.toContain("photoStory2");
+      expect(warmPlan.gallerySplit.second).toEqual([]);
+
+      const editorialPlan = buildCafeV2Plan(makeBrief({ realData: { photoUrls: sixPhotos } }), makeContents(), {
+        artDirection: "japanese-editorial",
+      });
+      expect(editorialPlan.blocks).not.toContain("photoStory2");
+      expect(editorialPlan.gallerySplit.second).toEqual([]);
+    });
+
+    it("sensory-immersiveでもGallery用写真が3枚以下ならphotoStory2を挿入しない", () => {
+      const threePhotos = sixPhotos.slice(0, 3); // hero+story+gallery1枚 → gallery用は1枚のみ
+      const plan = buildCafeV2Plan(makeBrief({ realData: { photoUrls: threePhotos } }), makeContents(), {
+        artDirection: "sensory-immersive",
+      });
+      expect(plan.blocks).not.toContain("photoStory2");
+      expect(plan.gallerySplit.second).toEqual([]);
+    });
   });
 });

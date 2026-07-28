@@ -6,11 +6,15 @@ import { RevealV2 } from "./RevealV2";
  * 信頼材料を見せるセクション。
  *
  * 表示するのは実データがある項目だけで、固定値・ダミー値は一切使わない。
- *  - Google評価(rating/reviewCount)のどちらかがあれば、その数字を見せる。
+ *  - Google評価は`googleRating`と`googleReviewCount`の**両方**が実データとして
+ *    存在する場合だけ表示する。片方だけでは「★4.6」のような数字だけが独り歩きし、
+ *    件数の裏付けが無い評価に見えてしまう（逆に件数だけでは何の評価か分からない）
+ *    ため、両方揃って初めて意味のある信頼材料になると判断した。
  *  - レビュー本文(reviews)があれば証言として添える。
- *  - Google評価が無くInstagramのURLだけがある場合は、代わりにSNSへの
- *    導線を信頼要素として見せる（フォロワー数などの数字は取得できないため
- *    表示しない。あくまで「実際に運用しているSNSがある」という事実だけを示す）。
+ *  - Google評価の条件を満たさずInstagramのURLだけがある場合は、Google評価とは
+ *    独立した「SNS導線」として見せる（見出しは"Follow"とし、"Trust"や"評価"を
+ *    連想させる文言は使わない。フォロワー数などの数字は取得できないため表示せず、
+ *    あくまで「実際に運用しているSNSがある」という事実だけを示す）。
  *  - どちらも無ければセクション自体を描画しない（section-plan-v2側でも
  *    ガードしているが、このコンポーネント単体でも安全側に倒す）。
  */
@@ -27,7 +31,7 @@ export function TrustV2({
   instagramUrl?: string;
   theme: CafeThemeV2;
 }) {
-  const hasRating = typeof googleRating === "number" || !!googleReviewCount;
+  const hasRating = typeof googleRating === "number" && typeof googleReviewCount === "number";
   const hasInstagram = !!instagramUrl;
   if (!hasRating && !hasInstagram) return null;
   const hasReviews = (reviews?.length ?? 0) > 0;

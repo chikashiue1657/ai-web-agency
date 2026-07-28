@@ -1,3 +1,5 @@
+"use client";
+import { useState } from "react";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { ArtDirection, HeroComposition } from "@/lib/engine/v2-design-system";
 import { ParallaxImageV2 } from "./ParallaxImageV2";
@@ -20,12 +22,79 @@ interface HeroV2Props {
   artDirection: ArtDirection;
 }
 
-/** Hero（写真あり・全面/色面のいずれも白文字）の入口CTA。ページ末尾のCTAセクションとは別。 */
+/**
+ * heroTitle文字列からstoreNameの箇所を見つけ、別スタイルで独立させて
+ * 表示するための分割。`heroTitle`は"毎日通いたくなる{storeName}"のように
+ * 生成エンジン側でstoreNameを地の文へ直接連結した1本の文字列であり
+ * （v1と共有するコピー生成ロジックのため、この結合自体は変更しない）、
+ * そのまま1つの見出しサイズで描画すると、英字・ハイフン入りの店名が
+ * 日本語の文と同じ巨大さになり、狭い画面で不自然に折り返る。
+ * storeNameが文字列中に見つかった場合だけ前後を分割し、storeName部分は
+ * 別コンポーネント（HeroTitle）で相対的に小さい独立したスタイルを当てる。
+ * 見つからない場合（他業種のコピーパターン・truncateによる欠落等）は
+ * 分割せずheroTitleをそのまま1つのブロックとして描画する（無理に分割しない）。
+ */
+function splitHeroTitle(
+  heroTitle: string,
+  storeName: string
+): { before: string; name: string | null; after: string } {
+  if (!storeName) return { before: heroTitle, name: null, after: "" };
+  const idx = heroTitle.indexOf(storeName);
+  if (idx === -1) return { before: heroTitle, name: null, after: "" };
+  return { before: heroTitle.slice(0, idx), name: storeName, after: heroTitle.slice(idx + storeName.length) };
+}
+
+/**
+ * Hero見出し。英単語・ハイフン入り店名が途中で破壊されないよう、
+ * `[overflow-wrap:normal]`（欧文は単語境界・ハイフンでしか折り返さない）を
+ * 全構図・全breakpointで統一して使う（以前は`break-words`と併用しており、
+ * コンテナに収まらない場合に英単語の途中で強制的に折り返すことがあった
+ * ＝実際に発生した不具合）。
+ * `word-break: keep-all`（`break-keep`）は意図的に付けない。keep-allは
+ * 「CJK文字どうしの間の改行を禁止する」プロパティであり、スペースを含まない
+ * 日本語の見出し文（例:「毎日通いたくなる」）に適用すると改行位置が
+ * 一切無くなり、見出し全体がコンテナ幅を超えて隣接する写真へめり込む
+ * ／隠れるという不具合を実際に引き起こした。デフォルトの`word-break:normal`
+ * はCJK文字間の改行を許可しつつ、`overflow-wrap:normal`と組み合わせれば
+ * 欧文単語だけは単語境界・ハイフン以外で折り返さないため、これで両立できる。
+ * storeNameが検出できた場合は`text-[0.5em]`の相対サイズでブランド名らしい
+ * 独立した大きさへ縮小する（ナビの店名表示と過剰に重複しないよう、ここでは
+ * 別要素を新設せず、既存のheroTitle内で視覚的階層だけを分ける）。
+ */
+function HeroTitle({
+  heroTitle,
+  storeName,
+  heroTitleClass,
+  className = "",
+}: {
+  heroTitle: string;
+  storeName: string;
+  heroTitleClass: string;
+  className?: string;
+}) {
+  const { before, name, after } = splitHeroTitle(heroTitle, storeName);
+  return (
+    <h1
+      className={`max-w-[16ch] [overflow-wrap:normal] [text-wrap:balance] ${heroTitleClass} ${className}`}
+    >
+      {before}
+      {name && <span className="font-sans text-[0.5em] font-medium tracking-tight">{name}</span>}
+      {after}
+    </h1>
+  );
+}
+
+/**
+ * Hero（写真あり・全面/色面のいずれも白文字）の入口CTA。ページ末尾のCTAセクションとは別。
+ * `scroll-mb-28`: キーボード操作でこのリンクへフォーカスが移った際、ブラウザが
+ * 自動スクロールする位置がモバイル下部固定CTAバーの真下にならないための
+ * 余白（sm以上は固定バー自体が無いため既定に戻す）。
+ */
 function HeroEntryLink({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: string }) {
   return (
     <a
       href={ctaHref}
-      className="mt-8 inline-flex w-fit items-center gap-2 border-b border-white/70 pb-1 text-sm font-medium text-white transition hover:gap-3 hover:border-white sm:text-base"
+      className="mt-8 inline-flex w-fit scroll-mb-28 items-center gap-2 border-b border-white/70 pb-1 text-sm font-medium text-white transition hover:gap-3 hover:border-white sm:scroll-mb-0 sm:text-base"
     >
       {ctaLabel}
       <span aria-hidden>→</span>
@@ -84,22 +153,24 @@ function FullBleedCenterHero({
   ctaLabel,
   ctaHref,
   heroTitleClass,
-}: HeroV2Props & { photoUrl: string }) {
+  onHeroPhotoFail,
+}: HeroV2Props & { photoUrl: string; onHeroPhotoFail: () => void }) {
   return (
     <section id="top" className="relative h-dvh min-h-[640px] w-full overflow-hidden bg-stone-950">
-      <ParallaxImageV2 src={photoUrl} alt={`${storeName}の店内の様子`} />
+      <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
 
-      <div className="relative flex h-full w-full flex-col justify-end px-5 pb-8 sm:px-10 sm:pb-12 lg:px-16 lg:pb-16">
+      {/*
+        pb-28: モバイルの下部固定CTAバー(概ね64〜90px、safe-area込み)にHero自身の
+        CTA・本文が隠れないための余白。sm以上は固定CTAバー自体が出ないため
+        通常の余白に戻す。
+      */}
+      <div className="relative flex h-full w-full flex-col justify-end px-5 pb-28 sm:px-10 sm:pb-12 lg:px-16 lg:pb-16">
         <div className="w-fit max-w-[92vw] rounded-sm bg-stone-950/75 px-5 py-6 backdrop-blur-sm sm:max-w-lg sm:px-8 sm:py-8">
           <span className="mb-4 block w-fit text-[11px] font-medium tracking-wide text-white/80 sm:text-xs">
             {area} ・ {industry}
           </span>
-          <h1
-            className={`max-w-[13ch] break-keep break-words text-white [text-wrap:balance] sm:max-w-2xl sm:[overflow-wrap:normal] ${heroTitleClass}`}
-          >
-            {heroTitle}
-          </h1>
-          <p className="mt-5 max-w-[26ch] break-keep break-words text-sm leading-relaxed text-white/85 sm:max-w-md sm:text-base sm:[overflow-wrap:normal]">
+          <HeroTitle heroTitle={heroTitle} storeName={storeName} heroTitleClass={heroTitleClass} className="text-white [text-wrap:balance]" />
+          <p className="mt-5 max-w-[26ch] [overflow-wrap:normal] text-sm leading-relaxed text-white/85 sm:max-w-md sm:text-base">
             {heroSubtitle}
           </p>
           <HeroEntryLink ctaLabel={ctaLabel} ctaHref={ctaHref} />
@@ -132,18 +203,20 @@ function SplitFrameHero({
   ctaHref,
   theme,
   heroTitleClass,
-}: HeroV2Props & { photoUrl: string }) {
+  onHeroPhotoFail,
+}: HeroV2Props & { photoUrl: string; onHeroPhotoFail: () => void }) {
   return (
     <section id="top" className={`w-full ${theme.paperBg}`}>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,44%)_1fr]">
         <div className="order-2 flex flex-col justify-center px-5 py-14 sm:px-10 sm:py-20 lg:order-1 lg:px-16">
           <EyebrowLabel area={area} industry={industry} tone="dark" theme={theme} />
-          <h1
-            className={`max-w-[15ch] break-keep break-words [text-wrap:balance] sm:max-w-lg ${heroTitleClass} ${theme.displayFont} ${theme.bodyText}`}
-          >
-            {heroTitle}
-          </h1>
-          <p className={`mt-5 max-w-[34ch] break-keep break-words text-sm leading-relaxed sm:max-w-sm sm:text-base ${theme.bodyTextSoft}`}>
+          <HeroTitle
+            heroTitle={heroTitle}
+            storeName={storeName}
+            heroTitleClass={heroTitleClass}
+            className={`max-w-[15ch] sm:max-w-lg ${theme.displayFont} ${theme.bodyText}`}
+          />
+          <p className={`mt-5 max-w-[34ch] [overflow-wrap:normal] text-sm leading-relaxed sm:max-w-sm sm:text-base ${theme.bodyTextSoft}`}>
             {heroSubtitle}
           </p>
           <HeroEntryLinkOnLight ctaLabel={ctaLabel} ctaHref={ctaHref} theme={theme} />
@@ -151,7 +224,7 @@ function SplitFrameHero({
 
         <div className="relative order-1 aspect-[4/3] w-full overflow-hidden sm:aspect-[16/10] lg:order-2 lg:aspect-auto lg:min-h-[560px]">
           <div className="absolute inset-3 overflow-hidden sm:inset-6 lg:inset-8">
-            <ParallaxImageV2 src={photoUrl} alt={`${storeName}の店内の様子`} />
+            <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
           </div>
         </div>
       </div>
@@ -179,24 +252,26 @@ function OverlapEditorialHero({
   ctaHref,
   theme,
   heroTitleClass,
-}: HeroV2Props & { photoUrl: string }) {
+  onHeroPhotoFail,
+}: HeroV2Props & { photoUrl: string; onHeroPhotoFail: () => void }) {
   return (
     <section id="top" className={`w-full ${theme.paperBg} px-4 pb-10 pt-8 sm:px-8 sm:pb-14 sm:pt-14 lg:px-12 lg:pb-20`}>
       <div className="relative mx-auto max-w-6xl">
         <div className="relative aspect-[4/5] w-full overflow-hidden sm:aspect-[16/9] lg:aspect-[21/9]">
-          <ParallaxImageV2 src={photoUrl} alt={`${storeName}の店内の様子`} />
+          <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
         </div>
 
         <div
           className={`relative z-10 mx-4 -mt-16 max-w-md ${theme.paperRaisedBg} px-6 py-8 shadow-sm sm:mx-10 sm:-mt-24 sm:px-10 sm:py-10 lg:mx-16 lg:-mt-28 lg:max-w-xl lg:px-12 lg:py-12`}
         >
           <EyebrowLabel area={area} industry={industry} tone="dark" theme={theme} />
-          <h1
-            className={`max-w-[14ch] break-keep break-words [text-wrap:balance] ${heroTitleClass} ${theme.displayFont} ${theme.bodyText}`}
-          >
-            {heroTitle}
-          </h1>
-          <p className={`mt-4 max-w-[30ch] break-keep break-words text-sm leading-relaxed ${theme.bodyTextSoft}`}>
+          <HeroTitle
+            heroTitle={heroTitle}
+            storeName={storeName}
+            heroTitleClass={heroTitleClass}
+            className={`max-w-[14ch] ${theme.displayFont} ${theme.bodyText}`}
+          />
+          <p className={`mt-4 max-w-[30ch] [overflow-wrap:normal] text-sm leading-relaxed ${theme.bodyTextSoft}`}>
             {heroSubtitle}
           </p>
           <HeroEntryLinkOnLight ctaLabel={ctaLabel} ctaHref={ctaHref} theme={theme} />
@@ -230,12 +305,13 @@ function JapaneseEditorialTypographicHero({
         <p className="text-xs font-medium tracking-[0.3em] text-stone-500">
           {String(1).padStart(2, "0")} — {area} / {industry}
         </p>
-        <h1
-          className={`mt-8 max-w-[14ch] break-keep break-words border-t border-stone-300 pt-8 [text-wrap:balance] ${heroTitleClass} ${theme.displayFont} ${theme.bodyText}`}
-        >
-          {heroTitle}
-        </h1>
-        <p className={`mt-6 max-w-[38ch] break-keep break-words text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
+        <HeroTitle
+          heroTitle={heroTitle}
+          storeName={storeName}
+          heroTitleClass={heroTitleClass}
+          className={`mt-8 max-w-[14ch] border-t border-stone-300 pt-8 ${theme.displayFont} ${theme.bodyText}`}
+        />
+        <p className={`mt-6 max-w-[38ch] [overflow-wrap:normal] text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
           {heroSubtitle}
         </p>
         <HeroEntryLinkOnLight ctaLabel={ctaLabel} ctaHref={ctaHref} theme={theme} />
@@ -270,14 +346,16 @@ function SensoryImmersiveTypographicHero({
         aria-hidden
         className="pointer-events-none absolute -right-10 top-1/4 h-64 w-64 rotate-45 bg-white/5"
       />
-      <div className="relative flex w-full flex-col px-5 pb-14 sm:px-10 sm:pb-20 lg:px-16 lg:pb-24">
+      {/* pb-28: モバイル下部固定CTAバーにHero自身のCTA・本文が隠れないための余白。 */}
+      <div className="relative flex w-full flex-col px-5 pb-28 sm:px-10 sm:pb-20 lg:px-16 lg:pb-24">
         <EyebrowLabel area={area} industry={industry} tone="light" theme={theme} />
-        <h1
-          className={`max-w-[13ch] break-keep break-words text-white [text-wrap:balance] sm:max-w-2xl sm:[overflow-wrap:normal] ${heroTitleClass}`}
-        >
-          {heroTitle}
-        </h1>
-        <p className="mt-5 max-w-[26ch] break-keep break-words text-sm leading-relaxed text-white/85 sm:max-w-md sm:text-base sm:[overflow-wrap:normal]">
+        <HeroTitle
+          heroTitle={heroTitle}
+          storeName={storeName}
+          heroTitleClass={heroTitleClass}
+          className="max-w-[13ch] text-white sm:max-w-2xl"
+        />
+        <p className="mt-5 max-w-[26ch] [overflow-wrap:normal] text-sm leading-relaxed text-white/85 sm:max-w-md sm:text-base">
           {heroSubtitle}
         </p>
         <HeroEntryLink ctaLabel={ctaLabel} ctaHref={ctaHref} />
@@ -310,12 +388,13 @@ function WarmCraftTypographicHero({
           className="absolute right-6 top-10 h-16 w-16 -rotate-6 rounded-full border-2 border-dashed border-stone-300 sm:right-10 sm:top-16 sm:h-24 sm:w-24"
         />
         <EyebrowLabel area={area} industry={industry} tone="dark" theme={theme} />
-        <h1
-          className={`max-w-[13ch] break-keep break-words [text-wrap:balance] ${heroTitleClass} ${theme.displayFont} ${theme.bodyText}`}
-        >
-          {heroTitle}
-        </h1>
-        <p className={`mt-5 max-w-[32ch] break-keep break-words text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
+        <HeroTitle
+          heroTitle={heroTitle}
+          storeName={storeName}
+          heroTitleClass={heroTitleClass}
+          className={`max-w-[13ch] ${theme.displayFont} ${theme.bodyText}`}
+        />
+        <p className={`mt-5 max-w-[32ch] [overflow-wrap:normal] text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
           {heroSubtitle}
         </p>
         <HeroEntryLinkOnLight ctaLabel={ctaLabel} ctaHref={ctaHref} theme={theme} />
@@ -339,18 +418,26 @@ function TypographicHero(props: NoPhotoHeroProps & { artDirection: ArtDirection 
  * （写真が無ければ呼び出し側が常に"typographic"を渡すため、このコンポーネント
  * 自身も念のため`photoUrl`の有無を最終防波堤としてチェックする）。
  * 「制作会社側の説明」は一切書かず、店の空気感・見出しコピー・単一のCTAのみを見せる。
+ *
+ * Hero写真の読み込みに失敗した場合、ページで最も目立つこの領域に中途半端な
+ * 空面を残さないよう、`photoFailed`状態でno-photo構成（TypographicHero）へ
+ * クライアント側で丸ごと切り替える。この判定はランタイムの読み込み結果に
+ * 依存するため、このコンポーネント自体をクライアントコンポーネントにしている
+ * （それ以外のロジックはサーバーコンポーネントのままでも成立する軽量な分岐のみ）。
  */
 export function HeroV2(props: HeroV2Props) {
+  const [photoFailed, setPhotoFailed] = useState(false);
   const { photoUrl, composition } = props;
 
-  if (!photoUrl || composition === "typographic") {
+  if (!photoUrl || composition === "typographic" || photoFailed) {
     return <TypographicHero {...props} />;
   }
+  const onHeroPhotoFail = () => setPhotoFailed(true);
   if (composition === "split-frame") {
-    return <SplitFrameHero {...props} photoUrl={photoUrl} />;
+    return <SplitFrameHero {...props} photoUrl={photoUrl} onHeroPhotoFail={onHeroPhotoFail} />;
   }
   if (composition === "overlap-editorial") {
-    return <OverlapEditorialHero {...props} photoUrl={photoUrl} />;
+    return <OverlapEditorialHero {...props} photoUrl={photoUrl} onHeroPhotoFail={onHeroPhotoFail} />;
   }
-  return <FullBleedCenterHero {...props} photoUrl={photoUrl} />;
+  return <FullBleedCenterHero {...props} photoUrl={photoUrl} onHeroPhotoFail={onHeroPhotoFail} />;
 }

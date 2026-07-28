@@ -18,10 +18,13 @@ export function SignatureV2({
 }) {
   if (items.length === 0) return null;
   const [lead, ...rest] = items;
+  // 補足項目(rest)が無い場合は文字量が少なく、既定の縦padding(py-24/32)だと
+  // 内容量に対して余白ばかりが目立つため、その分だけ詰める。
+  const verticalPadding = rest.length > 0 ? "py-24 sm:py-32" : "py-16 sm:py-20";
 
   return (
     <section id="signature" className={`${theme.paperRaisedBg}`}>
-      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-5 py-24 sm:grid-cols-[auto_1fr] sm:gap-10 sm:px-10 sm:py-32 lg:px-16">
+      <div className={`mx-auto grid max-w-5xl grid-cols-1 gap-6 px-5 sm:grid-cols-[auto_1fr] sm:gap-10 sm:px-10 lg:px-16 ${verticalPadding}`}>
         <RevealV2 variant="fade">
           <p className={`text-6xl leading-none sm:text-8xl ${theme.displayFont} ${theme.accentTextSoft}`}>“</p>
         </RevealV2>
@@ -29,7 +32,7 @@ export function SignatureV2({
           <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Signature</p>
           <RevealV2>
             <p
-              className={`mt-4 max-w-[22ch] break-keep break-words text-3xl leading-[1.15] sm:text-5xl sm:leading-[1.1] ${theme.displayFont} ${theme.bodyText}`}
+              className={`mt-4 max-w-[22ch] [overflow-wrap:normal] text-3xl leading-[1.15] sm:text-5xl sm:leading-[1.1] ${theme.displayFont} ${theme.bodyText}`}
             >
               {lead}
             </p>

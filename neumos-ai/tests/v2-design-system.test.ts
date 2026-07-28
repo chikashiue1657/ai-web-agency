@@ -3,6 +3,7 @@ import type { BrandArchetype, BrandPlan } from "@/lib/brand-director/types";
 import {
   DEFAULT_TOKENS,
   deriveArtDirection,
+  deriveHeaderTheme,
   resolveSurfaceClasses,
   resolveTypographyClasses,
   resolveV2DesignTokens,
@@ -140,12 +141,40 @@ describe("resolveV2DesignTokens", () => {
     ).toBe("text-link");
   });
 
-  it("colorBalanceはvisualDirection.paletteHintをそのまま反映する(方向によってクランプしない)", () => {
-    const tokens = resolveV2DesignTokens(
-      makeBrandPlan({ brandArchetype: "artisan", visualDirection: { paletteHint: "cool", typographyTone: "bold-display", photoTreatment: "mixed" } }),
-      "many"
-    );
-    expect(tokens.colorBalance).toBe("cool");
+  it("colorBalanceはartDirectionごとの許容範囲へ決定論的にクランプされる", () => {
+    // warm-craftはwarm/neutralのみ許可。cool/high-contrastはwarmへ変換される。
+    expect(
+      resolveV2DesignTokens(
+        makeBrandPlan({ brandArchetype: "artisan", visualDirection: { paletteHint: "cool", typographyTone: "bold-display", photoTreatment: "mixed" } }),
+        "many"
+      ).colorBalance
+    ).toBe("warm");
+    expect(
+      resolveV2DesignTokens(
+        makeBrandPlan({ brandArchetype: "warm-hospitality", visualDirection: { paletteHint: "high-contrast", typographyTone: "bold-display", photoTreatment: "mixed" } }),
+        "many"
+      ).colorBalance
+    ).toBe("warm");
+    // japanese-editorialはneutral/warmのみ許可。coolはneutralへ変換される。
+    expect(
+      resolveV2DesignTokens(
+        makeBrandPlan({ brandArchetype: "modern-minimal", visualDirection: { paletteHint: "cool", typographyTone: "bold-display", photoTreatment: "mixed" } }),
+        "many"
+      ).colorBalance
+    ).toBe("neutral");
+    // sensory-immersiveは4種すべて許可（クランプしない）。
+    expect(
+      resolveV2DesignTokens(
+        makeBrandPlan({ brandArchetype: "luxury-quiet", visualDirection: { paletteHint: "cool", typographyTone: "bold-display", photoTreatment: "mixed" } }),
+        "many"
+      ).colorBalance
+    ).toBe("cool");
+    expect(
+      resolveV2DesignTokens(
+        makeBrandPlan({ brandArchetype: "energetic-casual", visualDirection: { paletteHint: "high-contrast", typographyTone: "bold-display", photoTreatment: "mixed" } }),
+        "many"
+      ).colorBalance
+    ).toBe("high-contrast");
   });
 
   it("同じ入力なら常に同じ結果を返す（決定論的・再描画で安定する前提）", () => {
@@ -153,6 +182,23 @@ describe("resolveV2DesignTokens", () => {
     const first = resolveV2DesignTokens(plan, "many");
     const second = resolveV2DesignTokens(plan, "many");
     expect(first).toEqual(second);
+  });
+});
+
+describe("deriveHeaderTheme", () => {
+  it("写真ありの構図はcomposition基準で決まる(artDirectionに関わらず)", () => {
+    expect(deriveHeaderTheme("warm-craft", "full-bleed-center")).toBe("light");
+    expect(deriveHeaderTheme("sensory-immersive", "full-bleed-center")).toBe("light");
+    expect(deriveHeaderTheme("warm-craft", "overlap-editorial")).toBe("dark");
+    expect(deriveHeaderTheme("sensory-immersive", "overlap-editorial")).toBe("dark");
+    expect(deriveHeaderTheme("warm-craft", "split-frame")).toBe("dark");
+    expect(deriveHeaderTheme("japanese-editorial", "split-frame")).toBe("dark");
+  });
+
+  it("写真0枚(typographic)はartDirectionの背景色に合わせる(sensory-immersiveだけ暗色背景→light)", () => {
+    expect(deriveHeaderTheme("sensory-immersive", "typographic")).toBe("light");
+    expect(deriveHeaderTheme("warm-craft", "typographic")).toBe("dark");
+    expect(deriveHeaderTheme("japanese-editorial", "typographic")).toBe("dark");
   });
 });
 

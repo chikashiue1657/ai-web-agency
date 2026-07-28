@@ -78,7 +78,9 @@ describe("resolveBrandPlanForV2", () => {
     const brandPlan = await resolveBrandPlanForV2(cafeBrief, "req-2b");
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("font-serif");
-    expect(html).not.toContain("font-sans");
+    // Hero見出し内のstoreName部分だけは、ブランド名として独立させるため
+    // 常にfont-sansの小さめスパンで囲む（他は引き続きfont-serif）。
+    expect(html).toContain("font-sans");
     expect(html).toContain("text-amber-900");
   });
 

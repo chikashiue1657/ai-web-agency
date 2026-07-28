@@ -73,6 +73,13 @@ export interface StoreRealData {
    * おき、値が来た場合にのみ表示する（無ければ捏造せず非表示にする設計は他項目と同じ）。
    */
   reviews?: StoreReview[];
+  /**
+   * 実際のメニュー品目（店舗が入力・確認した実データの場合のみ）。
+   * 現時点ではMVP側にこの情報を渡す入力経路がまだ無いため、値が来た場合にのみ
+   * 商品名・価格として表示する（無ければMenuV2は生成コピーによる説明のみに留め、
+   * 架空の商品名・価格は一切表示しない）。
+   */
+  menuItems?: RealMenuItem[];
 }
 
 /** Google レビュー1件（本文のみ必須。評価者名・個別評価は取得できた場合のみ）。 */
@@ -80,6 +87,18 @@ export interface StoreReview {
   text: string;
   authorName?: string;
   rating?: number;
+}
+
+/**
+ * 実際のメニュー品目1件（店舗が入力・確認した実データの場合のみ渡される）。
+ * `brief.offer`（AIが文章生成に使う自由記述の「売り」の説明）とは別物であり、
+ * `offer`からメニュー品目・価格を自動生成することはしない（捏造防止）。
+ * priceは表記ゆれ（"500円〜"等）をそのまま尊重するため文字列として保持する。
+ */
+export interface RealMenuItem {
+  name: string;
+  price?: string;
+  description?: string;
 }
 
 export interface GenerateRequest {

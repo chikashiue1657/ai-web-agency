@@ -14,6 +14,15 @@ export const StoreRealDataSchema = z.object({
   googleRating: z.number().optional(),
   googleReviewCount: z.number().optional(),
   photoUrls: z.array(z.string()).optional(),
+  menuItems: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        price: z.string().optional(),
+        description: z.string().optional(),
+      })
+    )
+    .optional(),
 });
 
 export const StoreBriefSchema = z.object({

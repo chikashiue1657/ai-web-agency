@@ -11,11 +11,9 @@
  * リテラル文字列として書く（動的な文字列結合はしない）。
  */
 export interface CafeThemeV2 {
-  /** Hero写真の上に重ねる暗幕グラデーション（下部を濃く、見出しの可読性を確保） */
-  heroOverlay: string;
-  /** 写真が0枚のときのHero背景（プレースホルダー画像ではなく色面+タイポで見せる） */
-  heroNoPhotoBg: string;
-  heroNoPhotoText: string;
+  /** 濃色の帯として使うセクション背景（Trustの信頼要素セクション等）。 */
+  darkSectionBg: string;
+  darkSectionText: string;
   accentText: string;
   accentTextSoft: string;
   paperBg: string;
@@ -28,9 +26,8 @@ export interface CafeThemeV2 {
 }
 
 export const CAFE_THEME_V2: CafeThemeV2 = {
-  heroOverlay: "bg-gradient-to-t from-stone-950/90 via-stone-950/25 to-stone-950/5",
-  heroNoPhotoBg: "bg-gradient-to-br from-stone-950 via-amber-950 to-stone-900",
-  heroNoPhotoText: "text-amber-100",
+  darkSectionBg: "bg-gradient-to-br from-stone-950 via-amber-950 to-stone-900",
+  darkSectionText: "text-amber-100",
   // amber-700/90（白地でコントラスト比約3.9:1）はWCAG AAの4.5:1未達だったため、
   // axe-coreのcolor-contrastスキャンで検出された実不具合として、白地で
   // 4.5:1以上を確保できる濃さ（不透明・amber-900/800）に変更した。

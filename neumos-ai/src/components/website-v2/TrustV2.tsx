@@ -3,31 +3,37 @@ import type { CafeThemeV2 } from "@/lib/theme-v2";
 import { RevealV2 } from "./RevealV2";
 
 /**
- * Googleの評価を信頼材料として見せるセクション。
- * ratingかreviewCountのどちらかが実際に取得できている場合のみ描画される
- * （section-plan-v2側でガード済み）。左に大きな数字、右にレビュー本文
- * （取得できた場合のみ）という非対称の2カラムで、レビューは証言らしく
- * 引用符付きの大きめの文字とsurfaceStyleに応じた区切りで見せる。
+ * 信頼材料を見せるセクション。
  *
- * reviewsは現時点でMVP側にGoogle Places APIからレビュー本文を取得する処理が
- * 無いため、実データが来たときにだけ表示される（無ければ従来通り数字のみ）。
+ * 表示するのは実データがある項目だけで、固定値・ダミー値は一切使わない。
+ *  - Google評価(rating/reviewCount)のどちらかがあれば、その数字を見せる。
+ *  - レビュー本文(reviews)があれば証言として添える。
+ *  - Google評価が無くInstagramのURLだけがある場合は、代わりにSNSへの
+ *    導線を信頼要素として見せる（フォロワー数などの数字は取得できないため
+ *    表示しない。あくまで「実際に運用しているSNSがある」という事実だけを示す）。
+ *  - どちらも無ければセクション自体を描画しない（section-plan-v2側でも
+ *    ガードしているが、このコンポーネント単体でも安全側に倒す）。
  */
 export function TrustV2({
   googleRating,
   googleReviewCount,
   reviews,
+  instagramUrl,
   theme,
 }: {
   googleRating?: number;
   googleReviewCount?: number;
   reviews?: StoreReview[];
+  instagramUrl?: string;
   theme: CafeThemeV2;
 }) {
-  if (typeof googleRating !== "number" && !googleReviewCount) return null;
+  const hasRating = typeof googleRating === "number" || !!googleReviewCount;
+  const hasInstagram = !!instagramUrl;
+  if (!hasRating && !hasInstagram) return null;
   const hasReviews = (reviews?.length ?? 0) > 0;
 
   return (
-    <section id="trust" className={`${theme.heroNoPhotoBg}`}>
+    <section id="trust" className={`${theme.darkSectionBg}`}>
       <div
         className={`mx-auto grid max-w-5xl grid-cols-1 gap-10 px-5 py-16 sm:px-10 sm:py-20 lg:px-16 ${
           hasReviews ? "sm:grid-cols-[auto_1fr]" : ""
@@ -35,15 +41,42 @@ export function TrustV2({
       >
         <RevealV2>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Google Reviews</p>
-            {typeof googleRating === "number" && (
-              <span className={`mt-3 block text-6xl sm:text-7xl ${theme.displayFont} ${theme.heroNoPhotoText}`}>
-                ★{googleRating.toFixed(1)}
-              </span>
+            {hasRating ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Google Reviews</p>
+                {typeof googleRating === "number" && (
+                  <span className={`mt-3 block text-6xl sm:text-7xl ${theme.displayFont} ${theme.darkSectionText}`}>
+                    ★{googleRating.toFixed(1)}
+                  </span>
+                )}
+                {googleReviewCount ? (
+                  <p className="mt-2 text-sm text-white/70 sm:text-base">{googleReviewCount}件のレビューより</p>
+                ) : null}
+                {hasInstagram && (
+                  <a
+                    href={instagramUrl}
+                    className="mt-6 inline-flex items-center gap-2 border-b border-white/40 pb-1 text-xs text-white/80 hover:border-white"
+                  >
+                    Instagramで見る
+                    <span aria-hidden>→</span>
+                  </a>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Follow</p>
+                <p className={`mt-3 max-w-[24ch] text-2xl leading-snug sm:text-3xl ${theme.displayFont} ${theme.darkSectionText}`}>
+                  日々の様子はInstagramで
+                </p>
+                <a
+                  href={instagramUrl}
+                  className="mt-6 inline-flex items-center gap-2 border-b border-white/40 pb-1 text-sm text-white/85 hover:border-white"
+                >
+                  Instagramを見る
+                  <span aria-hidden>→</span>
+                </a>
+              </>
             )}
-            {googleReviewCount ? (
-              <p className="mt-2 text-sm text-white/70 sm:text-base">{googleReviewCount}件のレビューより</p>
-            ) : null}
           </div>
         </RevealV2>
 

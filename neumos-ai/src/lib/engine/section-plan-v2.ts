@@ -62,8 +62,12 @@ export function buildCafeV2Plan(
 ): CafeV2Plan {
   const photoPlan = options?.photoPlan ?? buildPhotoPlan(brief.realData?.photoUrls);
   const hasSignature = contents.sections.some((s) => s.kind === "feature");
-  const hasMenu = contents.sections.some((s) => s.kind === "service");
-  const hasTrust = typeof brief.realData?.googleRating === "number" || !!brief.realData?.googleReviewCount;
+  const hasMenu =
+    contents.sections.some((s) => s.kind === "service") || (brief.realData?.menuItems?.length ?? 0) > 0;
+  const hasTrust =
+    typeof brief.realData?.googleRating === "number" ||
+    !!brief.realData?.googleReviewCount ||
+    !!brief.realData?.instagramUrl;
   const hasPhotoStory = photoPlan.galleryPhotoUrls.length > 0;
 
   // Hero→Story→Gallery→Menu→Review→CTAの順（Phase3のセクション間リズム設計に

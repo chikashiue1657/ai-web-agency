@@ -1,5 +1,5 @@
 import type { CafeThemeV2 } from "@/lib/theme-v2";
-import type { HeroComposition } from "@/lib/engine/v2-design-system";
+import type { ArtDirection, HeroComposition } from "@/lib/engine/v2-design-system";
 import { ParallaxImageV2 } from "./ParallaxImageV2";
 
 interface HeroV2Props {
@@ -12,10 +12,12 @@ interface HeroV2Props {
   ctaLabel: string;
   ctaHref: string;
   theme: CafeThemeV2;
-  /** BrandPlan由来の構図（写真0枚なら呼び出し側が"typographic"を渡す）。 */
+  /** BrandPlan由来の構図(写真0枚なら呼び出し側が"typographic"を渡す)。 */
   composition: HeroComposition;
-  /** typographyScaleに応じた見出しサイズ（resolveTypographyClasses(...).heroTitle）。 */
+  /** typographyScaleに応じた見出しサイズ(resolveTypographyClasses(...).heroTitle)。 */
   heroTitleClass: string;
+  /** 写真0枚時のno-photo構成をどの方向で組むかを決める。 */
+  artDirection: ArtDirection;
 }
 
 /** Hero（写真あり・全面/色面のいずれも白文字）の入口CTA。ページ末尾のCTAセクションとは別。 */
@@ -65,9 +67,12 @@ function EyebrowLabel({ area, industry, tone, theme }: { area: string; industry:
 }
 
 /**
- * "full-bleed-center"（layoutVariant="immersive"）: 写真を画面いっぱいに敷き、
- * 下部グラデーション＋左下寄せテキストのみで見せる、最も没入感の強い構図。
- * このデザイン刷新前からの既定の見た目と同一（回帰させないため変更していない）。
+ * "full-bleed-center"（Sensory Immersive）: 写真を画面いっぱいに敷く、最も
+ * 没入感の強い構図。以前は写真全面に暗いグラデーションを重ねていたが、これは
+ * 「写真を暗いoverlayで覆い隠さない」方針に反するため撤廃した。
+ * テキストは写真から独立した半透明の面（チップ）にだけ乗せ、写真自体は
+ * ほぼそのまま見せる。チップは文字の分だけの大きさに留め、写真全体を
+ * 覆う暗幕にはしない。
  */
 function FullBleedCenterHero({
   storeName,
@@ -78,30 +83,32 @@ function FullBleedCenterHero({
   photoUrl,
   ctaLabel,
   ctaHref,
-  theme,
   heroTitleClass,
 }: HeroV2Props & { photoUrl: string }) {
   return (
-    <section id="top" className="relative h-dvh min-h-[640px] w-full overflow-hidden">
+    <section id="top" className="relative h-dvh min-h-[640px] w-full overflow-hidden bg-stone-950">
       <ParallaxImageV2 src={photoUrl} alt={`${storeName}の店内の様子`} />
-      <div className={`absolute inset-0 ${theme.heroOverlay}`} />
 
-      <div className="relative flex h-full w-full flex-col justify-end px-5 pb-14 sm:px-10 sm:pb-20 lg:px-16 lg:pb-24">
-        <EyebrowLabel area={area} industry={industry} tone="light" theme={theme} />
-        <h1
-          className={`max-w-[13ch] break-keep break-words text-white [text-wrap:balance] sm:max-w-2xl sm:[overflow-wrap:normal] ${heroTitleClass} ${theme.displayFont}`}
-        >
-          {heroTitle}
-        </h1>
-        <p className="mt-5 max-w-[26ch] break-keep break-words text-sm leading-relaxed text-white/85 sm:max-w-md sm:text-base sm:[overflow-wrap:normal]">
-          {heroSubtitle}
-        </p>
-        <HeroEntryLink ctaLabel={ctaLabel} ctaHref={ctaHref} />
+      <div className="relative flex h-full w-full flex-col justify-end px-5 pb-8 sm:px-10 sm:pb-12 lg:px-16 lg:pb-16">
+        <div className="w-fit max-w-[92vw] rounded-sm bg-stone-950/75 px-5 py-6 backdrop-blur-sm sm:max-w-lg sm:px-8 sm:py-8">
+          <span className="mb-4 block w-fit text-[11px] font-medium tracking-wide text-white/80 sm:text-xs">
+            {area} ・ {industry}
+          </span>
+          <h1
+            className={`max-w-[13ch] break-keep break-words text-white [text-wrap:balance] sm:max-w-2xl sm:[overflow-wrap:normal] ${heroTitleClass}`}
+          >
+            {heroTitle}
+          </h1>
+          <p className="mt-5 max-w-[26ch] break-keep break-words text-sm leading-relaxed text-white/85 sm:max-w-md sm:text-base sm:[overflow-wrap:normal]">
+            {heroSubtitle}
+          </p>
+          <HeroEntryLink ctaLabel={ctaLabel} ctaHref={ctaHref} />
+        </div>
       </div>
 
       <div
         aria-hidden
-        className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-1 text-white/60 motion-safe:animate-pulse sm:flex"
+        className="absolute bottom-5 right-5 hidden flex-col items-center gap-1 text-white/60 motion-safe:animate-pulse sm:flex"
       >
         <span className="h-8 w-px bg-white/40" />
       </div>
@@ -110,8 +117,9 @@ function FullBleedCenterHero({
 }
 
 /**
- * "split-frame"（layoutVariant="editorial"）: 写真を全面に敷かず、左右非対称の
+ * "split-frame"（Japanese Editorial）: 写真を全面に敷かず、左右非対称の
  * 2分割にする。モバイルは写真（枠付き）を上、テキストパネルを下に積む。
+ * テキストは常に写真の外側にあるため、overlayは一切不要。
  */
 function SplitFrameHero({
   storeName,
@@ -152,8 +160,13 @@ function SplitFrameHero({
 }
 
 /**
- * "overlap-editorial"（layoutVariant="direct"、既定）: 写真を余白付きで枠内に収め、
- * テキストカードをその角へ重ねる、雑誌の特集扉のような構図。
+ * "overlap-editorial"（Warm Craft）: 写真を余白付きで枠内に収め、テキスト
+ * カードをその角へ重ねる、雑誌の特集扉のような構図。カードは常に通常
+ * フロー内に置く（absolute+translateは使わない。カードの実際の高さは
+ * コンテンツ量で変わるため、絶対配置＋固定スペーサーの組み合わせは高さの
+ * 見積もりを誤ると後続セクションと視覚的に衝突する不具合が実際に発生した。
+ * negative marginで写真に食い込ませる方式なら、後続の兄弟要素は常に
+ * カードの実高さの分だけ正しく押し下げられる）。
  */
 function OverlapEditorialHero({
   storeName,
@@ -174,13 +187,6 @@ function OverlapEditorialHero({
           <ParallaxImageV2 src={photoUrl} alt={`${storeName}の店内の様子`} />
         </div>
 
-        {/*
-          カードは常に通常フロー内に置く（absolute+translateは使わない）。カードの
-          実際の高さはコンテンツ量で変わるため、絶対配置＋固定スペーサーの組み合わせは
-          高さの見積もりを誤ると後続セクションと視覚的に衝突する（実際に発生した不具合）。
-          negative marginで写真に食い込ませる方式なら、後続の兄弟要素は常にカードの
-          実高さの分だけ正しく押し下げられる。
-        */}
         <div
           className={`relative z-10 mx-4 -mt-16 max-w-md ${theme.paperRaisedBg} px-6 py-8 shadow-sm sm:mx-10 sm:-mt-24 sm:px-10 sm:py-10 lg:mx-16 lg:-mt-28 lg:max-w-xl lg:px-12 lg:py-12`}
         >
@@ -200,8 +206,14 @@ function OverlapEditorialHero({
   );
 }
 
-/** 写真0枚（composition="typographic"）: 色面と大型タイポグラフィだけで空気感を出す。 */
-function TypographicHero({
+type NoPhotoHeroProps = Omit<HeroV2Props, "photoUrl" | "composition">;
+
+/**
+ * 写真0枚・Japanese Editorial: 罫線・ノンブル・小さな英字ラベルで組む、
+ * 雑誌の目次ページのような静かな構成。ぼかした色面（失敗した画像読み込みに
+ * 見える）は使わない。
+ */
+function JapaneseEditorialTypographicHero({
   storeName,
   heroTitle,
   heroSubtitle,
@@ -211,18 +223,57 @@ function TypographicHero({
   ctaHref,
   theme,
   heroTitleClass,
-}: HeroV2Props) {
+}: NoPhotoHeroProps) {
   return (
-    <section id="top" className="relative flex min-h-[85dvh] w-full items-end overflow-hidden sm:min-h-[90dvh]">
-      <div className={`absolute inset-0 ${theme.heroNoPhotoBg}`}>
-        <div className="pointer-events-none absolute -left-20 top-1/3 h-72 w-72 rounded-full bg-amber-100/5 blur-3xl" />
-        <div className="pointer-events-none absolute -right-16 bottom-1/4 h-96 w-96 rounded-full bg-amber-100/5 blur-3xl" />
+    <section id="top" className={`w-full ${theme.paperBg}`}>
+      <div className="mx-auto flex min-h-[80dvh] max-w-5xl flex-col justify-center border-y border-stone-300 px-5 py-16 sm:min-h-[85dvh] sm:px-10 sm:py-24 lg:px-0">
+        <p className="text-xs font-medium tracking-[0.3em] text-stone-500">
+          {String(1).padStart(2, "0")} — {area} / {industry}
+        </p>
+        <h1
+          className={`mt-8 max-w-[14ch] break-keep break-words border-t border-stone-300 pt-8 [text-wrap:balance] ${heroTitleClass} ${theme.displayFont} ${theme.bodyText}`}
+        >
+          {heroTitle}
+        </h1>
+        <p className={`mt-6 max-w-[38ch] break-keep break-words text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
+          {heroSubtitle}
+        </p>
+        <HeroEntryLinkOnLight ctaLabel={ctaLabel} ctaHref={ctaHref} theme={theme} />
+        <p className="mt-16 text-xs tracking-[0.3em] text-stone-400">{storeName.toUpperCase()}</p>
       </div>
+    </section>
+  );
+}
 
+/**
+ * 写真0枚・Sensory Immersive: 大型タイポグラフィと斜めのグラフィック要素で
+ * エネルギーを出す。写真の代用に見えないよう、はっきり幾何学的な図形にする。
+ */
+function SensoryImmersiveTypographicHero({
+  storeName,
+  heroTitle,
+  heroSubtitle,
+  area,
+  industry,
+  ctaLabel,
+  ctaHref,
+  theme,
+  heroTitleClass,
+}: NoPhotoHeroProps) {
+  return (
+    <section id="top" className="relative flex min-h-[85dvh] w-full items-end overflow-hidden bg-stone-950 sm:min-h-[90dvh]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 -top-24 h-[420px] w-[420px] rotate-12 border border-white/10"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-10 top-1/4 h-64 w-64 rotate-45 bg-white/5"
+      />
       <div className="relative flex w-full flex-col px-5 pb-14 sm:px-10 sm:pb-20 lg:px-16 lg:pb-24">
         <EyebrowLabel area={area} industry={industry} tone="light" theme={theme} />
         <h1
-          className={`max-w-[13ch] break-keep break-words [text-wrap:balance] sm:max-w-2xl sm:[overflow-wrap:normal] ${heroTitleClass} ${theme.displayFont} ${theme.heroNoPhotoText}`}
+          className={`max-w-[13ch] break-keep break-words text-white [text-wrap:balance] sm:max-w-2xl sm:[overflow-wrap:normal] ${heroTitleClass}`}
         >
           {heroTitle}
         </h1>
@@ -230,9 +281,57 @@ function TypographicHero({
           {heroSubtitle}
         </p>
         <HeroEntryLink ctaLabel={ctaLabel} ctaHref={ctaHref} />
+        <p className="mt-10 text-xs uppercase tracking-[0.3em] text-white/40">{storeName}</p>
       </div>
     </section>
   );
+}
+
+/**
+ * 写真0枚・Warm Craft: 紙・スタンプを思わせる控えめなCSS表現（回転した
+ * 四角い枠・点線）で温かみを出す。画像アセットは使わない。
+ */
+function WarmCraftTypographicHero({
+  storeName,
+  heroTitle,
+  heroSubtitle,
+  area,
+  industry,
+  ctaLabel,
+  ctaHref,
+  theme,
+  heroTitleClass,
+}: NoPhotoHeroProps) {
+  return (
+    <section id="top" className={`w-full ${theme.paperBg}`}>
+      <div className="relative mx-auto min-h-[80dvh] max-w-3xl px-5 py-16 sm:min-h-[85dvh] sm:px-10 sm:py-24">
+        <div
+          aria-hidden
+          className="absolute right-6 top-10 h-16 w-16 -rotate-6 rounded-full border-2 border-dashed border-stone-300 sm:right-10 sm:top-16 sm:h-24 sm:w-24"
+        />
+        <EyebrowLabel area={area} industry={industry} tone="dark" theme={theme} />
+        <h1
+          className={`max-w-[13ch] break-keep break-words [text-wrap:balance] ${heroTitleClass} ${theme.displayFont} ${theme.bodyText}`}
+        >
+          {heroTitle}
+        </h1>
+        <p className={`mt-5 max-w-[32ch] break-keep break-words text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
+          {heroSubtitle}
+        </p>
+        <HeroEntryLinkOnLight ctaLabel={ctaLabel} ctaHref={ctaHref} theme={theme} />
+        <p className={`mt-14 border-t pt-4 text-xs tracking-[0.2em] ${theme.accentTextSoft} border-stone-300`}>
+          {storeName}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** 写真0枚（composition="typographic"）: artDirectionごとに全く異なる意図的な構成を出す。 */
+function TypographicHero(props: NoPhotoHeroProps & { artDirection: ArtDirection }) {
+  if (props.artDirection === "japanese-editorial") return <JapaneseEditorialTypographicHero {...props} />;
+  if (props.artDirection === "sensory-immersive") return <SensoryImmersiveTypographicHero {...props} />;
+  return <WarmCraftTypographicHero {...props} />;
 }
 
 /**

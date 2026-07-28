@@ -1,48 +1,84 @@
-import type { WebsiteSection } from "@/lib/types";
+import type { RealMenuItem, WebsiteSection } from "@/lib/types";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { SurfaceClasses } from "@/lib/engine/v2-design-system";
 import { RevealV2 } from "./RevealV2";
 
 /**
- * メニュー・楽しみ方。単純な同幅カードの反復や「全項目が同じ見え方の一覧」を
- * やめ、先頭の1件だけを「本日のおすすめ」的な大きな見出しで見せ、残りを
- * レストランのメニュー表に近い2カラム（左に品名／右に説明）の一覧にする。
- * 品目ごとの実写真はGoogle Placesから個別に取得できないため、写真を捏造せず
- * 文字の強弱だけで組む。surfaceStyleに応じてfeatured枠の質感を変える。
+ * 実メニュー品目(`realData.menuItems`)がある場合だけ表示する、品名+価格の
+ * 実際のメニュー表。価格は右揃え・tabular-numsで整列させる。
+ * 実データのみを描画するため、ここでは一切文言を生成・補完しない。
  */
-export function MenuV2({
+function RealMenuList({
+  items,
+  theme,
+  surface,
+  sectionHeadingClass,
+}: {
+  items: RealMenuItem[];
+  theme: CafeThemeV2;
+  surface: SurfaceClasses;
+  sectionHeadingClass: string;
+}) {
+  return (
+    <section id="menu" className={theme.paperBg}>
+      <div className="mx-auto max-w-4xl px-5 py-16 sm:px-10 sm:py-24 lg:px-16">
+        <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Menu</p>
+        <h2 className={`mt-4 ${sectionHeadingClass} ${theme.displayFont} ${theme.bodyText}`}>メニュー</h2>
+
+        <ul className={`mt-10 border-t ${surface.divider}`}>
+          {items.map((item, i) => (
+            <li key={`${item.name}-${i}`} className={`border-b py-6 last:border-b-0 ${surface.divider}`}>
+              <RevealV2 variant="fade-up" delayMs={i * 60} className="flex items-baseline justify-between gap-6">
+                <div className="min-w-0">
+                  <h3 className={`text-lg sm:text-xl ${theme.displayFont} ${theme.bodyText}`}>{item.name}</h3>
+                  {item.description && (
+                    <p className={`mt-1 text-sm leading-relaxed ${theme.bodyTextSoft}`}>{item.description}</p>
+                  )}
+                </div>
+                {item.price && (
+                  <span className={`shrink-0 text-sm tabular-nums sm:text-base ${theme.bodyText}`}>{item.price}</span>
+                )}
+              </RevealV2>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 実メニューデータが無い場合の代替表示。`brief.offer`由来の生成コピー
+ * (`sections`のkind="service")はあくまでAIが書いた紹介文であり、実在する
+ * 商品名・価格の一覧ではないため、「メニュー」を名乗らず・価格列を持たず、
+ * 生成コピーであることが分かるラベルを添えて紹介文として見せる。
+ */
+function GeneratedServiceOverview({
   sections,
-  offer,
   theme,
   surface,
   sectionHeadingClass,
 }: {
   sections: WebsiteSection[];
-  offer: string;
   theme: CafeThemeV2;
   surface: SurfaceClasses;
   sectionHeadingClass: string;
 }) {
-  if (sections.length === 0) return null;
   const [featured, ...rest] = sections;
 
   return (
     <section id="menu" className={theme.paperBg}>
       <div className="mx-auto max-w-4xl px-5 py-16 sm:px-10 sm:py-24 lg:px-16">
-        <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>Menu</p>
-        <h2 className={`mt-4 ${sectionHeadingClass} ${theme.displayFont} ${theme.bodyText}`}>メニュー・楽しみ方</h2>
-        {offer && (
-          <p className={`mt-3 max-w-[42ch] break-keep break-words text-sm sm:text-base ${theme.bodyTextSoft}`}>
-            {offer}
-          </p>
-        )}
+        <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${theme.accentText}`}>About the service</p>
+        <h2 className={`mt-4 ${sectionHeadingClass} ${theme.displayFont} ${theme.bodyText}`}>サービスについて</h2>
 
-        {/* 先頭の1件だけ「本日のおすすめ」として大きく見せる。 */}
         <RevealV2
           variant="fade-up"
           className={`mt-10 ${surface.cardBg} ${surface.cardBorder} px-6 py-8 sm:mt-12 sm:px-10 sm:py-10`}
         >
-          <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${theme.accentTextSoft}`}>Featured</p>
+          <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${theme.accentTextSoft}`}>
+            紹介文（AI生成）
+          </p>
           <h3 className={`mt-3 text-2xl sm:text-3xl ${theme.displayFont} ${theme.bodyText}`}>{featured.heading}</h3>
           <p className={`mt-3 whitespace-pre-line text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
             {featured.body}
@@ -75,5 +111,38 @@ export function MenuV2({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * 実メニュー(`menuItems`)がある場合だけ品名+価格の実際のメニュー表を出す。
+ * 無い場合は`brief.offer`を商品一覧・価格へ変換したりせず、生成コピーによる
+ * 「サービスについて」の紹介文へ再構成する（架空の商品・価格は一切出さない）。
+ * どちらの元データも無ければ何も描画しない。
+ */
+export function MenuV2({
+  sections,
+  menuItems,
+  theme,
+  surface,
+  sectionHeadingClass,
+}: {
+  sections: WebsiteSection[];
+  menuItems?: RealMenuItem[];
+  theme: CafeThemeV2;
+  surface: SurfaceClasses;
+  sectionHeadingClass: string;
+}) {
+  if (menuItems && menuItems.length > 0) {
+    return <RealMenuList items={menuItems} theme={theme} surface={surface} sectionHeadingClass={sectionHeadingClass} />;
+  }
+  if (sections.length === 0) return null;
+  return (
+    <GeneratedServiceOverview
+      sections={sections}
+      theme={theme}
+      surface={surface}
+      sectionHeadingClass={sectionHeadingClass}
+    />
   );
 }

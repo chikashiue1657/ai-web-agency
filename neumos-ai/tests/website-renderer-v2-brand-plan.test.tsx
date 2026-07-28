@@ -64,9 +64,12 @@ describe("WebsiteRendererV2: visualDirectionの反映", () => {
     expect(html).not.toContain("text-amber-900");
   });
 
-  it("typographyTone=clean-sansの場合、displayFontがfont-sansになる", () => {
+  it("brandArchetype=luxury-quiet(sensory-immersive方向)の場合、displayFontがfont-sansになる", () => {
+    // typographyScaleはvisualDirection.typographyToneの直接反映ではなく、
+    // artDirection(brandArchetypeから導出)ごとに固定される。sensory-immersiveの
+    // うちluxury-quietはclean-sans(font-sans)を使う。
     const contents = generateWebsiteRuleBased(cafeBrief);
-    const brandPlan = makeBrandPlan({ visualDirection: { paletteHint: "neutral", typographyTone: "clean-sans", photoTreatment: "framed" } });
+    const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("font-sans");
     expect(html).not.toContain("font-serif");
@@ -166,9 +169,9 @@ describe("WebsiteRendererV2: v1経路への非影響", () => {
 describe("WebsiteRendererV2: Hero構図の切り替え", () => {
   const photoBrief: StoreBrief = { ...cafeBrief, realData: { photoUrls: ["https://example.com/a.jpg"] } };
 
-  it("layoutVariant=immersiveかつ写真ありの場合、full-bleed構図（h-dvh）で描画する", () => {
+  it("sensory-immersive方向(luxury-quiet)×layoutVariant=immersiveかつ写真ありの場合、full-bleed構図（h-dvh）で描画する", () => {
     const contents = generateWebsiteRuleBased(photoBrief);
-    const brandPlan = makeBrandPlan({ layoutVariant: "immersive" });
+    const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "immersive" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("h-dvh");
   });
@@ -259,11 +262,11 @@ describe("WebsiteRendererV2: imageTreatmentの反映", () => {
     },
   };
 
-  it("photoTreatment=mixedの場合、先頭写真が大きく残りが小さめグリッドになる（aspect-square要素を含む）", () => {
+  it("sensory-immersive方向はimageTreatment=mixedになり、先頭写真が大きく残りが小さめグリッドになる（aspect-square要素を含む）", () => {
+    // imageTreatmentはvisualDirection.photoTreatmentの直接反映ではなく、
+    // artDirection(brandArchetypeから導出)ごとに固定される。
     const contents = generateWebsiteRuleBased(manyPhotoBrief);
-    const brandPlan = makeBrandPlan({
-      visualDirection: { paletteHint: "neutral", typographyTone: "editorial-serif", photoTreatment: "mixed" },
-    });
+    const brandPlan = makeBrandPlan({ brandArchetype: "energetic-casual" });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={manyPhotoBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain("aspect-square");
   });

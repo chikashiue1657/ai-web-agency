@@ -106,6 +106,7 @@ export function WebsiteRendererV2({
         theme={theme}
         composition={tokens.heroComposition}
         heroTitleClass={typography.heroTitle}
+        artDirection={tokens.artDirection}
       />
     ),
     signature: <SignatureV2 items={signatureItems} theme={theme} surface={surface} />,
@@ -131,7 +132,7 @@ export function WebsiteRendererV2({
     menu: (
       <MenuV2
         sections={serviceSections}
-        offer={brief.offer}
+        menuItems={brief.realData?.menuItems}
         theme={theme}
         surface={surface}
         sectionHeadingClass={typography.sectionHeading}
@@ -142,6 +143,7 @@ export function WebsiteRendererV2({
         googleRating={brief.realData?.googleRating}
         googleReviewCount={brief.realData?.googleReviewCount}
         reviews={brief.realData?.reviews}
+        instagramUrl={brief.realData?.instagramUrl}
         theme={theme}
       />
     ),

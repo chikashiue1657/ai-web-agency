@@ -1,14 +1,22 @@
 /**
  * v2「旗艦プレミアムデザイン」の設計トークン解決（純関数・v1には影響しない）。
  *
- * BrandPlan（と写真枚数tier）から、次の7軸を決定論的に導出する。
- *  - heroComposition   : Heroの構図
- *  - sectionRhythm     : セクション間の余白リズムの強弱パターン
- *  - imageTreatment    : 写真の見せ方（BrandPlan.visualDirection.photoTreatmentをそのまま使う）
- *  - typographyScale   : 見出しの書体・サイズの強さ（BrandPlan.visualDirection.typographyToneをそのまま使う）
- *  - surfaceStyle      : カード・背景の質感（brandArchetypeから導出）
- *  - ctaStyle          : CTAボタンの強さ（BrandPlan.ctaStrategy.urgencyから導出）
- *  - colorBalance      : 配色（BrandPlan.visualDirection.paletteHintをそのまま使う。theme-v2.tsが実際の色トークンへ変換する）
+ * まず`brandArchetype`から3つの「アートディレクション」のいずれか1つを決定論的に
+ * 決め（`deriveArtDirection`）、その方向の内部だけで残り7軸を制御する。
+ * 7軸を互いに独立させて自由に掛け合わせると、方向性の一貫しない
+ * 「ワイヤーフレームに色を塗っただけ」の見た目になりやすいため、
+ * 各軸はartDirectionごとに許容される値の範囲へ収める（クランプする）。
+ *
+ *  - artDirection      : "japanese-editorial" | "sensory-immersive" | "warm-craft"
+ *  - heroComposition   : Heroの構図（artDirection×layoutVariantの3x3テーブルで決定）
+ *  - sectionRhythm     : セクション間の余白リズム（artDirectionごとにほぼ固定、一部archetypeで微調整）
+ *  - imageTreatment    : 写真の見せ方（artDirectionごとに固定）
+ *  - typographyScale   : 見出しの書体・サイズ（artDirectionごとに固定、一部archetypeで微調整）
+ *  - surfaceStyle      : カード・背景の質感（artDirectionごとに固定）
+ *  - ctaStyle          : CTAボタンの強さ（urgency由来の値をartDirectionの許容範囲へクランプ）
+ *  - colorBalance      : 配色（BrandPlan.visualDirection.paletteHintをそのまま使う。
+ *                         色相はブランド固有の情報であり、方向の一貫性を壊さないため
+ *                         クランプしない）
  *
  * 同じBrandPlan・同じphotoTierを渡せば必ず同じ結果を返す（Math.random/Date.now等は
  * 一切使わない）。これはBrandPlanが生成時に一度だけ作られて記録へ保存される設計
@@ -17,14 +25,15 @@
  *
  * brandPlanが無い場合（旧レコード・生成時にBrand Directorが使えなかった場合）は
  * DEFAULT_TOKENSを返す。これはrule-providerがカフェに対して返す典型的な既定値
- * （brandArchetype:"artisan", layoutVariant:"direct", paletteHint:"neutral",
- * typographyTone:"editorial-serif", ctaStrategy.urgency:"low"）と同じ結果になるよう
+ * （brandArchetype:"artisan" → warm-craft方向、layoutVariant:"direct"、
+ * paletteHint:"neutral", ctaStrategy.urgency:"low"）と同じ結果になるよう
  * 選んでいるため、「BrandPlanが無い」ケースと「rule-providerの既定出力」ケースが
  * 視覚的に地続きになる（片方だけ特別扱いにしない）。
  */
 import type { BrandArchetype, BrandPlan } from "@/lib/brand-director/types";
 import type { PhotoTier } from "./photo-strategy";
 
+export type ArtDirection = "japanese-editorial" | "sensory-immersive" | "warm-craft";
 export type HeroComposition = "full-bleed-center" | "split-frame" | "overlap-editorial" | "typographic";
 export type SectionRhythm = "airy" | "dense" | "staggered";
 export type ImageTreatment = "full-bleed" | "framed" | "mixed";
@@ -34,6 +43,7 @@ export type CtaStyle = "text-link" | "outline-minimal" | "solid-bold";
 export type ColorBalance = "warm" | "cool" | "neutral" | "high-contrast";
 
 export interface V2DesignTokens {
+  artDirection: ArtDirection;
   heroComposition: HeroComposition;
   sectionRhythm: SectionRhythm;
   imageTreatment: ImageTreatment;
@@ -43,46 +53,95 @@ export interface V2DesignTokens {
   colorBalance: ColorBalance;
 }
 
-/** layoutVariantごとの既定Hero構図（写真がある場合）。 */
-const HERO_COMPOSITION_BY_LAYOUT: Record<BrandPlan["layoutVariant"], HeroComposition> = {
-  immersive: "full-bleed-center",
-  editorial: "split-frame",
-  direct: "overlap-editorial",
+/**
+ * brandArchetype(7種)をart direction(3種)へ過不足なく1:1以上で分類する。
+ * heritage-traditional/modern-minimal/wellness-calm → 静かな読み物のような
+ * Japanese Editorial。luxury-quiet/energetic-casual → 写真主役で没入感の強い
+ * Sensory Immersive。artisan/warm-hospitality → 温かい手仕事感のWarm Craft。
+ */
+const ART_DIRECTION_BY_ARCHETYPE: Record<BrandArchetype, ArtDirection> = {
+  "heritage-traditional": "japanese-editorial",
+  "modern-minimal": "japanese-editorial",
+  "wellness-calm": "japanese-editorial",
+  "luxury-quiet": "sensory-immersive",
+  "energetic-casual": "sensory-immersive",
+  artisan: "warm-craft",
+  "warm-hospitality": "warm-craft",
 };
 
-/** brandArchetypeごとのセクションリズム（空気感の強弱）。 */
-const SECTION_RHYTHM_BY_ARCHETYPE: Record<BrandArchetype, SectionRhythm> = {
-  "luxury-quiet": "airy",
-  "wellness-calm": "airy",
-  "energetic-casual": "dense",
-  artisan: "staggered",
-  "modern-minimal": "staggered",
-  "warm-hospitality": "staggered",
-  "heritage-traditional": "staggered",
+export function deriveArtDirection(brandArchetype: BrandArchetype): ArtDirection {
+  return ART_DIRECTION_BY_ARCHETYPE[brandArchetype];
+}
+
+/** artDirection×layoutVariantでHero構図を決める（写真がある場合）。方向を跨いだ構図は出さない。 */
+const HERO_COMPOSITION_TABLE: Record<ArtDirection, Record<BrandPlan["layoutVariant"], HeroComposition>> = {
+  "japanese-editorial": { immersive: "split-frame", editorial: "split-frame", direct: "split-frame" },
+  "sensory-immersive": { immersive: "full-bleed-center", editorial: "full-bleed-center", direct: "overlap-editorial" },
+  "warm-craft": { immersive: "overlap-editorial", editorial: "split-frame", direct: "overlap-editorial" },
 };
 
-/** brandArchetypeごとの質感（カード・背景の作り）。 */
-const SURFACE_STYLE_BY_ARCHETYPE: Record<BrandArchetype, SurfaceStyle> = {
-  artisan: "paper-warm",
-  "warm-hospitality": "paper-warm",
-  "heritage-traditional": "paper-warm",
-  "modern-minimal": "flat-minimal",
-  "luxury-quiet": "framed-card",
-  "wellness-calm": "framed-card",
-  "energetic-casual": "raw-editorial",
+/** artDirectionごとの基本セクションリズム。energetic-casualだけdenseへ寄せる。 */
+function resolveSectionRhythm(artDirection: ArtDirection, brandArchetype: BrandArchetype): SectionRhythm {
+  if (artDirection === "japanese-editorial") return "airy";
+  if (artDirection === "warm-craft") return "staggered";
+  return brandArchetype === "energetic-casual" ? "dense" : "airy";
+}
+
+/** artDirectionごとの写真の見せ方。方向の性格をもっとも強く表す軸の1つ。 */
+const IMAGE_TREATMENT_BY_DIRECTION: Record<ArtDirection, ImageTreatment> = {
+  "japanese-editorial": "framed",
+  "sensory-immersive": "mixed",
+  "warm-craft": "full-bleed",
 };
 
-/** ctaStrategy.urgencyごとのCTAボタンの強さ。 */
+/** artDirectionごとのタイポグラフィスケール。sensory-immersiveだけarchetypeで微調整する。 */
+function resolveTypographyScale(artDirection: ArtDirection, brandArchetype: BrandArchetype): TypographyScale {
+  if (artDirection === "japanese-editorial") return "editorial-serif";
+  if (artDirection === "warm-craft") return "editorial-serif";
+  return brandArchetype === "energetic-casual" ? "bold-display" : "clean-sans";
+}
+
+/** artDirectionごとのsurface(カード・背景)の質感。 */
+const SURFACE_STYLE_BY_DIRECTION: Record<ArtDirection, SurfaceStyle> = {
+  "japanese-editorial": "flat-minimal",
+  "sensory-immersive": "framed-card",
+  "warm-craft": "paper-warm",
+};
+
+/** ctaStrategy.urgency由来の素のCTAスタイル。 */
 const CTA_STYLE_BY_URGENCY: Record<BrandPlan["ctaStrategy"]["urgency"], CtaStyle> = {
   low: "text-link",
   medium: "outline-minimal",
   high: "solid-bold",
 };
 
+/**
+ * artDirectionごとに許容するCTAスタイルの範囲。urgency由来の値がこの範囲外なら、
+ * 範囲内でもっとも近い（同じ配列上で隣接する）値へ寄せる。
+ * japanese-editorial/warm-craftはsolid-boldを許さない（静かな方向に強すぎる）。
+ * sensory-immersiveはtext-linkを許さない（写真主役の力強さに対して弱すぎる）。
+ */
+const CTA_STYLE_ALLOWED: Record<ArtDirection, CtaStyle[]> = {
+  "japanese-editorial": ["text-link", "outline-minimal"],
+  "sensory-immersive": ["outline-minimal", "solid-bold"],
+  "warm-craft": ["text-link", "outline-minimal"],
+};
+
+function clampCtaStyle(raw: CtaStyle, artDirection: ArtDirection): CtaStyle {
+  const allowed = CTA_STYLE_ALLOWED[artDirection];
+  if (allowed.includes(raw)) return raw;
+  // 範囲外は「強さの順番（text-link < outline-minimal < solid-bold)」で最も近い許容値へ丸める。
+  const order: CtaStyle[] = ["text-link", "outline-minimal", "solid-bold"];
+  const rawIndex = order.indexOf(raw);
+  const distances = allowed.map((c) => Math.abs(order.indexOf(c) - rawIndex));
+  return allowed[distances.indexOf(Math.min(...distances))];
+}
+
 export const DEFAULT_TOKENS: V2DesignTokens = {
+  artDirection: "warm-craft",
   heroComposition: "overlap-editorial",
   sectionRhythm: "staggered",
-  imageTreatment: "framed",
+  imageTreatment: "full-bleed",
   typographyScale: "editorial-serif",
   surfaceStyle: "paper-warm",
   ctaStyle: "text-link",
@@ -92,18 +151,22 @@ export const DEFAULT_TOKENS: V2DesignTokens = {
 export function resolveV2DesignTokens(brandPlan: BrandPlan | undefined, photoTier: PhotoTier): V2DesignTokens {
   if (!brandPlan) return DEFAULT_TOKENS;
 
+  const artDirection = deriveArtDirection(brandPlan.brandArchetype);
+
   const tokens: V2DesignTokens = {
-    heroComposition: HERO_COMPOSITION_BY_LAYOUT[brandPlan.layoutVariant],
-    sectionRhythm: SECTION_RHYTHM_BY_ARCHETYPE[brandPlan.brandArchetype],
-    imageTreatment: brandPlan.visualDirection.photoTreatment,
-    typographyScale: brandPlan.visualDirection.typographyTone,
-    surfaceStyle: SURFACE_STYLE_BY_ARCHETYPE[brandPlan.brandArchetype],
-    ctaStyle: CTA_STYLE_BY_URGENCY[brandPlan.ctaStrategy.urgency],
+    artDirection,
+    heroComposition: HERO_COMPOSITION_TABLE[artDirection][brandPlan.layoutVariant],
+    sectionRhythm: resolveSectionRhythm(artDirection, brandPlan.brandArchetype),
+    imageTreatment: IMAGE_TREATMENT_BY_DIRECTION[artDirection],
+    typographyScale: resolveTypographyScale(artDirection, brandPlan.brandArchetype),
+    surfaceStyle: SURFACE_STYLE_BY_DIRECTION[artDirection],
+    ctaStyle: clampCtaStyle(CTA_STYLE_BY_URGENCY[brandPlan.ctaStrategy.urgency], artDirection),
     colorBalance: brandPlan.visualDirection.paletteHint,
   };
 
   // 写真が無い場合、split/overlap/full-bleedのような写真前提の構図は成立しないため、
   // タイポグラフィのみで組む構図へ必ず落とす（写真0枚で破綻させないため）。
+  // HeroV2側はartDirectionごとに異なる「意図的なno-photo構成」を描き分ける。
   if (photoTier === "none") {
     tokens.heroComposition = "typographic";
   }

@@ -1,6 +1,7 @@
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { ImageTreatment, SurfaceClasses } from "@/lib/engine/v2-design-system";
 import { RevealV2 } from "./RevealV2";
+import { SafeImageV2 } from "./SafeImageV2";
 
 /**
  * Gallery（写真セクション）。写真サイズを固定しない。1枚のときだけ
@@ -28,8 +29,7 @@ function FullBleedGallery({ storeName, photoUrls }: { storeName: string; photoUr
     <>
       {count === 1 && (
         <RevealV2 variant="scale">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <SafeImageV2
             src={photoUrls[0]}
             alt={`${storeName}の店内`}
             className="aspect-[16/9] w-full object-cover sm:aspect-[21/9]"
@@ -40,8 +40,7 @@ function FullBleedGallery({ storeName, photoUrls }: { storeName: string; photoUr
         <div className={`${columnsForCount(count)} gap-1 px-1 sm:gap-2 sm:px-2`}>
           {photoUrls.map((url, i) => (
             <RevealV2 key={url} variant="scale" delayMs={(i % 6) * 70} className="mb-1 break-inside-avoid sm:mb-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`${storeName}の様子`} className="block w-full" />
+              <SafeImageV2 src={url} alt={`${storeName}の様子`} className="block w-full" />
             </RevealV2>
           ))}
         </div>
@@ -64,8 +63,7 @@ function FramedGallery({
     <div className="mx-auto max-w-6xl px-5 sm:px-10 lg:px-16">
       {count === 1 && (
         <RevealV2 variant="scale">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <SafeImageV2
             src={photoUrls[0]}
             alt={`${storeName}の店内`}
             className={`aspect-[16/9] w-full object-cover ${surface.cardBorder}`}
@@ -76,8 +74,7 @@ function FramedGallery({
         <div className={`${columnsForCount(count)} gap-4 sm:gap-6`}>
           {photoUrls.map((url, i) => (
             <RevealV2 key={url} variant="scale" delayMs={(i % 6) * 70} className="mb-4 break-inside-avoid sm:mb-6">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`${storeName}の様子`} className={`block w-full ${surface.cardBorder}`} />
+              <SafeImageV2 src={url} alt={`${storeName}の様子`} className={`block w-full ${surface.cardBorder}`} />
             </RevealV2>
           ))}
         </div>
@@ -91,8 +88,7 @@ function MixedEditorialGallery({ storeName, photoUrls }: { storeName: string; ph
   return (
     <div className="mx-auto max-w-6xl px-3 sm:px-6 lg:px-10">
       <RevealV2 variant="scale">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <SafeImageV2
           src={featured}
           alt={`${storeName}の店内`}
           className="aspect-[16/10] w-full object-cover sm:aspect-[21/9]"
@@ -102,8 +98,7 @@ function MixedEditorialGallery({ storeName, photoUrls }: { storeName: string; ph
         <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           {rest.slice(0, 7).map((url, i) => (
             <RevealV2 key={url} variant="scale" delayMs={(i % 6) * 70}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`${storeName}の様子`} className="aspect-square w-full object-cover" />
+              <SafeImageV2 src={url} alt={`${storeName}の様子`} className="aspect-square w-full object-cover" />
             </RevealV2>
           ))}
         </div>

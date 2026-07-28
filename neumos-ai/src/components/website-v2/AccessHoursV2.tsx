@@ -37,6 +37,17 @@ function RowIcon({ label, className }: { label: RowLabel; className: string }) {
   );
 }
 
+/**
+ * 地図埋め込み(iframe)は広告ブロッカーやネットワーク制限で読み込みに失敗
+ * すると、ブラウザ既定の壊れたファイルアイコンだけが残る（実際に検証環境で
+ * 発生を確認した）。iframeの読み込み失敗はJSで確実に検知できないため、
+ * 埋め込みが失敗してもアクセス手段が失われないよう、常にGoogleマップを
+ * 新規タブで開く実リンクを併記する（埋め込みが正常な場合は単なる補助リンク）。
+ */
+function mapLinkHref(mapQuery: string): string {
+  return `https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}`;
+}
+
 function buildRows(realData?: StoreRealData): Row[] {
   const rows: Row[] = [];
   if (realData?.openingHours?.length) {
@@ -106,6 +117,14 @@ function ColophonAccessHours({
             referrerPolicy="no-referrer-when-downgrade"
           />
         </div>
+        <a
+          href={mapLinkHref(access.mapQuery)}
+          target="_blank"
+          rel="noreferrer"
+          className={`mt-3 inline-block text-xs ${theme.accentText} hover:underline`}
+        >
+          Google マップで見る →
+        </a>
       </div>
     </section>
   );
@@ -159,6 +178,14 @@ function ImmersiveAccessHours({
             ))}
           </dl>
         )}
+        <a
+          href={mapLinkHref(access.mapQuery)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-6 inline-block text-xs text-white/70 hover:text-white hover:underline"
+        >
+          Google マップで見る →
+        </a>
       </div>
     </section>
   );
@@ -218,7 +245,7 @@ function CraftAccessHours({
           )}
         </div>
 
-        <div className="min-h-[320px] lg:col-span-3">
+        <div className="relative min-h-[320px] lg:col-span-3">
           <iframe
             title={`${storeName}の地図`}
             src={mapSrc}
@@ -226,6 +253,14 @@ function CraftAccessHours({
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
           />
+          <a
+            href={mapLinkHref(access.mapQuery)}
+            target="_blank"
+            rel="noreferrer"
+            className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-stone-800 shadow-sm hover:bg-white"
+          >
+            Google マップで見る →
+          </a>
         </div>
       </div>
     </section>

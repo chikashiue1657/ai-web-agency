@@ -349,6 +349,20 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
     expect(html).not.toContain("h-64 w-full grayscale");
   });
 
+  it("AccessHoursのGoogle地図iframeには、埋め込み失敗時にも機能する実リンク(新規タブでGoogleマップを開く)が3方向すべてに併記される", () => {
+    // 地図iframeは広告ブロッカーやネットワーク制限で読み込みに失敗すると
+    // ブラウザ既定の壊れたファイルアイコンだけが残ることを実機検証で確認した。
+    // 埋め込みの成否によらず、常にこのリンクで実際の地図へ到達できることを保証する。
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    for (const brandArchetype of ["modern-minimal", "luxury-quiet", "artisan"] as const) {
+      const html = renderToStaticMarkup(
+        <WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={makeBrandPlan({ brandArchetype })} />
+      );
+      expect(html).toContain("Google マップで見る");
+      expect(html).toContain(`href="https://www.google.com/maps?q=`);
+    }
+  });
+
   it("CTA(variant=primary)は方向ごとにレイアウトが変わる(sensory-immersiveだけlg:flex-rowの左右分割)", () => {
     const contents = generateWebsiteRuleBased(cafeBrief);
     const immersiveHtml = renderToStaticMarkup(

@@ -457,7 +457,7 @@ export default function LayoutBoard({
                     onPointerDown={(e) => handlePointerDown(e, pl)}
                     onPointerMove={(e) => handlePointerMove(e, pl)}
                     onPointerUp={handlePointerUp}
-                    style={{ cursor: "grab" }}
+                    style={{ cursor: "grab", touchAction: "none" }}
                   >
                     <polygon points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill={piece.color + "66"} stroke={strokeColor} strokeWidth={selected ? 0.6 : 0.3} />
                     <line x1={grainPts[0].x} y1={grainPts[0].y} x2={grainPts[1].x} y2={grainPts[1].y} stroke="#374151" strokeWidth={0.15} strokeDasharray="1.2,0.8" />

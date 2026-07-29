@@ -83,16 +83,6 @@ describe("buildContactMethodsWithRealLinks", () => {
     expect(methods.some((m) => m.label.includes("マップ"))).toBe(false);
   });
 
-  it("補助的な連絡手段は最大2件までに収める（電話＋Instagram＋マップが揃っていても3件以内）", () => {
-    const methods = buildContactMethodsWithRealLinks(
-      makeBrief({
-        industry: "カフェ",
-        realData: { phone: "098-111-2222", instagramUrl: "https://instagram.com/example" },
-      })
-    );
-    expect(methods.length).toBeLessThanOrEqual(3);
-  });
-
   it("realData.googleMapsUrlがあれば、マップ項目のhrefはそのURLをそのまま使う（テキスト検索へ作り直さない）", () => {
     const methods = buildContactMethodsWithRealLinks(
       makeBrief({ industry: "カフェ", realData: { googleMapsUrl: "https://maps.google.com/?cid=999" } })
@@ -112,7 +102,23 @@ describe("buildContactMethodsWithRealLinks", () => {
     expect(methods.some((m) => m.label.includes("公式サイト"))).toBe(false);
   });
 
-  it("優先順位は電話→公式サイト→Instagram→Google Mapsの順で、最大3件(MAX_SECONDARY_METHODS+1)に収める", () => {
+  // 優先順位(電話→公式サイト→Instagram→Google Maps)の上位2件だけを表示することを
+  // 固定するシナリオ群(A〜F)。件数は常にMAX_SECONDARY_METHODS(2)を超えない。
+  it("A. websiteUrl無し・カフェ・phone＋instagramUrlありは、電話とInstagramの2件のみ(Google Mapsは出ない)", () => {
+    const methods = buildContactMethodsWithRealLinks(
+      makeBrief({
+        industry: "カフェ",
+        realData: { phone: "098-111-2222", instagramUrl: "https://instagram.com/example" },
+      })
+    );
+    expect(methods).toEqual([
+      { label: "お電話でのお問い合わせ", href: "tel:098-111-2222" },
+      { label: "Instagramを見る", href: "https://instagram.com/example" },
+    ]);
+    expect(methods.length).toBe(2);
+  });
+
+  it("B. websiteUrlあり・カフェ・phone＋websiteUrl＋instagramUrlありは、電話と公式サイトの2件のみ(InstagramとGoogle Mapsは出ない)", () => {
     const methods = buildContactMethodsWithRealLinks(
       makeBrief({
         industry: "カフェ",
@@ -123,23 +129,61 @@ describe("buildContactMethodsWithRealLinks", () => {
         },
       })
     );
-    // 電話・公式サイト・Instagramの3件が実データとして揃っているため、
-    // 優先順位どおりこの3件で埋まり、Google Mapsはこの店ではあふれて出ない。
     expect(methods).toEqual([
       { label: "お電話でのお問い合わせ", href: "tel:098-111-2222" },
       { label: "公式サイトを見る", href: "https://example-cafe.jp" },
-      { label: "Instagramを見る", href: "https://instagram.com/example" },
     ]);
-    expect(methods.length).toBeLessThanOrEqual(3);
+    expect(methods.length).toBe(2);
   });
 
-  it("websiteUrlが無い場合は従来どおり電話・Instagram・Mapsの組み合わせのまま変わらない", () => {
+  it("C. phone無し・websiteUrl＋instagramUrlありは、公式サイトとInstagramの2件のみ", () => {
     const methods = buildContactMethodsWithRealLinks(
-      makeBrief({ industry: "整体院", realData: { phone: "098-111-2222", instagramUrl: "https://instagram.com/example" } })
+      makeBrief({
+        industry: "カフェ",
+        realData: { websiteUrl: "https://example-cafe.jp", instagramUrl: "https://instagram.com/example" },
+      })
     );
     expect(methods).toEqual([
-      { label: "お電話でのお問い合わせ", href: "tel:098-111-2222" },
+      { label: "公式サイトを見る", href: "https://example-cafe.jp" },
       { label: "Instagramを見る", href: "https://instagram.com/example" },
+    ]);
+  });
+
+  it("D. phone無し・websiteUrl無し・instagramUrlありは、Instagramと Google Mapsの2件", () => {
+    const methods = buildContactMethodsWithRealLinks(
+      makeBrief({ industry: "カフェ", realData: { instagramUrl: "https://instagram.com/example" } })
+    );
+    expect(methods.length).toBe(2);
+    expect(methods[0]).toEqual({ label: "Instagramを見る", href: "https://instagram.com/example" });
+    expect(methods[1].label).toBe("Google マップで見る");
+  });
+
+  it("E. 実データ無しのカフェは、Google Mapsのみ(検索案内として1件)", () => {
+    const methods = buildContactMethodsWithRealLinks(makeBrief({ industry: "カフェ" }));
+    expect(methods).toEqual([{ label: "Google マップで見る", href: expect.stringContaining("google.com/maps") }]);
+  });
+
+  it("F. mapShownFor=falseの業種(整体院)で実データ無しは、正直な汎用フォールバックのみ", () => {
+    const methods = buildContactMethodsWithRealLinks(makeBrief({ industry: "整体院" }));
+    expect(methods).toEqual([{ label: "お問い合わせする", href: "#contact" }]);
+  });
+
+  it("実データが多い場合でも上位2件だけを表示する（4候補すべて揃っていても2件に切り詰める）", () => {
+    const methods = buildContactMethodsWithRealLinks(
+      makeBrief({
+        industry: "カフェ",
+        realData: {
+          phone: "098-111-2222",
+          websiteUrl: "https://example-cafe.jp",
+          instagramUrl: "https://instagram.com/example",
+          googleMapsUrl: "https://maps.google.com/?cid=999",
+        },
+      })
+    );
+    expect(methods.length).toBe(2);
+    expect(methods).toEqual([
+      { label: "お電話でのお問い合わせ", href: "tel:098-111-2222" },
+      { label: "公式サイトを見る", href: "https://example-cafe.jp" },
     ]);
   });
 });

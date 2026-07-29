@@ -19,7 +19,7 @@ import { classifyIndustry } from "@/lib/engine/industry";
 const FALLBACK_LABEL = "お問い合わせする";
 const FALLBACK_HREF = "#contact";
 /**
- * 主要CTAは1つ、補助的な連絡手段は最大 MAX_SECONDARY_METHODS + 1 件までにする
+ * 主要CTAは1つ、補助的な連絡手段は最大 MAX_SECONDARY_METHODS 件までにする
  * （画面が導線だらけにならないように）。優先順位は電話→公式サイト→Instagram→
  * Google Mapsの順（`buildContactMethodsWithRealLinks`参照）。
  */
@@ -78,8 +78,9 @@ function mapShownFor(category: ReturnType<typeof classifyIndustry>): boolean {
  * 電話・公式サイト・Instagramは実データが無ければ候補にすら入れない（架空の
  * リンクを作らない）。Google Mapsだけは`mapShownFor(category)`が真の業種なら
  * 実データが無くても検索案内として候補に入る（実在の確認は主張しない）。
- * 優先順位どおりに並べた候補を組み立てたうえで、最後に`MAX_SECONDARY_METHODS + 1`
- * 件まで切り詰める（画面が導線だらけにならないように）。
+ * 優先順位どおりに並べた候補を組み立てたうえで、上位 MAX_SECONDARY_METHODS
+ * （2）件だけを残す（画面が導線だらけにならないように。実データが多い店舗
+ * でも常に上位2件のみを表示する）。
  */
 export function buildContactMethodsWithRealLinks(brief: StoreBrief): ContactMethod[] {
   const category = classifyIndustry(brief.industry);
@@ -100,5 +101,5 @@ export function buildContactMethodsWithRealLinks(brief: StoreBrief): ContactMeth
     return [{ label: FALLBACK_LABEL, href: FALLBACK_HREF }];
   }
 
-  return candidates.slice(0, MAX_SECONDARY_METHODS + 1);
+  return candidates.slice(0, MAX_SECONDARY_METHODS);
 }

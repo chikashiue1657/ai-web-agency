@@ -102,4 +102,73 @@ describe("buildStoreRealData", () => {
     });
     expect(buildStoreRealData(store)?.photoUrls).toBeUndefined();
   });
+
+  describe("websiteUrl / googleMapsUrl", () => {
+    it("website_urlがあればwebsiteUrlとしてrealDataへ渡す", () => {
+      const store = makeStore({ website_url: "https://example-cafe.jp" });
+      expect(buildStoreRealData(store)?.websiteUrl).toBe("https://example-cafe.jp");
+    });
+
+    it("website_urlが無ければwebsiteUrl項目自体を作らない", () => {
+      const realData = buildStoreRealData(makeStore({ address: "沖縄県那覇市1-1-1" }));
+      expect(realData).toEqual({ address: "沖縄県那覇市1-1-1" });
+      expect(realData).not.toHaveProperty("websiteUrl");
+      expect(realData).not.toHaveProperty("googleMapsUrl");
+    });
+
+    it("source=google_placesでraw_payload.googleMapsUriがあればgoogleMapsUrlとして渡す", () => {
+      const store = makeStore({
+        raw_payload: { googleMapsUri: "https://maps.google.com/?cid=1234567890" },
+      });
+      expect(buildStoreRealData(store)?.googleMapsUrl).toBe("https://maps.google.com/?cid=1234567890");
+    });
+
+    it("sourceがgoogle_places以外ならgoogleMapsUriがあっても採用しない（Places由来のフィールド名を持たないため）", () => {
+      const store = makeStore({
+        source: "manual",
+        raw_payload: { googleMapsUri: "https://maps.google.com/?cid=1234567890" },
+      });
+      expect(buildStoreRealData(store)?.googleMapsUrl).toBeUndefined();
+    });
+
+    it("httpsで始まらない値・危険なスキーム・非文字列は採用しない（捏造・不正スキームを避ける）", () => {
+      expect(buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "javascript:alert(1)" } }))?.googleMapsUrl).toBeUndefined();
+      expect(buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "http://maps.google.com/?cid=1" } }))?.googleMapsUrl).toBeUndefined();
+      expect(buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: 12345 } }))?.googleMapsUrl).toBeUndefined();
+    });
+
+    it("raw_payloadがnull/空オブジェクト/配列/不正な形でも例外にならずgoogleMapsUrlはundefined", () => {
+      expect(() => buildStoreRealData(makeStore({ raw_payload: null }))).not.toThrow();
+      expect(buildStoreRealData(makeStore({ raw_payload: null }))?.googleMapsUrl).toBeUndefined();
+      expect(buildStoreRealData(makeStore({ raw_payload: {} }))?.googleMapsUrl).toBeUndefined();
+      expect(() =>
+        buildStoreRealData(makeStore({ raw_payload: [] as unknown as Record<string, unknown> }))
+      ).not.toThrow();
+      expect(() =>
+        buildStoreRealData(makeStore({ raw_payload: "broken" as unknown as Record<string, unknown> }))
+      ).not.toThrow();
+    });
+
+    it("memory repositoryを通した取り込み→読み出しでもwebsiteUrl/googleMapsUrlが失われない（正規化→保存→取得の経路一致確認）", async () => {
+      const { normalizePlacesNew } = await import("@/lib/normalize");
+      const { getMemoryRepository } = await import("@/lib/repo/memory");
+
+      const normalized = normalizePlacesNew({
+        id: "places/roundtrip-test",
+        displayName: { text: "ラウンドトリップ喫茶" },
+        formattedAddress: "沖縄県那覇市1-1-1",
+        websiteUri: "https://roundtrip-cafe.example.com",
+        googleMapsUri: "https://maps.google.com/?cid=999999",
+      });
+
+      const repo = getMemoryRepository();
+      const { stores } = await repo.upsertStores([normalized]);
+      const saved = await repo.getStore(stores[0].id);
+      expect(saved).not.toBeNull();
+
+      const realData = buildStoreRealData(saved!);
+      expect(realData?.websiteUrl).toBe("https://roundtrip-cafe.example.com");
+      expect(realData?.googleMapsUrl).toBe("https://maps.google.com/?cid=999999");
+    });
+  });
 });

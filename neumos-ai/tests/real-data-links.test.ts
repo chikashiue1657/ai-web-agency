@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCtaWithRealLinks, buildContactMethodsWithRealLinks } from "@/lib/engine/real-data-links";
+import { buildCtaWithRealLinks, buildContactMethodsWithRealLinks, resolveGoogleMapsUrl } from "@/lib/engine/real-data-links";
 import type { StoreBrief } from "@/lib/types";
 
 function makeBrief(overrides: Partial<StoreBrief> = {}): StoreBrief {
@@ -91,5 +91,44 @@ describe("buildContactMethodsWithRealLinks", () => {
       })
     );
     expect(methods.length).toBeLessThanOrEqual(3);
+  });
+
+  it("realData.googleMapsUrlがあれば、マップ項目のhrefはそのURLをそのまま使う（テキスト検索へ作り直さない）", () => {
+    const methods = buildContactMethodsWithRealLinks(
+      makeBrief({ industry: "カフェ", realData: { googleMapsUrl: "https://maps.google.com/?cid=999" } })
+    );
+    expect(methods).toContainEqual({ label: "Google マップで見る", href: "https://maps.google.com/?cid=999" });
+  });
+});
+
+describe("resolveGoogleMapsUrl: Google Mapsリンクの優先順位", () => {
+  const fallbackQuery = "テスト店 那覇市";
+
+  it("1. realData.googleMapsUrlがあれば最優先でそのまま使う（検索URLへ作り直さない）", () => {
+    const url = resolveGoogleMapsUrl(
+      { googleMapsUrl: "https://maps.google.com/?cid=12345", address: "沖縄県那覇市1-1-1" },
+      fallbackQuery
+    );
+    expect(url).toBe("https://maps.google.com/?cid=12345");
+  });
+
+  it("2. googleMapsUrlが無くrealData.addressがあれば、実住所の検索URLへフォールバックする", () => {
+    const url = resolveGoogleMapsUrl({ address: "沖縄県那覇市おもろまち1-2-3" }, fallbackQuery);
+    expect(url).toBe(`https://www.google.com/maps?q=${encodeURIComponent("沖縄県那覇市おもろまち1-2-3")}`);
+  });
+
+  it("3. googleMapsUrlもaddressも無ければ、fallbackQuery(storeName+area等)の検索URLへフォールバックする", () => {
+    expect(resolveGoogleMapsUrl(undefined, fallbackQuery)).toBe(
+      `https://www.google.com/maps?q=${encodeURIComponent(fallbackQuery)}`
+    );
+    expect(resolveGoogleMapsUrl({}, fallbackQuery)).toBe(
+      `https://www.google.com/maps?q=${encodeURIComponent(fallbackQuery)}`
+    );
+  });
+
+  it("架空のURLは作らない：realDataに何も無くてもfallbackQueryの範囲を超えた値を挿入しない", () => {
+    const url = resolveGoogleMapsUrl(undefined, fallbackQuery);
+    const decoded = decodeURIComponent(new URL(url).searchParams.get("q") ?? "");
+    expect(decoded).toBe(fallbackQuery);
   });
 });

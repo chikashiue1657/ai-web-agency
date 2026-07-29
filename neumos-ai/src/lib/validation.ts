@@ -4,6 +4,28 @@ import { z } from "zod";
  * 入力検証。`brief` は AI集客支援MVP側 `NeumosBrief` をそのまま渡しても動くように、
  * 未知フィールド（例: brief.generationType の重複）は無視する（strictにしない）。
  */
+/**
+ * 危険なスキーム（javascript:/data:等）を拒否する安全なURL用スキーマ。
+ * 許可スキームは呼び出し側が明示する（websiteUrlは実店舗サイトがhttp運用の
+ * ケースも実データとして許容し、googleMapsUrlはGoogle Places由来（常にhttps契約）
+ * のみを想定するためhttpsだけを許可する）。
+ */
+function safeUrlSchema(allowedProtocols: readonly string[]) {
+  return z.string().refine(
+    (value) => {
+      try {
+        return allowedProtocols.includes(new URL(value).protocol);
+      } catch {
+        return false;
+      }
+    },
+    { message: `URL must use one of: ${allowedProtocols.join(", ")}` }
+  );
+}
+
+const WebsiteUrlSchema = safeUrlSchema(["https:", "http:"]);
+const GoogleMapsUrlSchema = safeUrlSchema(["https:"]);
+
 /** Googleビジネスプロフィール等から取得できた実データ（任意、無ければ全て省略可）。 */
 export const StoreRealDataSchema = z.object({
   address: z.string().optional(),
@@ -23,6 +45,8 @@ export const StoreRealDataSchema = z.object({
       })
     )
     .optional(),
+  websiteUrl: WebsiteUrlSchema.optional(),
+  googleMapsUrl: GoogleMapsUrlSchema.optional(),
 });
 
 export const StoreBriefSchema = z.object({

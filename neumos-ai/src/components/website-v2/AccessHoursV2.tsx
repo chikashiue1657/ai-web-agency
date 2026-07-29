@@ -1,6 +1,7 @@
 import type { AccessInfo, StoreRealData } from "@/lib/types";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { ArtDirection, SurfaceClasses } from "@/lib/engine/v2-design-system";
+import { resolveGoogleMapsUrl } from "@/lib/engine/real-data-links";
 
 /**
  * 営業時間・定休日・電話・住所（Access + v1のStoreInfoCard相当）を1つに統合。
@@ -22,6 +23,10 @@ import type { ArtDirection, SurfaceClasses } from "@/lib/engine/v2-design-system
  * アクセス要件を満たす構成に統一した。地図の代わりとなる図形は、実在しない
  * 地図画像・道路情報を捏造することは絶対にせず、方向ごとの見た目の違いは
  * 構造・タイポグラフィ・（warm-craftのみ）非地図の装飾要素で作る。
+ *
+ * Google Mapsへのリンク先(mapsUrl)は`engine/real-data-links.ts`の
+ * `resolveGoogleMapsUrl`が3方向共通で1回だけ解決する（realData.googleMapsUrl
+ * → realData.addressの検索URL → storeName+areaの検索URL、の優先順位）。
  */
 const ROW_ICON: Record<"営業時間" | "定休日" | "電話" | "住所", string> = {
   営業時間: "M12 7v5l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -45,10 +50,6 @@ function RowIcon({ label, className }: { label: RowLabel; className: string }) {
   );
 }
 
-function mapLinkHref(mapQuery: string): string {
-  return `https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}`;
-}
-
 function buildRows(realData?: StoreRealData): Row[] {
   const rows: Row[] = [];
   if (realData?.openingHours?.length) {
@@ -69,12 +70,14 @@ function ColophonAccessHours({
   storeName,
   access,
   rows,
+  mapsUrl,
   theme,
   surface,
 }: {
   storeName: string;
   access: AccessInfo;
   rows: Row[];
+  mapsUrl: string;
   theme: CafeThemeV2;
   surface: SurfaceClasses;
 }) {
@@ -111,7 +114,7 @@ function ColophonAccessHours({
         <div className={`mx-auto mt-10 w-10 border-t ${surface.divider}`} />
 
         <a
-          href={mapLinkHref(access.mapQuery)}
+          href={mapsUrl}
           target="_blank"
           rel="noreferrer"
           className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-xs font-medium ${theme.accentText} ${surface.divider} hover:bg-black/[0.03]`}
@@ -133,11 +136,13 @@ function ImmersiveAccessHours({
   storeName,
   access,
   rows,
+  mapsUrl,
   theme,
 }: {
   storeName: string;
   access: AccessInfo;
   rows: Row[];
+  mapsUrl: string;
   theme: CafeThemeV2;
 }) {
   return (
@@ -172,7 +177,7 @@ function ImmersiveAccessHours({
               </dl>
             )}
             <a
-              href={mapLinkHref(access.mapQuery)}
+              href={mapsUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/40 px-6 py-3 text-xs font-medium text-white transition hover:bg-white/10"
@@ -197,12 +202,14 @@ function CraftAccessHours({
   storeName,
   access,
   rows,
+  mapsUrl,
   theme,
   surface,
 }: {
   storeName: string;
   access: AccessInfo;
   rows: Row[];
+  mapsUrl: string;
   theme: CafeThemeV2;
   surface: SurfaceClasses;
 }) {
@@ -244,7 +251,7 @@ function CraftAccessHours({
           )}
 
           <a
-            href={mapLinkHref(access.mapQuery)}
+            href={mapsUrl}
             target="_blank"
             rel="noreferrer"
             className={`mt-2 inline-flex w-fit items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-xs font-medium ${theme.accentText} ${surface.divider} hover:bg-black/[0.03]`}
@@ -298,12 +305,19 @@ export function AccessHoursV2({
   // 必要最低限だけ表示する：営業時間と定休日は別々の行にせず1行にまとめる
   // （営業時間・定休日・電話・住所の4行がすべて並ぶと情報過多に見えるため）。
   const rows = buildRows(realData);
+  // Google Mapsリンクは3方向共通で同じ優先順位（googleMapsUrl→address検索→
+  // storeName+area検索）から1回だけ解決する（`real-data-links.ts`参照）。
+  const mapsUrl = resolveGoogleMapsUrl(realData, access.mapQuery);
 
   if (artDirection === "japanese-editorial") {
-    return <ColophonAccessHours storeName={storeName} access={access} rows={rows} theme={theme} surface={surface} />;
+    return (
+      <ColophonAccessHours storeName={storeName} access={access} rows={rows} mapsUrl={mapsUrl} theme={theme} surface={surface} />
+    );
   }
   if (artDirection === "sensory-immersive") {
-    return <ImmersiveAccessHours storeName={storeName} access={access} rows={rows} theme={theme} />;
+    return <ImmersiveAccessHours storeName={storeName} access={access} rows={rows} mapsUrl={mapsUrl} theme={theme} />;
   }
-  return <CraftAccessHours storeName={storeName} access={access} rows={rows} theme={theme} surface={surface} />;
+  return (
+    <CraftAccessHours storeName={storeName} access={access} rows={rows} mapsUrl={mapsUrl} theme={theme} surface={surface} />
+  );
 }

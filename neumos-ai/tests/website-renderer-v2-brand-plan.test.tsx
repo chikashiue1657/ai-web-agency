@@ -398,6 +398,36 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
     }
   });
 
+  it("AccessHoursのGoogle Mapsリンクは、realData.googleMapsUrlがあれば3方向すべてでそれをそのまま使う(検索URLへ作り直さない)", () => {
+    const briefWithMapsUrl = { ...cafeBrief, realData: { googleMapsUrl: "https://maps.google.com/?cid=424242" } };
+    const contents = generateWebsiteRuleBased(briefWithMapsUrl);
+    for (const brandArchetype of ["modern-minimal", "luxury-quiet", "artisan"] as const) {
+      const html = renderToStaticMarkup(
+        <WebsiteRendererV2 brief={briefWithMapsUrl} contents={contents} brandPlan={makeBrandPlan({ brandArchetype })} />
+      );
+      expect(html).toContain('href="https://maps.google.com/?cid=424242"');
+      expect(html).not.toContain("maps?q=");
+    }
+  });
+
+  it("AccessHoursのGoogle Mapsリンクは、googleMapsUrlが無くrealData.addressがあれば実住所の検索URLへフォールバックする", () => {
+    const briefWithAddress = { ...cafeBrief, realData: { address: "沖縄県那覇市おもろまち1-2-3" } };
+    const contents = generateWebsiteRuleBased(briefWithAddress);
+    const html = renderToStaticMarkup(
+      <WebsiteRendererV2 brief={briefWithAddress} contents={contents} brandPlan={makeBrandPlan({ brandArchetype: "artisan" })} />
+    );
+    expect(html).toContain(`href="https://www.google.com/maps?q=${encodeURIComponent("沖縄県那覇市おもろまち1-2-3")}"`);
+  });
+
+  it("realData自体が無い既存レコード相当のbriefでも、従来どおりstoreName+areaの検索URLで描画できる(後方互換)", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    const html = renderToStaticMarkup(
+      <WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={makeBrandPlan({ brandArchetype: "artisan" })} />
+    );
+    expect(html).toContain("Google マップで見る");
+    expect(html).toContain(`href="https://www.google.com/maps?q=${encodeURIComponent(`${cafeBrief.storeName} ${cafeBrief.area}`)}"`);
+  });
+
   it("AccessHoursはiframeを一切使わない(埋め込み失敗時のブラウザ既定「壊れたファイル」アイコンをそもそも発生させないため)", () => {
     // iframeのonErrorはブラウザによって信頼できず、失敗時に壊れたアイコンだけが
     // 残ることを実機検証で確認した。そのため地図はiframe埋め込みをやめ、

@@ -13,7 +13,7 @@
  * 該当フィールドは使わない）。headline/bodyのような channel非依存のコピーは
  * 生成結果をそのまま活かす。
  */
-import type { StoreBrief, ContactMethod, WebsiteCta } from "@/lib/types";
+import type { StoreBrief, StoreRealData, ContactMethod, WebsiteCta } from "@/lib/types";
 import { classifyIndustry } from "@/lib/engine/industry";
 
 const FALLBACK_LABEL = "お問い合わせする";
@@ -21,8 +21,20 @@ const FALLBACK_HREF = "#contact";
 /** 主要CTAは1つ、補助的な連絡手段は最大2つまでにする（画面が導線だらけにならないように）。 */
 const MAX_SECONDARY_METHODS = 2;
 
-function mapsSearchUrl(brief: StoreBrief): string {
-  return `https://www.google.com/maps?q=${encodeURIComponent(`${brief.storeName} ${brief.area}`)}`;
+/**
+ * Google Mapsへの実リンクを次の優先順位で解決する（AccessHoursV2・
+ * buildContactMethodsWithRealLinksの両方が使う唯一の決定箇所）。
+ *  1. realData.googleMapsUrl — Google Places由来の検証済みURL。
+ *     文字列検索URLへ作り直さず、そのまま使う。
+ *  2. realData.addressを使った検索URL — 実住所ベースなので1より精度は
+ *     落ちるが、テキスト検索よりは実データに基づく。
+ *  3. fallbackQuery（storeName+area等）を使った検索URL — 実データが
+ *     何も無い場合の従来どおりの案内リンク（架空のURLを作るわけではない）。
+ */
+export function resolveGoogleMapsUrl(realData: StoreRealData | undefined, fallbackQuery: string): string {
+  if (realData?.googleMapsUrl) return realData.googleMapsUrl;
+  const query = realData?.address || fallbackQuery;
+  return `https://www.google.com/maps?q=${encodeURIComponent(query)}`;
 }
 
 /** 業種別の「電話予約」ボタン文言。実際に電話番号がある場合のみ使う。 */
@@ -52,7 +64,7 @@ export function buildCtaWithRealLinks(headline: string, body: string, brief: Sto
   return { headline, body, buttonLabel: FALLBACK_LABEL, href: FALLBACK_HREF };
 }
 
-/** GoogleマップのリンクはstoreName+areaの検索クエリで常に組み立てられる（実在の確認を主張しない案内リンク）ため、電話・Instagramが無い場合の補助として使える。 */
+/** Googleマップのリンクは実データが無くても検索クエリで常に組み立てられる（実在の確認を主張しない案内リンク）ため、電話・Instagramが無い場合の補助として使える。 */
 function mapShownFor(category: ReturnType<typeof classifyIndustry>): boolean {
   return category === "cafe" || category === "izakaya" || category === "hotel" || category === "general";
 }
@@ -66,7 +78,8 @@ export function buildContactMethodsWithRealLinks(brief: StoreBrief): ContactMeth
   if (phone) methods.push({ label: "お電話でのお問い合わせ", href: `tel:${phone}` });
   if (instagramUrl) methods.push({ label: "Instagramを見る", href: instagramUrl });
   if (methods.length < MAX_SECONDARY_METHODS && mapShownFor(category)) {
-    methods.push({ label: "Google マップで見る", href: mapsSearchUrl(brief) });
+    const mapsUrl = resolveGoogleMapsUrl(brief.realData, `${brief.storeName} ${brief.area}`);
+    methods.push({ label: "Google マップで見る", href: mapsUrl });
   }
 
   if (methods.length === 0) {

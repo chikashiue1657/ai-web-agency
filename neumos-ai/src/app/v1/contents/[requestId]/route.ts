@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getGenerationRecord } from "@/lib/store";
 import { toLegacyGeneratedContents } from "@/lib/bridge";
 import { extractErrorDetail } from "@/lib/error-detail";
+import { checkNeumosApiAuth, neumosApiAuthError } from "@/lib/neumos-api-auth";
 
 /**
  * GET /v1/contents/{requestId} — MVP側のポーリング契約に対応する状態取得API。
@@ -14,7 +15,12 @@ import { extractErrorDetail } from "@/lib/error-detail";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET(_req: NextRequest, { params }: { params: { requestId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { requestId: string } }) {
+  const auth = checkNeumosApiAuth(req);
+  if (!auth.authorized) {
+    return neumosApiAuthError(auth.status);
+  }
+
   try {
     const record = await getGenerationRecord(params.requestId);
     if (!record) {

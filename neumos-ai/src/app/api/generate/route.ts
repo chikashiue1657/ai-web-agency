@@ -5,6 +5,7 @@ import { performGeneration } from "@/lib/generate";
 import { IMPLEMENTED_GENERATION_TYPES } from "@/lib/types";
 import type { GenerateResponse } from "@/lib/types";
 import { extractErrorDetail } from "@/lib/error-detail";
+import { checkNeumosApiAuth, neumosApiAuthError } from "@/lib/neumos-api-auth";
 
 /**
  * POST /api/generate
@@ -12,6 +13,11 @@ import { extractErrorDetail } from "@/lib/error-detail";
  * v1 は generationType = "website" のみ実装。他の種別は入力検証は通すが 501 を返す。
  */
 export async function POST(req: NextRequest) {
+  const auth = checkNeumosApiAuth(req);
+  if (!auth.authorized) {
+    return neumosApiAuthError(auth.status);
+  }
+
   let body: unknown;
   try {
     body = await req.json();

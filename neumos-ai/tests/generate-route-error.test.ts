@@ -52,7 +52,10 @@ function jsonRequest(url: string, body: unknown) {
   return new NextRequest(
     new Request(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-neumos-api-key",
+      },
       body: JSON.stringify(body),
     })
   );
@@ -61,6 +64,7 @@ function jsonRequest(url: string, body: unknown) {
 describe("Supabase書き込み失敗時、POST /v1/contents と /api/generate は詳細付きの500を返す", () => {
   beforeEach(() => {
     vi.resetModules();
+    process.env.NEUMOS_API_KEY = "test-neumos-api-key";
   });
 
   it("POST /v1/contents: errorDetailにPostgrestのcode/messageがそのまま入る", async () => {

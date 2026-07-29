@@ -99,6 +99,49 @@ describe("buildContactMethodsWithRealLinks", () => {
     );
     expect(methods).toContainEqual({ label: "Google マップで見る", href: "https://maps.google.com/?cid=999" });
   });
+
+  it("websiteUrlがあれば「公式サイトを見る」が実URLで含まれる", () => {
+    const methods = buildContactMethodsWithRealLinks(
+      makeBrief({ realData: { websiteUrl: "https://example-cafe.jp" } })
+    );
+    expect(methods).toContainEqual({ label: "公式サイトを見る", href: "https://example-cafe.jp" });
+  });
+
+  it("websiteUrlが無ければ「公式サイトを見る」は出さない（架空の公式サイトURLを作らない）", () => {
+    const methods = buildContactMethodsWithRealLinks(makeBrief({ realData: { phone: "098-111-2222" } }));
+    expect(methods.some((m) => m.label.includes("公式サイト"))).toBe(false);
+  });
+
+  it("優先順位は電話→公式サイト→Instagram→Google Mapsの順で、最大3件(MAX_SECONDARY_METHODS+1)に収める", () => {
+    const methods = buildContactMethodsWithRealLinks(
+      makeBrief({
+        industry: "カフェ",
+        realData: {
+          phone: "098-111-2222",
+          websiteUrl: "https://example-cafe.jp",
+          instagramUrl: "https://instagram.com/example",
+        },
+      })
+    );
+    // 電話・公式サイト・Instagramの3件が実データとして揃っているため、
+    // 優先順位どおりこの3件で埋まり、Google Mapsはこの店ではあふれて出ない。
+    expect(methods).toEqual([
+      { label: "お電話でのお問い合わせ", href: "tel:098-111-2222" },
+      { label: "公式サイトを見る", href: "https://example-cafe.jp" },
+      { label: "Instagramを見る", href: "https://instagram.com/example" },
+    ]);
+    expect(methods.length).toBeLessThanOrEqual(3);
+  });
+
+  it("websiteUrlが無い場合は従来どおり電話・Instagram・Mapsの組み合わせのまま変わらない", () => {
+    const methods = buildContactMethodsWithRealLinks(
+      makeBrief({ industry: "整体院", realData: { phone: "098-111-2222", instagramUrl: "https://instagram.com/example" } })
+    );
+    expect(methods).toEqual([
+      { label: "お電話でのお問い合わせ", href: "tel:098-111-2222" },
+      { label: "Instagramを見る", href: "https://instagram.com/example" },
+    ]);
+  });
 });
 
 describe("resolveGoogleMapsUrl: Google Mapsリンクの優先順位", () => {

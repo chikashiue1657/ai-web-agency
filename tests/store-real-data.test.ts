@@ -137,6 +137,34 @@ describe("buildStoreRealData", () => {
       expect(buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: 12345 } }))?.googleMapsUrl).toBeUndefined();
     });
 
+    it("Google Maps以外のホストは、httpsでも採用しない（許可ホストはmaps.google.comのみに限定）", () => {
+      expect(buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "https://evil.example/maps" } }))?.googleMapsUrl).toBeUndefined();
+      expect(buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "https://www.google.com/maps?q=x" } }))?.googleMapsUrl).toBeUndefined();
+      expect(buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "https://google.com/maps?q=x" } }))?.googleMapsUrl).toBeUndefined();
+    });
+
+    it("maps.google.comを偽装したホスト（サブドメイン結合・userinfo偽装）は採用しない", () => {
+      expect(
+        buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "https://maps.google.com.evil.example/" } }))?.googleMapsUrl
+      ).toBeUndefined();
+      // "@"より前はuserinfoとして解釈され、実際のホストはevil.exampleになる。
+      expect(
+        buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "https://maps.google.com@evil.example/" } }))?.googleMapsUrl
+      ).toBeUndefined();
+    });
+
+    it("username/password付きURLは、ホストがmaps.google.comでも採用しない", () => {
+      expect(
+        buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "https://user:password@maps.google.com/" } }))?.googleMapsUrl
+      ).toBeUndefined();
+    });
+
+    it("正規のGoogle Maps URL(maps.google.com・https・認証情報無し)は採用する", () => {
+      expect(
+        buildStoreRealData(makeStore({ raw_payload: { googleMapsUri: "https://maps.google.com/?cid=42" } }))?.googleMapsUrl
+      ).toBe("https://maps.google.com/?cid=42");
+    });
+
     it("raw_payloadがnull/空オブジェクト/配列/不正な形でも例外にならずgoogleMapsUrlはundefined", () => {
       expect(() => buildStoreRealData(makeStore({ raw_payload: null }))).not.toThrow();
       expect(buildStoreRealData(makeStore({ raw_payload: null }))?.googleMapsUrl).toBeUndefined();
@@ -147,6 +175,71 @@ describe("buildStoreRealData", () => {
       expect(() =>
         buildStoreRealData(makeStore({ raw_payload: "broken" as unknown as Record<string, unknown> }))
       ).not.toThrow();
+    });
+
+    it("不正なgoogleMapsUriがあっても、生成リクエスト全体は失敗させず他のrealDataフィールドはそのまま含める", () => {
+      const store = makeStore({
+        address: "沖縄県那覇市1-1-1",
+        phone: "098-000-0002",
+        raw_payload: { googleMapsUri: "https://evil.example/maps" },
+      });
+      const realData = buildStoreRealData(store);
+      expect(realData?.googleMapsUrl).toBeUndefined();
+      expect(realData?.address).toBe("沖縄県那覇市1-1-1");
+      expect(realData?.phone).toBe("098-000-0002");
+    });
+
+    describe("websiteUrlの安全性検証", () => {
+      it("正常なhttps website_urlをそのまま渡す", () => {
+        expect(buildStoreRealData(makeStore({ website_url: "https://example-cafe.jp" }))?.websiteUrl).toBe(
+          "https://example-cafe.jp"
+        );
+      });
+
+      it("正常なhttp website_urlも渡す（SSL未導入の実店舗サイトを実データとして許容する）", () => {
+        expect(buildStoreRealData(makeStore({ website_url: "http://example-cafe.jp" }))?.websiteUrl).toBe(
+          "http://example-cafe.jp"
+        );
+      });
+
+      it("空白文字だけのwebsite_urlは省略する", () => {
+        expect(buildStoreRealData(makeStore({ website_url: "   " }))?.websiteUrl).toBeUndefined();
+      });
+
+      it("前後に空白が付いたwebsite_urlはtrimしてから採用する（決定した挙動をここで固定する）", () => {
+        expect(buildStoreRealData(makeStore({ website_url: "  https://example-cafe.jp  " }))?.websiteUrl).toBe(
+          "https://example-cafe.jp"
+        );
+      });
+
+      it("URLとして解析できない文字列は省略する", () => {
+        expect(buildStoreRealData(makeStore({ website_url: "not a url" }))?.websiteUrl).toBeUndefined();
+      });
+
+      it("javascript:/data:/ftp:等の非http(s)スキームは省略する", () => {
+        expect(buildStoreRealData(makeStore({ website_url: "javascript:alert(1)" }))?.websiteUrl).toBeUndefined();
+        expect(
+          buildStoreRealData(makeStore({ website_url: "data:text/html,<script>alert(1)</script>" }))?.websiteUrl
+        ).toBeUndefined();
+        expect(buildStoreRealData(makeStore({ website_url: "ftp://example.com/site" }))?.websiteUrl).toBeUndefined();
+      });
+
+      it("相対URLは省略する（推測でhttps://を補って架空のURLを作らない）", () => {
+        expect(buildStoreRealData(makeStore({ website_url: "/menu" }))?.websiteUrl).toBeUndefined();
+        expect(buildStoreRealData(makeStore({ website_url: "example.com/path" }))?.websiteUrl).toBeUndefined();
+      });
+
+      it("不正なwebsite_urlがあっても、生成リクエスト全体は失敗させず他のrealDataフィールドはそのまま含める", () => {
+        const store = makeStore({
+          address: "沖縄県那覇市1-1-1",
+          phone: "098-000-0003",
+          website_url: "javascript:alert(1)",
+        });
+        const realData = buildStoreRealData(store);
+        expect(realData?.websiteUrl).toBeUndefined();
+        expect(realData?.address).toBe("沖縄県那覇市1-1-1");
+        expect(realData?.phone).toBe("098-000-0003");
+      });
     });
 
     it("memory repositoryを通した取り込み→読み出しでもwebsiteUrl/googleMapsUrlが失われない（正規化→保存→取得の経路一致確認）", async () => {

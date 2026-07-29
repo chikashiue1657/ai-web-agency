@@ -22,18 +22,68 @@ import type { Store, StoreRealData } from "@/lib/types";
 const PHOTO_NAME_PATTERN = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/;
 const MAX_PHOTOS = 6;
 
-const GOOGLE_MAPS_URL_PATTERN = /^https:\/\//i;
+/**
+ * このファイル内で実際に確認できるgoogleMapsUriの取得形式（tests/normalize.test.ts・
+ * tests/store-real-data.test.tsのfixture、normalize/url.tsのNON_WEBSITE_HOSTS判定）は
+ * いずれも"maps.google.com"のみである。推測で他ドメイン（www.google.com/google.com等）
+ * を広く許可せず、実際に確認できた形式だけに限定する。
+ */
+const ALLOWED_GOOGLE_MAPS_HOSTS = new Set(["maps.google.com"]);
 
 /**
  * raw_payload.googleMapsUri（Places API (New) のgoogleMapsUriそのもの）を取り出す。
  * source が google_places 以外の行はPlaces由来のフィールド名を持たない（apify/csv/manual等は
- * raw_payloadの形状が異なる）ため対象外にする。httpsで始まらない値・文字列以外は
- * 採用しない（Places側は常にhttpsを返す契約のため、それ以外は取得元不明の値として扱う）。
+ * raw_payloadの形状が異なる）ため対象外にする。
+ *
+ * new URL()で解析できない値・https以外・ALLOWED_GOOGLE_MAPS_HOSTSに無いホスト・
+ * user:password@形式の認証情報付きURLは採用せず、この項目だけをundefinedにする
+ * （生成リクエスト全体は失敗させない）。ホストの一致は完全一致のみ（endsWith等の
+ * サフィックス一致は"maps.google.com.evil.example"のような偽装ホストを通して
+ * しまうため使わない）。認証情報チェックにより
+ * "https://maps.google.com@evil.example/"（実際のホストはevil.example）・
+ * "https://user:password@maps.google.com/"のどちらも拒否する。
  */
 function resolveGoogleMapsUrl(store: Store): string | undefined {
   if (store.source !== "google_places") return undefined;
   const raw = (store.raw_payload as { googleMapsUri?: unknown } | null)?.googleMapsUri;
-  return typeof raw === "string" && GOOGLE_MAPS_URL_PATTERN.test(raw) ? raw : undefined;
+  if (typeof raw !== "string") return undefined;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return undefined;
+    if (url.username || url.password) return undefined;
+    if (!ALLOWED_GOOGLE_MAPS_HOSTS.has(url.hostname.toLowerCase())) return undefined;
+    return raw;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * store.website_urlを実際にNeumosへ送ってよい安全なURLかどうか検証する。
+ * normalize/url.tsのnormalizeUrl()が保存時に既に大半のゴミを弾いているはずだが、
+ * 過去に保存された値・DB上の手動編集等で不正な値が紛れ込む可能性を考慮し、
+ * 送信直前にもう一段独立して検証する（不正ならこの項目だけundefinedにし、
+ * 他のrealDataフィールドはそのまま送る）。
+ *
+ * 決定した挙動: 前後の空白のみtrimしてから検証する（内部の空白は矯正せず、
+ * trim後もURLとして解析できなければ拒否する）。空白だけの値はtrim後に空文字列
+ * となり拒否される。スキーム省略の相対URL・javascript:/data:/ftp:等の
+ * 非http(s)スキーム・new URL()で解析できない値はすべて拒否する（相対URLを
+ * 「たぶんこうだろう」と推測してhttps://を補完することはしない＝架空のURLを
+ * 作らない）。
+ */
+function resolveWebsiteUrl(store: Store): string | undefined {
+  const raw = store.website_url;
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+    return trimmed;
+  } catch {
+    return undefined;
+  }
 }
 
 function resolvePhotoUrls(store: Store): string[] | undefined {
@@ -64,7 +114,9 @@ export function buildStoreRealData(store: Store): StoreRealData | undefined {
   if (store.instagram_url) data.instagramUrl = store.instagram_url;
   if (typeof store.rating === "number") data.googleRating = store.rating;
   if (store.review_count) data.googleReviewCount = store.review_count;
-  if (store.website_url) data.websiteUrl = store.website_url;
+
+  const websiteUrl = resolveWebsiteUrl(store);
+  if (websiteUrl) data.websiteUrl = websiteUrl;
 
   const photoUrls = resolvePhotoUrls(store);
   if (photoUrls) data.photoUrls = photoUrls;

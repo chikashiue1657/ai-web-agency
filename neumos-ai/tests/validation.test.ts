@@ -98,4 +98,26 @@ describe("StoreRealDataSchema: websiteUrl/googleMapsUrlの安全なURL検証", (
     const result = StoreRealDataSchema.safeParse({ address: "沖縄県那覇市1-1-1" });
     expect(result.success).toBe(true);
   });
+
+  it("googleMapsUrlはGoogle以外のhttps URLを拒否する（許可ホストはmaps.google.comのみ）", () => {
+    expect(StoreRealDataSchema.safeParse({ googleMapsUrl: "https://evil.example/maps" }).success).toBe(false);
+    expect(StoreRealDataSchema.safeParse({ googleMapsUrl: "https://www.google.com/maps?q=x" }).success).toBe(false);
+    expect(StoreRealDataSchema.safeParse({ googleMapsUrl: "https://google.com/maps?q=x" }).success).toBe(false);
+  });
+
+  it("googleMapsUrlはGoogleホストを装ったURL（サブドメイン結合・userinfo偽装）を拒否する", () => {
+    expect(StoreRealDataSchema.safeParse({ googleMapsUrl: "https://maps.google.com.evil.example/" }).success).toBe(false);
+    // "@"より前はuserinfoとして解釈され、実際のホストはevil.exampleになる。
+    expect(StoreRealDataSchema.safeParse({ googleMapsUrl: "https://maps.google.com@evil.example/" }).success).toBe(false);
+  });
+
+  it("googleMapsUrlはusername/password付きURLを、ホストがmaps.google.comでも拒否する", () => {
+    expect(StoreRealDataSchema.safeParse({ googleMapsUrl: "https://user:password@maps.google.com/" }).success).toBe(false);
+  });
+
+  it("googleMapsUrlは正規のGoogle Maps URL(maps.google.com・https・認証情報無し)を受理する", () => {
+    const result = StoreRealDataSchema.safeParse({ googleMapsUrl: "https://maps.google.com/?cid=42" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.googleMapsUrl).toBe("https://maps.google.com/?cid=42");
+  });
 });

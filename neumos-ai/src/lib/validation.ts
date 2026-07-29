@@ -6,9 +6,8 @@ import { z } from "zod";
  */
 /**
  * 危険なスキーム（javascript:/data:等）を拒否する安全なURL用スキーマ。
- * 許可スキームは呼び出し側が明示する（websiteUrlは実店舗サイトがhttp運用の
- * ケースも実データとして許容し、googleMapsUrlはGoogle Places由来（常にhttps契約）
- * のみを想定するためhttpsだけを許可する）。
+ * websiteUrlは実店舗サイトがhttp運用のケースも実データとして許容する
+ * （ホストは店舗ごとに異なるため制限しない）。
  */
 function safeUrlSchema(allowedProtocols: readonly string[]) {
   return z.string().refine(
@@ -24,7 +23,37 @@ function safeUrlSchema(allowedProtocols: readonly string[]) {
 }
 
 const WebsiteUrlSchema = safeUrlSchema(["https:", "http:"]);
-const GoogleMapsUrlSchema = safeUrlSchema(["https:"]);
+
+/**
+ * このリポジトリ内で実際に確認できるgoogleMapsUriの取得形式（MVP側の
+ * fixture・テスト・normalize/url.tsのNON_WEBSITE_HOSTS判定）は、いずれも
+ * "maps.google.com"のみである。推測で他ドメイン（www.google.com/google.com等）
+ * を広く許可せず、実際に確認できた形式だけに限定する。
+ */
+const ALLOWED_GOOGLE_MAPS_HOSTS = new Set(["maps.google.com"]);
+
+/**
+ * googleMapsUrlはGoogle Places由来のURLのみを想定するため、httpsに加えて
+ * ホストをALLOWED_GOOGLE_MAPS_HOSTSへ限定し、user:password@形式の認証情報付き
+ * URLも拒否する。ホストの一致は完全一致のみ（endsWith等のサフィックス一致は
+ * "maps.google.com.evil.example"のような偽装ホストを通してしまうため使わない）。
+ * 認証情報チェックにより"https://maps.google.com@evil.example/"
+ * （実際のホストはevil.example）・"https://user:password@maps.google.com/"の
+ * どちらも拒否する。
+ */
+const GoogleMapsUrlSchema = z.string().refine(
+  (value) => {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:") return false;
+      if (url.username || url.password) return false;
+      return ALLOWED_GOOGLE_MAPS_HOSTS.has(url.hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  },
+  { message: "googleMapsUrl must be an https URL on an allowed Google Maps host without embedded credentials" }
+);
 
 /** Googleビジネスプロフィール等から取得できた実データ（任意、無ければ全て省略可）。 */
 export const StoreRealDataSchema = z.object({

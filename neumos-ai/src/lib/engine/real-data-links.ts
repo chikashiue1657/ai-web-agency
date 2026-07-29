@@ -18,7 +18,11 @@ import { classifyIndustry } from "@/lib/engine/industry";
 
 const FALLBACK_LABEL = "お問い合わせする";
 const FALLBACK_HREF = "#contact";
-/** 主要CTAは1つ、補助的な連絡手段は最大2つまでにする（画面が導線だらけにならないように）。 */
+/**
+ * 主要CTAは1つ、補助的な連絡手段は最大 MAX_SECONDARY_METHODS + 1 件までにする
+ * （画面が導線だらけにならないように）。優先順位は電話→公式サイト→Instagram→
+ * Google Mapsの順（`buildContactMethodsWithRealLinks`参照）。
+ */
 const MAX_SECONDARY_METHODS = 2;
 
 /**
@@ -64,27 +68,37 @@ export function buildCtaWithRealLinks(headline: string, body: string, brief: Sto
   return { headline, body, buttonLabel: FALLBACK_LABEL, href: FALLBACK_HREF };
 }
 
-/** Googleマップのリンクは実データが無くても検索クエリで常に組み立てられる（実在の確認を主張しない案内リンク）ため、電話・Instagramが無い場合の補助として使える。 */
+/** Googleマップのリンクは実データが無くても検索クエリで常に組み立てられる（実在の確認を主張しない案内リンク）ため、電話・公式サイト・Instagramが無い場合の補助として使える。 */
 function mapShownFor(category: ReturnType<typeof classifyIndustry>): boolean {
   return category === "cafe" || category === "izakaya" || category === "hotel" || category === "general";
 }
 
+/**
+ * 補助的な連絡手段の優先順位: 電話 → 公式サイト → Instagram → Google Maps。
+ * 電話・公式サイト・Instagramは実データが無ければ候補にすら入れない（架空の
+ * リンクを作らない）。Google Mapsだけは`mapShownFor(category)`が真の業種なら
+ * 実データが無くても検索案内として候補に入る（実在の確認は主張しない）。
+ * 優先順位どおりに並べた候補を組み立てたうえで、最後に`MAX_SECONDARY_METHODS + 1`
+ * 件まで切り詰める（画面が導線だらけにならないように）。
+ */
 export function buildContactMethodsWithRealLinks(brief: StoreBrief): ContactMethod[] {
   const category = classifyIndustry(brief.industry);
   const phone = brief.realData?.phone;
+  const websiteUrl = brief.realData?.websiteUrl;
   const instagramUrl = brief.realData?.instagramUrl;
 
-  const methods: ContactMethod[] = [];
-  if (phone) methods.push({ label: "お電話でのお問い合わせ", href: `tel:${phone}` });
-  if (instagramUrl) methods.push({ label: "Instagramを見る", href: instagramUrl });
-  if (methods.length < MAX_SECONDARY_METHODS && mapShownFor(category)) {
+  const candidates: ContactMethod[] = [];
+  if (phone) candidates.push({ label: "お電話でのお問い合わせ", href: `tel:${phone}` });
+  if (websiteUrl) candidates.push({ label: "公式サイトを見る", href: websiteUrl });
+  if (instagramUrl) candidates.push({ label: "Instagramを見る", href: instagramUrl });
+  if (mapShownFor(category)) {
     const mapsUrl = resolveGoogleMapsUrl(brief.realData, `${brief.storeName} ${brief.area}`);
-    methods.push({ label: "Google マップで見る", href: mapsUrl });
+    candidates.push({ label: "Google マップで見る", href: mapsUrl });
   }
 
-  if (methods.length === 0) {
-    methods.push({ label: FALLBACK_LABEL, href: FALLBACK_HREF });
+  if (candidates.length === 0) {
+    return [{ label: FALLBACK_LABEL, href: FALLBACK_HREF }];
   }
 
-  return methods.slice(0, MAX_SECONDARY_METHODS + 1);
+  return candidates.slice(0, MAX_SECONDARY_METHODS + 1);
 }

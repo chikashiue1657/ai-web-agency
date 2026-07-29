@@ -13,16 +13,32 @@
  * 該当フィールドは使わない）。headline/bodyのような channel非依存のコピーは
  * 生成結果をそのまま活かす。
  */
-import type { StoreBrief, ContactMethod, WebsiteCta } from "@/lib/types";
+import type { StoreBrief, StoreRealData, ContactMethod, WebsiteCta } from "@/lib/types";
 import { classifyIndustry } from "@/lib/engine/industry";
 
 const FALLBACK_LABEL = "お問い合わせする";
 const FALLBACK_HREF = "#contact";
-/** 主要CTAは1つ、補助的な連絡手段は最大2つまでにする（画面が導線だらけにならないように）。 */
+/**
+ * 主要CTAは1つ、補助的な連絡手段は最大 MAX_SECONDARY_METHODS 件までにする
+ * （画面が導線だらけにならないように）。優先順位は電話→公式サイト→Instagram→
+ * Google Mapsの順（`buildContactMethodsWithRealLinks`参照）。
+ */
 const MAX_SECONDARY_METHODS = 2;
 
-function mapsSearchUrl(brief: StoreBrief): string {
-  return `https://www.google.com/maps?q=${encodeURIComponent(`${brief.storeName} ${brief.area}`)}`;
+/**
+ * Google Mapsへの実リンクを次の優先順位で解決する（AccessHoursV2・
+ * buildContactMethodsWithRealLinksの両方が使う唯一の決定箇所）。
+ *  1. realData.googleMapsUrl — Google Places由来の検証済みURL。
+ *     文字列検索URLへ作り直さず、そのまま使う。
+ *  2. realData.addressを使った検索URL — 実住所ベースなので1より精度は
+ *     落ちるが、テキスト検索よりは実データに基づく。
+ *  3. fallbackQuery（storeName+area等）を使った検索URL — 実データが
+ *     何も無い場合の従来どおりの案内リンク（架空のURLを作るわけではない）。
+ */
+export function resolveGoogleMapsUrl(realData: StoreRealData | undefined, fallbackQuery: string): string {
+  if (realData?.googleMapsUrl) return realData.googleMapsUrl;
+  const query = realData?.address || fallbackQuery;
+  return `https://www.google.com/maps?q=${encodeURIComponent(query)}`;
 }
 
 /** 業種別の「電話予約」ボタン文言。実際に電話番号がある場合のみ使う。 */
@@ -52,26 +68,38 @@ export function buildCtaWithRealLinks(headline: string, body: string, brief: Sto
   return { headline, body, buttonLabel: FALLBACK_LABEL, href: FALLBACK_HREF };
 }
 
-/** GoogleマップのリンクはstoreName+areaの検索クエリで常に組み立てられる（実在の確認を主張しない案内リンク）ため、電話・Instagramが無い場合の補助として使える。 */
+/** Googleマップのリンクは実データが無くても検索クエリで常に組み立てられる（実在の確認を主張しない案内リンク）ため、電話・公式サイト・Instagramが無い場合の補助として使える。 */
 function mapShownFor(category: ReturnType<typeof classifyIndustry>): boolean {
   return category === "cafe" || category === "izakaya" || category === "hotel" || category === "general";
 }
 
+/**
+ * 補助的な連絡手段の優先順位: 電話 → 公式サイト → Instagram → Google Maps。
+ * 電話・公式サイト・Instagramは実データが無ければ候補にすら入れない（架空の
+ * リンクを作らない）。Google Mapsだけは`mapShownFor(category)`が真の業種なら
+ * 実データが無くても検索案内として候補に入る（実在の確認は主張しない）。
+ * 優先順位どおりに並べた候補を組み立てたうえで、上位 MAX_SECONDARY_METHODS
+ * （2）件だけを残す（画面が導線だらけにならないように。実データが多い店舗
+ * でも常に上位2件のみを表示する）。
+ */
 export function buildContactMethodsWithRealLinks(brief: StoreBrief): ContactMethod[] {
   const category = classifyIndustry(brief.industry);
   const phone = brief.realData?.phone;
+  const websiteUrl = brief.realData?.websiteUrl;
   const instagramUrl = brief.realData?.instagramUrl;
 
-  const methods: ContactMethod[] = [];
-  if (phone) methods.push({ label: "お電話でのお問い合わせ", href: `tel:${phone}` });
-  if (instagramUrl) methods.push({ label: "Instagramを見る", href: instagramUrl });
-  if (methods.length < MAX_SECONDARY_METHODS && mapShownFor(category)) {
-    methods.push({ label: "Google マップで見る", href: mapsSearchUrl(brief) });
+  const candidates: ContactMethod[] = [];
+  if (phone) candidates.push({ label: "お電話でのお問い合わせ", href: `tel:${phone}` });
+  if (websiteUrl) candidates.push({ label: "公式サイトを見る", href: websiteUrl });
+  if (instagramUrl) candidates.push({ label: "Instagramを見る", href: instagramUrl });
+  if (mapShownFor(category)) {
+    const mapsUrl = resolveGoogleMapsUrl(brief.realData, `${brief.storeName} ${brief.area}`);
+    candidates.push({ label: "Google マップで見る", href: mapsUrl });
   }
 
-  if (methods.length === 0) {
-    methods.push({ label: FALLBACK_LABEL, href: FALLBACK_HREF });
+  if (candidates.length === 0) {
+    return [{ label: FALLBACK_LABEL, href: FALLBACK_HREF }];
   }
 
-  return methods.slice(0, MAX_SECONDARY_METHODS + 1);
+  return candidates.slice(0, MAX_SECONDARY_METHODS);
 }

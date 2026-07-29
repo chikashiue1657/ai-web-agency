@@ -80,6 +80,14 @@ export interface StoreRealData {
    * 架空の商品名・価格は一切表示しない）。
    */
   menuItems?: RealMenuItem[];
+  /** 店舗公式サイトURL（実データがある場合のみ。MVP側store.website_url由来）。 */
+  websiteUrl?: string;
+  /**
+   * Google Places由来の正式なGoogle Maps URL（MVP側raw_payload.googleMapsUriそのもの）。
+   * 存在する場合、Google Mapsリンクはこの値を最優先で使い、テキスト検索URLへ
+   * 作り直さない（`engine/real-data-links.ts`の`resolveGoogleMapsUrl`参照）。
+   */
+  googleMapsUrl?: string;
 }
 
 /** Google レビュー1件（本文のみ必須。評価者名・個別評価は取得できた場合のみ）。 */

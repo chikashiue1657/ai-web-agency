@@ -185,6 +185,13 @@ export interface StoreRealData {
   googleReviewCount?: number;
   /** 実写真のURL（表示可能な直リンク）。存在する分だけGallery/Aboutで使う。 */
   photoUrls?: string[];
+  /** 店舗公式サイトURL（store.website_url由来。SNS/ポータルは既にnormalize/url.tsで除外済み）。 */
+  websiteUrl?: string;
+  /**
+   * Google Places由来の正式なGoogle Maps URL（raw_payload.googleMapsUriそのもの）。
+   * 存在する場合、Neumos AI側はテキスト検索URLへ作り直さずこの値をそのまま使う。
+   */
+  googleMapsUrl?: string;
 }
 
 /** generationType を除いた再利用可能なブリーフ核（StoreStrategy が保持）。 */

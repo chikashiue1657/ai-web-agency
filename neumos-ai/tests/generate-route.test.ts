@@ -19,6 +19,8 @@ const brief = {
   offer: "初回カウンセリング無料",
 };
 
+const cafeBrief = { ...brief, storeName: "麦の香", industry: "カフェ" };
+
 function jsonRequest(url: string, body: unknown) {
   return new NextRequest(new Request(url, {
     method: "POST",
@@ -57,6 +59,13 @@ describe("POST /api/generate", () => {
     });
     const res = await generatePOST(req);
     expect(res.status).toBe(400);
+  });
+
+  it("カフェはv2を既定Previewにする", async () => {
+    const req = jsonRequest("http://localhost:3100/api/generate", { generationType: "website", brief: cafeBrief });
+    const res = await generatePOST(req);
+    const json = await res.json();
+    expect(json.previewUrl).toBe(`http://localhost:3100/preview/${json.requestId}/v2`);
   });
 
   it("returns 501 for a not-yet-implemented generationType", async () => {

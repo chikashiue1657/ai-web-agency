@@ -103,7 +103,10 @@ function resolvePhotoUrls(store: Store): string[] | undefined {
     .slice(0, MAX_PHOTOS);
 
   if (names.length === 0) return undefined;
-  return names.map((name) => `${baseUrl}/api/places/photo?name=${encodeURIComponent(name)}&w=800`);
+  return names.map(
+    (name, index) =>
+      `${baseUrl}/api/places/photo?name=${encodeURIComponent(name)}&w=800&i=${index}`
+  );
 }
 
 export function buildStoreRealData(store: Store): StoreRealData | undefined {

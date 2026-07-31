@@ -119,6 +119,19 @@ export const ruleBrandDirectionProvider: BrandDirectionProvider = {
             rejectionReason: p.rejectionReason,
           }))
         : positionalPhotoAssignments(photoUrls),
+      supplementalImageDirection: category === "cafe" ? {
+        sourcePhotoUrl: photoAnalyses?.find((photo) => photo.recommendedRole !== "reject")?.photoUrl ?? null,
+        storeStrength: brief.salesAngle,
+        visitMotivation: brief.websiteGoal,
+        commercialSubject: "coffee-craft",
+        shotType: "ritual-detail",
+        cameraAngle: "counter-height",
+        composition: "asymmetric-editorial",
+        lighting: "soft-window",
+        sensoryCues: safeMoodKeywords(brief, category).slice(0, 4),
+        truthBoundary: ["実在店舗の再現ではない", "ロゴ・商品名・内外装を作らない"],
+        avoid: ["架空の店舗外観", "読める文字", "過剰に整った商品陳列", "広告的な豆の散乱"],
+      } : null,
       ctaStrategy: {
         placement: category === "izakaya" || category === "cafe" ? "hero" : "end-only",
         urgency: category === "izakaya" ? "high" : "low",

@@ -61,7 +61,17 @@ const SupplementalImageSchema = z.object({
   role: z.literal("atmosphere"),
   altText: z.string().min(1),
   disclosure: z.literal("AI生成イメージ（実際の店舗写真ではありません）"),
-  promptVersion: z.literal("cafe-atmosphere-v1"),
+  promptVersion: z.enum(["cafe-atmosphere-v1", "cafe-shot-plan-v2"]),
+  usage: z.object({
+    model: z.string().min(1),
+    quality: z.string().min(1),
+    size: z.string().min(1),
+    inputTokens: z.number().int().nonnegative().nullable(),
+    outputTokens: z.number().int().nonnegative().nullable(),
+    totalTokens: z.number().int().nonnegative().nullable(),
+    estimatedOutputCostUsd: z.number().nonnegative().nullable(),
+    remainingProjectCreditUsd: z.null(),
+  }).optional(),
 });
 
 /** Googleビジネスプロフィール等から取得できた実データ（任意、無ければ全て省略可）。 */

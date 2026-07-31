@@ -128,6 +128,17 @@ function extractUsage(response: unknown): { inputTokens: number | null; outputTo
   };
 }
 
+function keepKnownSupplementalSource<T extends { supplementalImageDirection?: { sourcePhotoUrl: string | null } | null }>(
+  plan: T,
+  photoAnalyses?: PhotoAnalysis[]
+): T {
+  const direction = plan.supplementalImageDirection;
+  if (!direction?.sourcePhotoUrl) return plan;
+  const knownUrls = new Set((photoAnalyses ?? []).map((photo) => photo.photoUrl));
+  if (knownUrls.has(direction.sourcePhotoUrl)) return plan;
+  return { ...plan, supplementalImageDirection: { ...direction, sourcePhotoUrl: null } };
+}
+
 // 重要（プロンプトインジェクション対策）: brief/realDataは店舗オーナー・Google Places等の
 // 外部入力であり、信頼できない入力として扱う。system役割には静的な指示文だけを置き、
 // brief等の外部データは必ずuser役割のcontentとして渡す（system役割へ混ぜない）。
@@ -146,7 +157,13 @@ confidenceは、briefの情報量が少ない・判断が難しい場合は低�
 （低いconfidenceの判断を断定的な表現の理由にしないこと）。
 制作会社側の施策説明（SEO・集客支援等）は一切出力しないこと。
 写真の分析結果(photoAnalyses)を渡されていない場合、photoAssignmentsは空配列にすること
-（写真を見ずに役割を捏造しないこと）。`;
+（写真を見ずに役割を捏造しないこと）。
+カフェの場合は supplementalImageDirection に、既存写真の単なる色・素材の模倣ではなく、
+「来店したくなる理由を伝えるために不足している1カット」の撮影指示を作ること。
+photoAnalysesがある場合は、写っている店の強みを読み取り、どこを切り取るか、どの高さ・角度・
+構図・光で撮るかまで決める。実在する商品名、ロゴ、内外装、人物、設備を推測で追加しない。
+sourcePhotoUrlは入力されたphotoAnalyses[].photoUrlのいずれか、またはnullだけにする。
+カフェ以外では supplementalImageDirection はnullにすること。`;
 
 const PHOTO_SYSTEM_PROMPT = `あなたは店舗写真1枚を分析するVisionアナリストです。
 ${UNTRUSTED_DATA_NOTICE}
@@ -280,7 +297,7 @@ export const openaiBrandDirectionProvider: BrandDirectionProvider = {
 
         const usage = extractUsage(response);
         return {
-          plan: parsed.data,
+          plan: keepKnownSupplementalSource(parsed.data, photoAnalyses),
           usage: {
             requestId: input.requestId,
             provider: "openai",

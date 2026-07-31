@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { StoreBrief } from "@/lib/types";
-import { resolveSupplementalImages } from "@/lib/images/supplemental";
+import { buildSupplementalImagePrompt, resolveSupplementalImages } from "@/lib/images/supplemental";
 import { SupplementalImageV2 } from "@/components/website-v2/SupplementalImageV2";
+import type { BrandPlan } from "@/lib/brand-director/types";
 
 const brief: StoreBrief = {
   storeName: "Test Cafe", industry: "cafe", area: "Tokyo", targetCustomer: "adults",
@@ -10,6 +11,22 @@ const brief: StoreBrief = {
   siteConcept: "calm craft cafe", recommendedPages: ["top"], seoKeywords: ["cafe"],
   tone: "warm and quiet", offer: "coffee",
 };
+
+const brandPlan = {
+  supplementalImageDirection: {
+    sourcePhotoUrl: "https://example.com/store.jpg",
+    storeStrength: "counter craft and a broad bean selection",
+    visitMotivation: "discover beans and talk with a barista",
+    commercialSubject: "bean-selection",
+    shotType: "merchandise-detail",
+    cameraAngle: "counter-height",
+    composition: "layered-depth",
+    lighting: "warm-ambient",
+    sensoryCues: ["warm wood", "handmade service"],
+    truthBoundary: ["do not recreate the store"],
+    avoid: ["perfect kraft bags", "scattered beans"],
+  },
+} as BrandPlan;
 
 beforeEach(() => { delete process.env.SUPPLEMENTAL_IMAGE_PROVIDER; });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -38,6 +55,31 @@ describe("AI supplemental images", () => {
     expect(result[0].role).toBe("atmosphere");
     expect(result[0].disclosure).toContain("実際の店舗写真ではありません");
     expect(uploadImage).toHaveBeenCalledWith("supplemental/req-3/atmosphere.png", expect.any(Uint8Array));
+  });
+
+  it("uses the Brand Director shooting brief instead of a generic mood-only prompt", () => {
+    const prompt = buildSupplementalImagePrompt(brief, brandPlan);
+    expect(prompt).toContain("counter craft and a broad bean selection");
+    expect(prompt).toContain("merchandise-detail");
+    expect(prompt).toContain("counter-height");
+    expect(prompt).toContain("perfect kraft bags");
+    expect(prompt).toContain("Do not recreate the actual store");
+  });
+
+  it("stores per-generation token usage and an output-cost estimate when provided", async () => {
+    process.env.SUPPLEMENTAL_IMAGE_PROVIDER = "openai";
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    const usage = {
+      model: "gpt-image-2", quality: "low", size: "1536x1024",
+      inputTokens: 20, outputTokens: 196, totalTokens: 216,
+      estimatedOutputCostUsd: 0.005, remainingProjectCreditUsd: null,
+    } as const;
+    const result = await resolveSupplementalImages(brief, "req-usage", brandPlan, {
+      generateImage: vi.fn().mockResolvedValue({ bytes: new Uint8Array([1]), usage }),
+      uploadImage: vi.fn().mockResolvedValue("https://example.com/generated.png"),
+    });
+    expect(result[0].usage).toEqual(usage);
+    expect(result[0].promptVersion).toBe("cafe-shot-plan-v2");
   });
 
   it("fails open when generation fails", async () => {

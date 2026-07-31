@@ -247,8 +247,7 @@ Neumos AI v1は、この契約に対応する**互換ブリッジ**を用意し�
    ```bash
    # ai-web-agency/.env.local
    NEUMOS_API_URL=https://neumos-ai.example.com
-   NEUMOS_API_KEY=（任意の値。v1側では認証未実装のため検証はしないが、
-                    本番運用時はNeumos AI側にAPIキー検証を追加すること）
+   NEUMOS_API_KEY=（Neumos AI側と同じ十分に長いランダム値）
    ```
 
 3. MVP側は `NEUMOS_API_URL` が設定されると、店舗詳細の「この店舗のホームページをAIで作成」
@@ -338,7 +337,21 @@ MVP側でこのエラーが出た場合の確認手順（`requestContentGenerati
 - **公開自動化**: `publishedUrl` は現状常に `null`。静的ホスティングへのデプロイや
   独自ドメイン接続は今後の拡張ポイント（`preview/render.ts` の出力はビルド非依存の
   単体HTMLのため、そのまま静的配信可能）。
-- **認証**: `/v1/contents` は現状 `Authorization` ヘッダを検証しない。本番運用では
-  MVPの `INTERNAL_API_KEY` と同様の仕組みを追加すること。
+- **認証**: `POST /v1/contents`、`GET /v1/contents/{requestId}`、`POST /api/generate` は
+  `Authorization: Bearer <NEUMOS_API_KEY>` を必須とする。
 - **多言語対応**: `StoreBrief` に `language` を追加し、`prompts.ts` / `rule-based.ts` を
   言語別に分岐させることで対応可能。
+
+## Generation API authentication
+
+The following routes require `Authorization: Bearer <NEUMOS_API_KEY>`:
+
+- `POST /v1/contents`
+- `GET /v1/contents/{requestId}`
+- `POST /api/generate`
+
+Set the same non-empty `NEUMOS_API_KEY` value on Neumos AI and the calling MVP.
+Only the `Authorization` header is accepted; query parameters and request bodies are
+never used for authentication. If the server key is unset or empty, these routes
+fail closed with `404`. Missing, malformed, empty, or mismatched Bearer credentials
+return `401`. Authentication failures include `Cache-Control: no-store`.

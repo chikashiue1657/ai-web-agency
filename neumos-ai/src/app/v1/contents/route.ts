@@ -7,6 +7,7 @@ import { IMPLEMENTED_GENERATION_TYPES } from "@/lib/types";
 import { extractErrorDetail } from "@/lib/error-detail";
 import { getSupabaseProjectRef } from "@/lib/supabase/server";
 import { TABLE_NAME } from "@/lib/store";
+import { checkNeumosApiAuth, neumosApiAuthError } from "@/lib/neumos-api-auth";
 
 /**
  * POST /v1/contents — AI集客支援MVPの `NEUMOS_API_URL` 連携用エンドポイント。
@@ -25,6 +26,11 @@ import { TABLE_NAME } from "@/lib/store";
  * （`{type,title,url,body,meta}`）形式に変換して返す。
  */
 export async function POST(req: NextRequest) {
+  const auth = checkNeumosApiAuth(req);
+  if (!auth.authorized) {
+    return neumosApiAuthError(auth.status);
+  }
+
   let body: unknown;
   try {
     body = await req.json();

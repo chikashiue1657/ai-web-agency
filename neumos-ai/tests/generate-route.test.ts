@@ -22,7 +22,10 @@ const brief = {
 function jsonRequest(url: string, body: unknown) {
   return new NextRequest(new Request(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      authorization: "Bearer test-neumos-api-key",
+    },
     body: JSON.stringify(body),
   }));
 }
@@ -31,6 +34,7 @@ describe("POST /api/generate", () => {
   beforeEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
+    process.env.NEUMOS_API_KEY = "test-neumos-api-key";
   });
 
   it("returns 200 with requestId/status/previewUrl/generatedContents for website", async () => {
@@ -68,6 +72,7 @@ describe("MVP bridge: POST /v1/contents + GET /v1/contents/:requestId (NOT under
   beforeEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
+    process.env.NEUMOS_API_KEY = "test-neumos-api-key";
   });
 
   it("submits a generation job and returns a status pollable via GET", async () => {
@@ -83,7 +88,9 @@ describe("MVP bridge: POST /v1/contents + GET /v1/contents/:requestId (NOT under
     expect(submitJson.generatedContents[0]).toHaveProperty("type");
 
     const statusRes = await v1ContentsStatusGET(
-      new NextRequest(new Request(`http://localhost:3100/v1/contents/${submitJson.requestId}`)),
+      new NextRequest(new Request(`http://localhost:3100/v1/contents/${submitJson.requestId}`, {
+        headers: { authorization: "Bearer test-neumos-api-key" },
+      })),
       { params: { requestId: submitJson.requestId } }
     );
     expect(statusRes.status).toBe(200);

@@ -16,7 +16,7 @@ import {
   categoryLabel,
 } from "@/components/ui";
 import { Markdown } from "@/components/markdown";
-import { extractPhotoNames, photoProxyUrl } from "@/lib/places/photos";
+import { photoProxyUrl } from "@/lib/places/photos";
 import { ActionsPanel } from "./actions-panel";
 import { StatusFunnel } from "./status-funnel";
 import { OutreachPanel } from "./outreach-panel";
@@ -49,7 +49,9 @@ export default async function StoreDetailPage({ params }: { params: { id: string
   const mapQuery = [store.name, store.address].filter(Boolean).join(" ");
   const openingHours =
     store.opening_hours?.weekday_text ?? store.opening_hours?.raw ?? [];
-  const photoNames = extractPhotoNames(store.raw_payload);
+  const photoIndexes = store.source === "google_places" && store.place_id
+    ? Array.from({ length: Math.min(store.photo_count, 8) }, (_, index) => index)
+    : [];
 
   return (
     <div className="space-y-4">
@@ -146,14 +148,14 @@ export default async function StoreDetailPage({ params }: { params: { id: string
 
       {/* 写真一覧 */}
       <Section title={`写真一覧（${store.photo_count}枚）`}>
-        {photoNames.length > 0 ? (
+        {photoIndexes.length > 0 && store.place_id ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {photoNames.map((name) => (
+            {photoIndexes.map((index) => (
               // Places写真はプロキシ経由（キーを晒さない）。next/imageは外部最適化不要のため素のimg。
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                key={name}
-                src={photoProxyUrl(name, 600)}
+                key={index}
+                src={photoProxyUrl(store.place_id!, index, 600)}
                 alt={`${store.name} の写真`}
                 loading="lazy"
                 className="w-full h-28 object-cover rounded border border-gray-100 bg-gray-50"

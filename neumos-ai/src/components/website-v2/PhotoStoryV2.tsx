@@ -4,6 +4,7 @@ import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { ImageTreatment, SurfaceClasses } from "@/lib/engine/v2-design-system";
 import { RevealV2 } from "./RevealV2";
 import { SafeImageV2 } from "./SafeImageV2";
+import { GooglePhotoAttributionV2 } from "./GooglePhotoAttributionV2";
 
 /**
  * Gallery（写真セクション）。写真サイズを固定しない。1枚のときだけ
@@ -53,6 +54,7 @@ function FullBleedGallery({
             collapseOnFail
             onFail={() => onPhotoFail(photoUrls[0])}
           />
+          <GooglePhotoAttributionV2 photoUrl={photoUrls[0]} />
         </RevealV2>
       )}
       {count >= 2 && (
@@ -66,6 +68,7 @@ function FullBleedGallery({
                 collapseOnFail
                 onFail={() => onPhotoFail(url)}
               />
+              <GooglePhotoAttributionV2 photoUrl={url} />
             </RevealV2>
           ))}
         </div>
@@ -97,6 +100,7 @@ function FramedGallery({
             collapseOnFail
             onFail={() => onPhotoFail(photoUrls[0])}
           />
+          <GooglePhotoAttributionV2 photoUrl={photoUrls[0]} />
         </RevealV2>
       )}
       {count >= 2 && (
@@ -110,6 +114,7 @@ function FramedGallery({
                 collapseOnFail
                 onFail={() => onPhotoFail(url)}
               />
+              <GooglePhotoAttributionV2 photoUrl={url} />
             </RevealV2>
           ))}
         </div>
@@ -138,6 +143,7 @@ function MixedEditorialGallery({
           collapseOnFail
           onFail={() => onPhotoFail(featured)}
         />
+        <GooglePhotoAttributionV2 photoUrl={featured} />
       </RevealV2>
       {rest.length > 0 && (
         <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
@@ -150,6 +156,7 @@ function MixedEditorialGallery({
                 collapseOnFail
                 onFail={() => onPhotoFail(url)}
               />
+              <GooglePhotoAttributionV2 photoUrl={url} />
             </RevealV2>
           ))}
         </div>

@@ -19,7 +19,6 @@
  */
 import type { Store, StoreRealData } from "@/lib/types";
 
-const PHOTO_NAME_PATTERN = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/;
 const MAX_PHOTOS = 6;
 
 /**
@@ -94,18 +93,11 @@ function resolvePhotoUrls(store: Store): string[] | undefined {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_BASE_URL?.trim().replace(/\/$/, "");
   if (!baseUrl) return undefined; // 絶対URLを組み立てるためのベースURLが無ければ諦める
 
-  const photos = (store.raw_payload as { photos?: unknown } | null)?.photos;
-  if (!Array.isArray(photos)) return undefined;
-
-  const names = photos
-    .map((p) => (p && typeof p === "object" && "name" in p ? (p as { name: unknown }).name : undefined))
-    .filter((name): name is string => typeof name === "string" && PHOTO_NAME_PATTERN.test(name))
-    .slice(0, MAX_PHOTOS);
-
-  if (names.length === 0) return undefined;
-  return names.map(
-    (name, index) =>
-      `${baseUrl}/api/places/photo?name=${encodeURIComponent(name)}&w=800&i=${index}`
+  if (!store.place_id || !/^[A-Za-z0-9_-]+$/.test(store.place_id)) return undefined;
+  const count = Math.min(Math.max(store.photo_count, 0), MAX_PHOTOS);
+  if (count === 0) return undefined;
+  return Array.from({ length: count }, (_, index) =>
+    `${baseUrl}/api/places/photo?placeId=${encodeURIComponent(store.place_id!)}&w=800&i=${index}`
   );
 }
 

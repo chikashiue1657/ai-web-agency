@@ -3,6 +3,7 @@ import type { WebsiteTheme } from "@/lib/theme";
 import { splitBulletLines } from "./utils";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 import { StoreInfoCard } from "./StoreInfoCard";
+import { GooglePhotoAttributionV2 } from "@/components/website-v2/GooglePhotoAttributionV2";
 
 export function About({
   storeName,
@@ -25,12 +26,11 @@ export function About({
       <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-16">
         <div>
           {photoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={photoUrl}
-              alt={`${storeName}の店舗紹介`}
-              className={`mb-8 aspect-video w-full object-cover ${theme.radius}`}
-            />
+            <div className="mb-8">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photoUrl} alt={`${storeName}の店舗紹介`} className={`aspect-video w-full object-cover ${theme.radius}`} />
+              <GooglePhotoAttributionV2 photoUrl={photoUrl} />
+            </div>
           ) : (
             <ImagePlaceholder
               label={`${storeName}の店舗紹介`}

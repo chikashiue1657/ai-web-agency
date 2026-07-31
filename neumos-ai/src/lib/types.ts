@@ -88,6 +88,17 @@ export interface StoreRealData {
    * 作り直さない（`engine/real-data-links.ts`の`resolveGoogleMapsUrl`参照）。
    */
   googleMapsUrl?: string;
+  /** 実店舗写真とは別枠で、明示的なAI表示とともに使う補助画像。 */
+  supplementalImages?: SupplementalImage[];
+}
+
+export interface SupplementalImage {
+  url: string;
+  source: "openai-generated";
+  role: "atmosphere";
+  altText: string;
+  disclosure: "AI生成イメージ（実際の店舗写真ではありません）";
+  promptVersion: "cafe-atmosphere-v1";
 }
 
 /** Google レビュー1件（本文のみ必須。評価者名・個別評価は取得できた場合のみ）。 */

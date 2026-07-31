@@ -117,4 +117,17 @@ describe("buildNeumosBrief", () => {
     expect(blog.seoKeywords).toEqual(web.seoKeywords);
     expect(blog.salesAngle).toBe(web.salesAngle);
   });
+
+  it("カフェのWebサイトには営業提案文ではなく来店客向けの文を渡す", () => {
+    const cafeStrategy = diagnoseStore({ store: { ...store, category: "cafe", name: "麦の香" }, lead });
+    const originalSalesAngle = cafeStrategy.generationBrief.salesAngle;
+    const web = buildNeumosBrief(cafeStrategy, "website");
+
+    expect(web.offer).toBe("麦の香で過ごす、ほっとひと息つける時間");
+    expect(web.salesAngle).toBe("店内で過ごす時間と、その店らしい雰囲気");
+    expect(web.offer).not.toContain("ホームページ");
+    expect(web.offer).not.toContain("SNS");
+    expect(cafeStrategy.generationBrief.salesAngle).toBe(originalSalesAngle);
+    expect(buildNeumosBrief(cafeStrategy, "blog_post").salesAngle).toBe(originalSalesAngle);
+  });
 });

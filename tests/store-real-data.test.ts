@@ -88,7 +88,7 @@ describe("buildStoreRealData", () => {
     });
     const realData = buildStoreRealData(store);
     expect(realData?.photoUrls).toEqual([
-      "https://ai-web-agency.example.com/api/places/photo?name=places%2Fabc%2Fphotos%2Fxyz&w=800",
+      "https://ai-web-agency.example.com/api/places/photo?name=places%2Fabc%2Fphotos%2Fxyz&w=800&i=0",
     ]);
   });
 

@@ -55,6 +55,15 @@ const GoogleMapsUrlSchema = z.string().refine(
   { message: "googleMapsUrl must be an https URL on an allowed Google Maps host without embedded credentials" }
 );
 
+const SupplementalImageSchema = z.object({
+  url: safeUrlSchema(["https:"]),
+  source: z.literal("openai-generated"),
+  role: z.literal("atmosphere"),
+  altText: z.string().min(1),
+  disclosure: z.literal("AI生成イメージ（実際の店舗写真ではありません）"),
+  promptVersion: z.literal("cafe-atmosphere-v1"),
+});
+
 /** Googleビジネスプロフィール等から取得できた実データ（任意、無ければ全て省略可）。 */
 export const StoreRealDataSchema = z.object({
   address: z.string().optional(),
@@ -76,6 +85,7 @@ export const StoreRealDataSchema = z.object({
     .optional(),
   websiteUrl: WebsiteUrlSchema.optional(),
   googleMapsUrl: GoogleMapsUrlSchema.optional(),
+  supplementalImages: z.array(SupplementalImageSchema).max(1).optional(),
 });
 
 export const StoreBriefSchema = z.object({

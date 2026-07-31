@@ -30,6 +30,7 @@ export type CafeV2BlockId =
   | "signature"
   | "photoStory"
   | "story"
+  | "supplementalImage"
   | "menu"
   | "trust"
   | "accessHours"
@@ -93,6 +94,7 @@ export function buildCafeV2Plan(
   const blocks: CafeV2BlockId[] = ["hero"];
   if (hasSignature) blocks.push("signature");
   blocks.push("story");
+  if ((brief.realData?.supplementalImages?.length ?? 0) > 0) blocks.push("supplementalImage");
   if (hasPhotoStory) blocks.push("photoStory");
   if (hasMenu) blocks.push("menu");
   if (splitForImmersiveRhythm && gallerySplit.second.length > 0) blocks.push("photoStory2");

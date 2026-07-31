@@ -1,0 +1,59 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { StoreBrief } from "@/lib/types";
+import { resolveSupplementalImages } from "@/lib/images/supplemental";
+import { SupplementalImageV2 } from "@/components/website-v2/SupplementalImageV2";
+
+const brief: StoreBrief = {
+  storeName: "Test Cafe", industry: "cafe", area: "Tokyo", targetCustomer: "adults",
+  mainProblem: "awareness", salesAngle: "quiet coffee time", websiteGoal: "visits",
+  siteConcept: "calm craft cafe", recommendedPages: ["top"], seoKeywords: ["cafe"],
+  tone: "warm and quiet", offer: "coffee",
+};
+
+beforeEach(() => { delete process.env.SUPPLEMENTAL_IMAGE_PROVIDER; });
+afterEach(() => { vi.restoreAllMocks(); });
+
+describe("AI supplemental images", () => {
+  it("is disabled by default", async () => {
+    const generateImage = vi.fn();
+    expect(await resolveSupplementalImages(brief, "req-1", { generateImage })).toEqual([]);
+    expect(generateImage).not.toHaveBeenCalled();
+  });
+
+  it("skips generation when two real photos already exist", async () => {
+    process.env.SUPPLEMENTAL_IMAGE_PROVIDER = "openai";
+    const generateImage = vi.fn();
+    const withPhotos = { ...brief, realData: { photoUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg"] } };
+    expect(await resolveSupplementalImages(withPhotos, "req-2", { generateImage })).toEqual([]);
+    expect(generateImage).not.toHaveBeenCalled();
+  });
+
+  it("generates and stores at most one disclosed atmosphere image", async () => {
+    process.env.SUPPLEMENTAL_IMAGE_PROVIDER = "openai";
+    const generateImage = vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]));
+    const uploadImage = vi.fn().mockResolvedValue("https://example.supabase.co/storage/v1/object/public/assets/a.png");
+    const result = await resolveSupplementalImages(brief, "req-3", { generateImage, uploadImage });
+    expect(result).toHaveLength(1);
+    expect(result[0].role).toBe("atmosphere");
+    expect(result[0].disclosure).toContain("実際の店舗写真ではありません");
+    expect(uploadImage).toHaveBeenCalledWith("supplemental/req-3/atmosphere.png", expect.any(Uint8Array));
+  });
+
+  it("fails open when generation fails", async () => {
+    process.env.SUPPLEMENTAL_IMAGE_PROVIDER = "openai";
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await resolveSupplementalImages(brief, "req-4", { generateImage: vi.fn().mockRejectedValue(new Error("failed")) });
+    expect(result).toEqual([]);
+  });
+
+  it("renders an explicit AI disclosure", () => {
+    const html = renderToStaticMarkup(<SupplementalImageV2 image={{
+      url: "https://example.com/ai.png", source: "openai-generated", role: "atmosphere",
+      altText: "AI atmosphere", disclosure: "AI生成イメージ（実際の店舗写真ではありません）",
+      promptVersion: "cafe-atmosphere-v1",
+    }} />);
+    expect(html).toContain("AI生成イメージ（実際の店舗写真ではありません）");
+    expect(html).toContain("supplemental-image");
+  });
+});

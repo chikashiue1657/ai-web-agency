@@ -74,3 +74,12 @@ alter table neumos_content_generation_requests
 -- （PGRST204）が一時的に返ることがある。DDL変更のたびに必ず最後に実行する。
 -- ============================================================
 notify pgrst, 'reload schema';
+
+-- v2のAI補助画像用。公開サイトで表示するためpublic bucketとする。
+-- 書き込みはservice_roleを使うサーバー生成処理からのみ行う。
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('neumos-generated-assets', 'neumos-generated-assets', true, 10485760, array['image/png'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;

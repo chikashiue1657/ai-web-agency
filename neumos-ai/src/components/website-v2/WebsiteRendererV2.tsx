@@ -27,6 +27,7 @@ import { TrustV2 } from "./TrustV2";
 import { AccessHoursV2 } from "./AccessHoursV2";
 import { CTAV2 } from "./CTAV2";
 import { MobileStickyCtaV2 } from "./MobileStickyCtaV2";
+import { SupplementalImageV2 } from "./SupplementalImageV2";
 
 /** storyの直後へblockIdを1件挿入する（既に存在する場合や対象が無い場合は何もしない）。 */
 function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): CafeV2BlockId[] {
@@ -153,6 +154,7 @@ export function WebsiteRendererV2({
         surface={surface}
       />
     ),
+    supplementalImage: <SupplementalImageV2 image={brief.realData?.supplementalImages?.[0]} />,
     menu: (
       <MenuV2
         sections={serviceSections}

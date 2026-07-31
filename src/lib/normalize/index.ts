@@ -28,6 +28,12 @@ export function decideHasWebsite(websiteUrl: string | null): boolean {
   return looksLikeOfficialWebsite(websiteUrl);
 }
 
+/** Placesの期限付き写真リソース名は長期保存せず、写真件数だけを列へ保持する。 */
+function withoutPhotoReferences(input: Record<string, unknown>): Record<string, unknown> {
+  const { photos: _photos, ...rest } = input;
+  return rest;
+}
+
 /** 共通の最終組み立て（各ソース正規化の合流点）。 */
 function assemble(input: {
   place_id: string | null;
@@ -106,7 +112,7 @@ export function normalizeGooglePlace(input: GooglePlaceInput): NormalizedStore {
     // websiteは公式HP候補。url(Googleマップ)はSNS/公式判定に通すので候補に含める。
     urlCandidates: [input.website, input.url],
     source: "google_places",
-    raw: input as Record<string, unknown>,
+    raw: withoutPhotoReferences(input as Record<string, unknown>),
   });
 }
 
@@ -147,7 +153,7 @@ export function normalizePlacesNew(input: PlacesNewInput): NormalizedStore {
     // websiteUri は公式HP候補。googleMapsUri はSNS/公式判定に通す（HP扱いにはならない）。
     urlCandidates: [input.websiteUri, input.googleMapsUri],
     source: "google_places",
-    raw: input as Record<string, unknown>,
+    raw: withoutPhotoReferences(input as Record<string, unknown>),
   });
 }
 

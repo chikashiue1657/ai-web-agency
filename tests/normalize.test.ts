@@ -45,6 +45,15 @@ describe("normalizeGooglePlace", () => {
 });
 
 describe("normalizePlacesNew", () => {
+  it("期限付き写真リソース名をraw_payloadへ長期保存しない", () => {
+    const result = normalizePlacesNew({
+      id: "place-photo-safe",
+      displayName: { text: "写真テスト店" },
+      photos: [{ name: "places/place-photo-safe/photos/temporary-name" }],
+    });
+    expect(result.photo_count).toBe(1);
+    expect(result.raw_payload).not.toHaveProperty("photos");
+  });
   it("Places API (New) 形式を正規化する", () => {
     const n = normalizePlacesNew({
       id: "ChIJ_new_001",

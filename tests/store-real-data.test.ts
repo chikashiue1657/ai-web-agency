@@ -77,18 +77,18 @@ describe("buildStoreRealData", () => {
     expect(realData?.photoUrls).toBeUndefined();
   });
 
-  it("APIキー・ベースURLがあり、有効な写真参照がある場合はプロキシURLを組み立てる", () => {
+  it("APIキー・ベースURL・placeId・写真件数があれば、期限付き写真名を含まないURLを組み立てる", () => {
     process.env.GOOGLE_PLACES_API_KEY = "test-key";
     process.env.NEXT_PUBLIC_SITE_BASE_URL = "https://ai-web-agency.example.com/";
     const store = makeStore({
       address: "沖縄県那覇市1-1-1",
-      raw_payload: {
-        photos: [{ name: "places/abc/photos/xyz" }, { name: "invalid-format" }, { notName: true }],
-      },
+      place_id: "abc",
+      photo_count: 2,
     });
     const realData = buildStoreRealData(store);
     expect(realData?.photoUrls).toEqual([
-      "https://ai-web-agency.example.com/api/places/photo?name=places%2Fabc%2Fphotos%2Fxyz&w=800&i=0",
+      "https://ai-web-agency.example.com/api/places/photo?placeId=abc&w=800&i=0",
+      "https://ai-web-agency.example.com/api/places/photo?placeId=abc&w=800&i=1",
     ]);
   });
 

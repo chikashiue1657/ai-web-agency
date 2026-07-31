@@ -1,6 +1,7 @@
 import type { GalleryItem } from "@/lib/types";
 import type { WebsiteTheme } from "@/lib/theme";
 import { ImagePlaceholder } from "./ImagePlaceholder";
+import { GooglePhotoAttributionV2 } from "@/components/website-v2/GooglePhotoAttributionV2";
 
 export function Gallery({
   items,
@@ -42,6 +43,7 @@ export function Gallery({
                     className="aspect-square"
                   />
                 )}
+                {photoUrl ? <GooglePhotoAttributionV2 photoUrl={photoUrl} /> : null}
                 <figcaption className="mt-2 text-center text-xs text-gray-600 sm:text-sm">{item.caption}</figcaption>
               </figure>
             );

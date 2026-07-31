@@ -6,6 +6,7 @@ import type { SurfaceClasses } from "@/lib/engine/v2-design-system";
 import { splitBulletLines } from "@/components/website/utils";
 import { RevealV2 } from "./RevealV2";
 import { SafeImageV2 } from "./SafeImageV2";
+import { GooglePhotoAttributionV2 } from "./GooglePhotoAttributionV2";
 
 /**
  * 店名から決定論的に左右を決める（同じ店なら常に同じ側、店ごとにはばらける）。
@@ -67,6 +68,7 @@ export function StoryV2({
             collapseOnFail
             onFail={() => setPhotoFailed(true)}
           />
+          <GooglePhotoAttributionV2 photoUrl={photoUrl} />
         </div>
         <div
           className={`mx-auto flex max-w-6xl px-5 py-10 sm:px-10 sm:py-14 lg:px-16 ${

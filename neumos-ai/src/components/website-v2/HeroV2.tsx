@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { ArtDirection, HeroComposition } from "@/lib/engine/v2-design-system";
 import { ParallaxImageV2 } from "./ParallaxImageV2";
+import { GooglePhotoAttributionV2 } from "./GooglePhotoAttributionV2";
 
 interface HeroV2Props {
   storeName: string;
@@ -170,6 +171,9 @@ function FullBleedCenterHero({
     <section id="top" className="relative w-full overflow-hidden bg-stone-950 sm:h-dvh sm:min-h-[640px]">
       <div className="relative aspect-[4/3] w-full sm:absolute sm:inset-0 sm:aspect-auto sm:h-full">
         <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
+        <div className="absolute bottom-2 right-2 z-20 max-w-[85%] bg-black/60 px-1">
+          <GooglePhotoAttributionV2 photoUrl={photoUrl} dark />
+        </div>
       </div>
 
       {/*
@@ -238,6 +242,9 @@ function SplitFrameHero({
         <div className="relative order-1 aspect-[4/3] w-full overflow-hidden sm:aspect-[16/10] lg:order-2 lg:aspect-auto lg:min-h-[560px]">
           <div className="absolute inset-3 overflow-hidden sm:inset-6 lg:inset-8">
             <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
+            <div className="absolute bottom-2 right-2 z-20 max-w-[85%] bg-black/60 px-1">
+              <GooglePhotoAttributionV2 photoUrl={photoUrl} dark />
+            </div>
           </div>
         </div>
       </div>
@@ -272,6 +279,9 @@ function OverlapEditorialHero({
       <div className="relative mx-auto max-w-6xl">
         <div className="relative aspect-[4/5] w-full overflow-hidden sm:aspect-[16/9] lg:aspect-[21/9]">
           <ParallaxImageV2 src={photoUrl} alt={`${storeName}の写真`} onFail={onHeroPhotoFail} />
+          <div className="absolute bottom-2 right-2 z-20 max-w-[85%] bg-black/60 px-1">
+            <GooglePhotoAttributionV2 photoUrl={photoUrl} dark />
+          </div>
         </div>
 
         <div

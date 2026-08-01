@@ -50,11 +50,11 @@ function ensureRequiredKinds(pages: string[]): string[] {
 }
 
 export function analyzeStrengths(brief: StoreBrief): string[] {
-  const strengths = [
-    `${brief.offer}という他にない提案ができる`,
-    `${brief.salesAngle}を軸にした接客・サービス力`,
-  ];
-  if (brief.tone) strengths.push(`「${brief.tone}」という一貫した世界観を伝えられる`);
+  const strengths = [brief.offer, brief.salesAngle].filter(Boolean);
+  if (brief.realData?.googleRating && brief.realData.googleReviewCount) {
+    strengths.push(`Google評価 ${brief.realData.googleRating.toFixed(1)}（${brief.realData.googleReviewCount}件）`);
+  }
+  if (brief.realData?.address) strengths.push(`${brief.area}にある実店舗`);
   return strengths;
 }
 
@@ -77,26 +77,21 @@ export function defineTargetPersona(brief: StoreBrief): string {
  * サイトの目的）から独自に6項目を合成し、最低4件（可能なら6件）を返す。
  */
 export function defineDifferentiators(brief: StoreBrief): string[] {
-  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
-  const offerHeadline = brief.offer.split(/[。／/]/)[0]?.trim() || brief.offer;
-  const items = [
-    `${offerHeadline}という他にはない提案`,
-    // salesAngleは営業チーム側の切り口・仮説であり、店舗の実績が検証済みという
-    // 意味ではないため、「確かな実力」等の断定表現は避け、あくまで方針・軸として書く。
-    `${angleHeadline}を軸にした専門性`,
-    `${brief.area}エリアで通いやすい立地`,
-    `${brief.targetCustomer}に寄り添った接客・ご案内`,
-  ];
-  if (brief.tone) items.push(`「${brief.tone}」という一貫した世界観`);
-  items.push(`${brief.websiteGoal}につながる導線設計`);
-  return items;
+  const items = [brief.offer, brief.salesAngle, brief.siteConcept, `${brief.area}の店舗`].filter(Boolean);
+  if (brief.realData?.googleRating && brief.realData.googleReviewCount) {
+    items.push(`Google評価 ${brief.realData.googleRating.toFixed(1)}（${brief.realData.googleReviewCount}件）`);
+  }
+  if (brief.realData?.address) items.push(`${brief.area}にある実店舗`);
+  if (brief.realData?.openingHours?.[0]) {
+    items.push(`営業時間：${brief.realData.openingHours[0]}`);
+  }
+  return [...new Set(items)].slice(0, 5);
 }
 
 export function buildConcept(brief: StoreBrief, strategy: StrategyAnalysis): string {
   const base = brief.siteConcept?.trim();
-  const angleHeadline = brief.salesAngle.split(/[。／/]/)[0]?.trim() || brief.salesAngle;
   const concept = base
-    ? `${base}（${strategy.targetPersona.split("。")[0]}に向けて、${angleHeadline}を前面に打ち出す）`
+    ? base
     : `${brief.storeName}が${brief.targetCustomer}に${brief.offer}を届ける、${brief.tone}なサイト`;
   return truncateJa(concept, BODY_MAX);
 }
@@ -118,7 +113,8 @@ export function buildSeo(brief: StoreBrief): { seoTitle: string; metaDescription
   const seoTitle = keywords
     ? `${brief.storeName}｜${brief.area}の${brief.industry}｜${keywords}`
     : `${brief.storeName}｜${brief.area}の${brief.industry}`;
-  const metaDescription = `${brief.area}で${brief.industry}をお探しなら${brief.storeName}へ。${brief.offer}。${brief.mainProblem.replace(/。$/, "")}という悩みも解決します。`;
+  const address = brief.realData?.address ? ` ${brief.realData.address}。` : "";
+  const metaDescription = `${brief.area}の${brief.industry}、${brief.storeName}。${brief.offer}。${address}営業時間・アクセス・店舗情報をご案内します。`;
   return { seoTitle: seoTitle.slice(0, 60), metaDescription: metaDescription.slice(0, 120) };
 }
 
@@ -152,7 +148,7 @@ function sectionBody(kind: SectionKind, brief: StoreBrief, strategy: StrategyAna
   }
   if (kind === "service") {
     return truncateJa(
-      `${brief.offer}を中心に、${brief.targetCustomer}のニーズに合わせたメニュー・サービスをご用意しています。`,
+      `${brief.offer}。詳しいメニューや当日の提供内容は、店舗へ直接お問い合わせください。`,
       BODY_MAX
     );
   }
@@ -186,7 +182,9 @@ export function buildAccess(brief: StoreBrief): AccessInfo {
   return {
     areaLabel: brief.area,
     addressHint: truncateJa(
-      `${brief.area}エリアにあり、${brief.targetCustomer}の方にもお越しいただきやすい立地です。詳しい道順はお問い合わせください。`,
+      brief.realData?.address
+        ? `${brief.realData.address}。営業時間と最新の営業状況をご確認のうえお越しください。`
+        : `${brief.area}エリアの店舗です。詳しい道順と最新の営業状況は店舗へご確認ください。`,
       BODY_MAX
     ),
     mapQuery: `${brief.storeName} ${brief.area}`,
@@ -208,7 +206,12 @@ export function buildContactMethods(brief: StoreBrief): ContactMethod[] {
 
 export function buildCta(brief: StoreBrief): WebsiteCta {
   const headline = truncateJa(brief.offer, HERO_TITLE_MAX);
-  const body = truncateJa(`${brief.websiteGoal}をお考えの方は、今すぐお気軽にご連絡ください。`, BODY_MAX);
+  const body = truncateJa(
+    brief.realData?.phone
+      ? "営業時間・アクセスをご確認のうえ、ご予約やお問い合わせはお電話ください。"
+      : "営業時間・アクセスをご確認のうえ、最新情報は店舗の公式窓口でご確認ください。",
+    BODY_MAX
+  );
   return buildCtaWithRealLinks(headline, body, brief);
 }
 
@@ -216,21 +219,15 @@ export function buildFaq(brief: StoreBrief, strategy: StrategyAnalysis): FaqItem
   return [
     {
       question: `${brief.industry}を利用するのが初めてですが大丈夫ですか？`,
-      answer: truncateJa(`はい、${brief.targetCustomer}のお客様にもわかりやすくご案内しますのでご安心ください。`, BODY_MAX),
+      answer: truncateJa("営業時間・提供内容は変更になる場合があります。ご来店前に店舗へ直接ご確認ください。", BODY_MAX),
     },
     {
       question: `${brief.mainProblem.replace(/。$/, "")}という悩みも相談できますか？`,
-      answer: truncateJa(
-        `もちろんです。${strategy.differentiators[0] ?? brief.salesAngle.split(/[。／/]/)[0]}を軸に、お客様一人ひとりに合わせてご提案します。`,
-        BODY_MAX
-      ),
+      answer: truncateJa("提供内容の詳細は、店舗へ直接お問い合わせください。", BODY_MAX),
     },
     {
       question: `${brief.area}エリア以外からでも利用できますか？`,
-      answer: truncateJa(
-        `はい、${brief.area}エリア外のお客様や観光客の方もご利用いただけます。お気軽にお問い合わせください。`,
-        BODY_MAX
-      ),
+      answer: truncateJa("所在地とアクセスをご確認のうえお越しください。最新の営業状況は店舗へ直接ご確認ください。", BODY_MAX),
     },
   ];
 }

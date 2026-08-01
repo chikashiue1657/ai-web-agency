@@ -154,3 +154,30 @@ describe("v2: 写真の切り取り位置は常に中央固定（Vision焦点情
     expect(html).not.toContain("object-[68%_38%]");
   });
 });
+
+describe("v2: hero直後の意思決定情報", () => {
+  it("評価・住所・営業時間が実データにある場合だけ要約表示する", () => {
+    const brief: StoreBrief = {
+      ...cafeBrief,
+      realData: {
+        googleRating: 4.7,
+        googleReviewCount: 128,
+        address: "〒900-0015 沖縄県那覇市久茂地1-2-3",
+        openingHours: ["月曜日: 8:00〜19:00"],
+      },
+    };
+    const contents = generateWebsiteRuleBased(brief);
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={brief} contents={contents} />);
+    expect(html).toContain('aria-label="店舗の基本情報"');
+    expect(html).toContain("★ 4.7");
+    expect(html).toContain("128件");
+    expect(html).toContain("沖縄県那覇市久茂地1-2-3");
+    expect(html).toContain("月曜日: 8:00〜19:00");
+  });
+
+  it("実データが乏しい場合は情報を捏造せず帯ごと表示しない", () => {
+    const contents = generateWebsiteRuleBased(cafeBrief);
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} />);
+    expect(html).not.toContain('aria-label="店舗の基本情報"');
+  });
+});

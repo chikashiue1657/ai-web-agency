@@ -1,24 +1,44 @@
-import { getGenerationRecord } from "@/lib/store";
+import type { Metadata } from "next";
 import { WebsiteRendererV2 } from "@/components/website-v2/WebsiteRendererV2";
 import { extractErrorDetail } from "@/lib/error-detail";
+import { buildCafeStructuredData, serializeStructuredData } from "@/lib/seo-v2";
+import { getGenerationRecord } from "@/lib/store";
 
 /**
  * v2デザインエンジンのプレビュー。既存の`/preview/[requestId]`（v1）は
  * 一切変更せず、同じ生成レコードを新しい描画コンポーネント群だけで
- * 組み直す独立ルートとして追加する。生成ロジック（brief/contents）は
- * v1と完全に同一のものを使うため、比較検証は同じrequestIdで
- * `/preview/{id}`と`/preview/{id}/v2`を見比べるだけで行える。
+ * 組み直す独立ルートとして追加する。
  *
- * 重要: BrandDirectorはここ（GETリクエスト・レンダリング時）では絶対に呼ばない。
- * BrandPlanは`generate.ts`の`performGeneration()`が生成時に一度だけ作成し
- * `record.brandPlan`として永続化済みのものを、そのままWebsiteRendererV2へ渡すだけ。
- * こうしないと、このページを開く・再読み込みするたびにOpenAI課金が発生してしまう
- * （force-dynamic・revalidate=0のためNext.jsのキャッシュにも乗らない）。
- * 過去に生成されたレコードで`brandPlan`が無い（旧レコード・カフェ以外）場合は
- * `undefined`のまま渡され、WebsiteRendererV2は従来通りBrandPlan無しで描画する。
+ * 重要: Brand Directorはここ（GETリクエスト・レンダリング時）では呼ばない。
+ * BrandPlanは生成時に保存された`record.brandPlan`を読むだけにする。
  */
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function v2Url(previewUrl: string): string {
+  const normalized = previewUrl.replace(/\/$/, "");
+  return normalized.endsWith("/v2") ? normalized : `${normalized}/v2`;
+}
+
+export async function generateMetadata({ params }: { params: { requestId: string } }): Promise<Metadata> {
+  const record = await getGenerationRecord(params.requestId).catch(() => undefined);
+  if (!record) return { title: "プレビューが見つかりません | Neumos AI" };
+
+  const image = record.brief.realData?.photoUrls?.[0];
+  const pageUrl = v2Url(record.previewUrl);
+  return {
+    title: record.generatedContents.seoTitle,
+    description: record.generatedContents.metaDescription,
+    alternates: { canonical: pageUrl },
+    openGraph: {
+      type: "website",
+      title: record.generatedContents.seoTitle,
+      description: record.generatedContents.metaDescription,
+      url: pageUrl,
+      images: image ? [{ url: image, alt: `${record.brief.storeName}の写真` }] : undefined,
+    },
+  };
+}
 
 export default async function PreviewV2Page({ params }: { params: { requestId: string } }) {
   let record;
@@ -51,5 +71,11 @@ export default async function PreviewV2Page({ params }: { params: { requestId: s
     );
   }
 
-  return <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} brandPlan={record.brandPlan} />;
+  const structuredData = buildCafeStructuredData(record.brief, record.generatedContents, v2Url(record.previewUrl));
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structuredData) }} />
+      <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} brandPlan={record.brandPlan} />
+    </>
+  );
 }

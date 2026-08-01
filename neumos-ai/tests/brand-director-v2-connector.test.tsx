@@ -72,6 +72,32 @@ describe("resolveBrandPlanForV2", () => {
     expect(BrandPlanSchema.safeParse(plan).success).toBe(true);
   });
 
+  it("生成時に実写真を最大3枚だけ分析し、その結果をBrandPlan決定へ渡す", async () => {
+    const photoUrls = ["https://example.com/1.jpg", "https://example.com/2.jpg", "https://example.com/3.jpg", "https://example.com/4.jpg"];
+    const analyses = photoUrls.slice(0, 3).map((photoUrl, index) => ({
+      photoUrl,
+      subject: index === 0 ? "coffee cup" : "cafe interior",
+      brightness: "balanced" as const,
+      orientation: "landscape" as const,
+      dominantMood: "warm",
+      containsPeople: false,
+      containsFoodOrProduct: index === 0,
+      containsExterior: false,
+      containsInterior: true,
+      textSafeArea: "left" as const,
+      recommendedRole: index === 0 ? "hero" as const : "gallery" as const,
+      qualityScore: 80,
+      rejectionReason: null,
+    }));
+    const photosSpy = vi.spyOn(ruleBrandDirectionProvider, "analyzePhotos").mockResolvedValue(analyses);
+    const brandSpy = vi.spyOn(ruleBrandDirectionProvider, "analyzeBrand");
+
+    await resolveBrandPlanForV2({ ...cafeBrief, realData: { photoUrls } }, "req-photo-analysis");
+
+    expect(photosSpy).toHaveBeenCalledWith(photoUrls.slice(0, 3), expect.objectContaining({ requestId: "req-photo-analysis" }));
+    expect(brandSpy).toHaveBeenCalledWith(expect.objectContaining({ requestId: "req-photo-analysis" }), analyses);
+  });
+
   it("回帰確認: 既定経路（OPENAI_API_KEY未設定）でv2ページを最後まで組み立てても、" +
     "既存のLuxury Layout Engineの見た目（serif書体・写真の位置ベース割当て）は変わらない", async () => {
     const contents = generateWebsiteRuleBased(cafeBrief);

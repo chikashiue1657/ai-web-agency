@@ -25,7 +25,7 @@ describe("GET /api/places/photo", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("https://images.example.com/photo.jpg");
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

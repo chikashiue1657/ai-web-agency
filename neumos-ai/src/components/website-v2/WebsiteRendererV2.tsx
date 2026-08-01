@@ -28,6 +28,7 @@ import { AccessHoursV2 } from "./AccessHoursV2";
 import { CTAV2 } from "./CTAV2";
 import { MobileStickyCtaV2 } from "./MobileStickyCtaV2";
 import { SupplementalImageV2 } from "./SupplementalImageV2";
+import { StoreFactsV2 } from "./StoreFactsV2";
 
 /** storyの直後へblockIdを1件挿入する（既に存在する場合や対象が無い場合は何もしない）。 */
 function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): CafeV2BlockId[] {
@@ -225,6 +226,7 @@ export function WebsiteRendererV2({
           return (
             <div key={`${block}-${i}`} className={getSectionGapClass(prevBlock, block, tokens.sectionRhythm)}>
               {blockRenderer[block]}
+              {block === "hero" && <StoreFactsV2 realData={brief.realData} area={brief.area} theme={theme} />}
             </div>
           );
         })}

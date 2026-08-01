@@ -31,7 +31,12 @@ export async function resolveBrandPlanForV2(brief: StoreBrief, requestId: string
 
   try {
     const provider = getBrandDirectionProvider();
-    const result = await provider.analyzeBrand({ requestId, brief });
+    const input = { requestId, brief };
+    // Hero/Story/Galleryの判断に必要な先頭3枚だけを生成時に分析する。
+    // v2表示時には再分析しないため、閲覧ごとのAPI費用は発生しない。
+    const photoUrls = (brief.realData?.photoUrls ?? []).slice(0, 3);
+    const photoAnalyses = photoUrls.length ? await provider.analyzePhotos(photoUrls, input) : undefined;
+    const result = await provider.analyzeBrand(input, photoAnalyses);
     // usage情報（APIキー・プロンプト・写真URLの生値を含まない安全なフィールドのみ）を
     // 既存のusage-log境界（ログ出力）へ渡す。Supabaseへの永続化は今回のPRでは行わない。
     console.info("[neumos-ai] brand-director v2 usage", result.usage);

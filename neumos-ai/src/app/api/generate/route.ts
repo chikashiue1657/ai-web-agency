@@ -7,6 +7,8 @@ import type { GenerateResponse } from "@/lib/types";
 import { extractErrorDetail } from "@/lib/error-detail";
 import { checkNeumosApiAuth, neumosApiAuthError } from "@/lib/neumos-api-auth";
 
+export const maxDuration = 60;
+
 /**
  * POST /api/generate
  * 店舗情報・AI診断・営業提案(brief)を受け取り、店舗向けWeb集客コンテンツを生成する。

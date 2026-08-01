@@ -60,7 +60,8 @@ function resolveVisionDetail(): "low" | "high" {
  * 反映されない実バグになる — 実際にテストで発見した）。
  */
 function getTimeoutMs(): number {
-  return Number(process.env.OPENAI_TIMEOUT_MS) || 8000;
+  // Vision 1回＋BrandPlan最大2回でもVercelの60秒枠へ収まるよう、既定は15秒。
+  return Number(process.env.OPENAI_TIMEOUT_MS) || 15_000;
 }
 
 async function callResponsesApi(body: unknown, timeoutMs = getTimeoutMs()): Promise<unknown> {
@@ -335,9 +336,7 @@ export const openaiBrandDirectionProvider: BrandDirectionProvider = {
     const detail = resolveVisionDetail();
     // 上限枚数はBrandPlan.photoAssignmentsの上限と同じ値を単一の真実源として使う。
     const targetUrls = photoUrls.slice(0, BRAND_PLAN_BOUNDS.photoAssignments.max);
-    const results: PhotoAnalysis[] = [];
-
-    for (const photoUrl of targetUrls) {
+    return Promise.all(targetUrls.map(async (photoUrl): Promise<PhotoAnalysis> => {
       try {
         const body = buildPhotoAnalysisRequestBody(photoUrl, input, { model, detail });
         const response = await callResponsesApi(body);
@@ -345,16 +344,15 @@ export const openaiBrandDirectionProvider: BrandDirectionProvider = {
 
         const parsed = PhotoAnalysisSchema.safeParse(JSON.parse(text));
         if (!parsed.success) throw new Error("photo analysis failed schema validation");
-        results.push({ ...parsed.data, photoUrl });
+        return { ...parsed.data, photoUrl };
       } catch (err) {
         // 写真URLの生値はログに出さない（redactErrorForLogはエラーメッセージのみを扱う）。
         console.warn(
           "[neumos-ai] brand-director openai analyzePhotos failed for one photo; marking as rejected",
           redactErrorForLog(err)
         );
-        results.push(neutralRejectedAnalysis(photoUrl, "analysis_failed"));
+        return neutralRejectedAnalysis(photoUrl, "analysis_failed");
       }
-    }
-    return results;
+    }));
   },
 };

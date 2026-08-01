@@ -40,6 +40,24 @@ export interface PhotoAssignment {
   rejectionReason: string | null;
 }
 
+/**
+ * 実写真のVision分析と店舗briefから作る、補助画像1枚分の撮影指示。
+ * 実在店舗の再現図ではなく「不足している訴求カット」を生成するために使う。
+ */
+export interface SupplementalImageDirection {
+  sourcePhotoUrl: string | null;
+  storeStrength: string;
+  visitMotivation: string;
+  commercialSubject: "coffee-craft" | "bean-selection" | "hospitality" | "space-atmosphere";
+  shotType: "product-detail" | "ritual-detail" | "merchandise-detail" | "space-detail";
+  cameraAngle: "eye-level" | "three-quarter" | "overhead" | "counter-height";
+  composition: "close-crop" | "layered-depth" | "asymmetric-editorial" | "environmental-detail";
+  lighting: "soft-window" | "warm-ambient" | "directional-natural" | "balanced-daylight";
+  sensoryCues: string[];
+  truthBoundary: string[];
+  avoid: string[];
+}
+
 export interface BrandPlan {
   brandArchetype: BrandArchetype;
   /** classifyIndustry()互換のカテゴリ文字列。判定できなければ"general"。 */
@@ -64,6 +82,8 @@ export interface BrandPlan {
   /** 既存v2の設計（immersive/editorial/direct Hero）に対応。 */
   layoutVariant: "immersive" | "editorial" | "direct";
   photoAssignments: PhotoAssignment[];
+  /** 旧レコードとの互換性のためoptional。新しいOpenAI出力では常に値またはnullを返す。 */
+  supplementalImageDirection?: SupplementalImageDirection | null;
   ctaStrategy: {
     placement: "hero" | "after-story" | "end-only";
     urgency: "low" | "medium" | "high";

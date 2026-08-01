@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StoreBrief } from "@/lib/types";
+import type { PhotoAnalysis } from "@/lib/brand-director/types";
 import { BRAND_PLAN_BOUNDS, BrandPlanSchema, PhotoAnalysisSchema } from "@/lib/brand-director/schema";
 import { getBrandDirectionProvider, isBrandDirectorOpenAiConfigured } from "@/lib/brand-director/provider";
 import { ruleBrandDirectionProvider } from "@/lib/brand-director/rule-provider";
@@ -37,6 +38,19 @@ const validBrandPlan = {
   photoAssignments: [],
   ctaStrategy: { placement: "hero", urgency: "medium" },
   confidence: 0.7,
+  supplementalImageDirection: {
+    sourcePhotoUrl: "https://example.com/a.jpg",
+    storeStrength: "豆を選ぶ楽しさと、店員に相談できる距離感",
+    visitMotivation: "自分に合う一杯を見つけに行きたくなる",
+    commercialSubject: "bean-selection",
+    shotType: "merchandise-detail",
+    cameraAngle: "counter-height",
+    composition: "asymmetric-editorial",
+    lighting: "warm-ambient",
+    sensoryCues: ["木棚に並ぶコーヒー豆", "手に取れる距離感"],
+    truthBoundary: ["実在商品名やロゴは描かない", "店舗内装を再現しない"],
+    avoid: ["架空の看板", "読める文字"],
+  },
   evidence: [{ field: "moodKeywords", basis: "brief", detail: "brief.toneより" }],
 };
 
@@ -54,7 +68,7 @@ const validPhotoAnalysis = {
   recommendedRole: "hero",
   qualityScore: 80,
   rejectionReason: null,
-};
+} satisfies PhotoAnalysis;
 
 /** OpenAI経路がfetchを実際に呼ぶために必要な最小env var一式（テスト用ダミー値）。 */
 function stubOpenAiEnv(overrides: Partial<Record<"OPENAI_API_KEY" | "OPENAI_MODEL_PREMIUM" | "OPENAI_MODEL_VISION", string>> = {}) {
@@ -231,6 +245,24 @@ describe("openai-provider: output抽出とフォールバック網羅（10ケー
     expect(result.usage.provider).toBe("openai");
     expect(result.usage.fallbackReason).toBeNull();
     expect(BrandPlanSchema.safeParse(result.plan).success).toBe(true);
+  });
+
+  it("撮影設計の参照URLは、実際に分析した写真だけを保持する", async () => {
+    stubOpenAiEnv();
+    mockFetchAlways({ ok: true, body: { output_text: JSON.stringify(validBrandPlan) } });
+
+    const known = await openaiBrandDirectionProvider.analyzeBrand(makeInput(), [validPhotoAnalysis]);
+    expect(known.plan.supplementalImageDirection?.sourcePhotoUrl).toBe(validPhotoAnalysis.photoUrl);
+
+    const unknown = await openaiBrandDirectionProvider.analyzeBrand(makeInput(), [
+      { ...validPhotoAnalysis, photoUrl: "https://example.com/other.jpg" },
+    ]);
+    expect(unknown.plan.supplementalImageDirection?.sourcePhotoUrl).toBeNull();
+  });
+
+  it("旧レコード互換のため、撮影設計が無いBrandPlanも読み込める", () => {
+    const { supplementalImageDirection: _omitted, ...legacyPlan } = validBrandPlan;
+    expect(BrandPlanSchema.safeParse(legacyPlan).success).toBe(true);
   });
 
   it("2) output[].content[]のmessage/output_textブロックから抽出できる", async () => {

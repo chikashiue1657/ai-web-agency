@@ -55,6 +55,20 @@ export const PhotoAssignmentSchema = z.object({
   rejectionReason: z.string().nullable(),
 });
 
+export const SupplementalImageDirectionSchema = z.object({
+  sourcePhotoUrl: z.string().min(1).nullable(),
+  storeStrength: z.string().min(1),
+  visitMotivation: z.string().min(1),
+  commercialSubject: z.enum(["coffee-craft", "bean-selection", "hospitality", "space-atmosphere"]),
+  shotType: z.enum(["product-detail", "ritual-detail", "merchandise-detail", "space-detail"]),
+  cameraAngle: z.enum(["eye-level", "three-quarter", "overhead", "counter-height"]),
+  composition: z.enum(["close-crop", "layered-depth", "asymmetric-editorial", "environmental-detail"]),
+  lighting: z.enum(["soft-window", "warm-ambient", "directional-natural", "balanced-daylight"]),
+  sensoryCues: z.array(z.string().min(1)).min(1).max(4),
+  truthBoundary: z.array(z.string().min(1)).min(1).max(5),
+  avoid: z.array(z.string().min(1)).min(1).max(6),
+});
+
 export const BrandPlanSchema = z.object({
   brandArchetype: z.enum(brandArchetypeEnum),
   industry: z.string().min(1),
@@ -76,6 +90,7 @@ export const BrandPlanSchema = z.object({
   }),
   layoutVariant: z.enum(["immersive", "editorial", "direct"]),
   photoAssignments: z.array(PhotoAssignmentSchema).max(BRAND_PLAN_BOUNDS.photoAssignments.max),
+  supplementalImageDirection: SupplementalImageDirectionSchema.nullable().optional(),
   ctaStrategy: z.object({
     placement: z.enum(["hero", "after-story", "end-only"]),
     urgency: z.enum(["low", "medium", "high"]),
@@ -118,6 +133,7 @@ export const BRAND_PLAN_JSON_SCHEMA = {
       "copyDirection",
       "layoutVariant",
       "photoAssignments",
+      "supplementalImageDirection",
       "ctaStrategy",
       "confidence",
       "evidence",
@@ -177,6 +193,41 @@ export const BRAND_PLAN_JSON_SCHEMA = {
             rejectionReason: { type: ["string", "null"] },
           },
         },
+      },
+      supplementalImageDirection: {
+        anyOf: [
+          {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "sourcePhotoUrl",
+              "storeStrength",
+              "visitMotivation",
+              "commercialSubject",
+              "shotType",
+              "cameraAngle",
+              "composition",
+              "lighting",
+              "sensoryCues",
+              "truthBoundary",
+              "avoid",
+            ],
+            properties: {
+              sourcePhotoUrl: { type: ["string", "null"] },
+              storeStrength: { type: "string" },
+              visitMotivation: { type: "string" },
+              commercialSubject: { type: "string", enum: ["coffee-craft", "bean-selection", "hospitality", "space-atmosphere"] },
+              shotType: { type: "string", enum: ["product-detail", "ritual-detail", "merchandise-detail", "space-detail"] },
+              cameraAngle: { type: "string", enum: ["eye-level", "three-quarter", "overhead", "counter-height"] },
+              composition: { type: "string", enum: ["close-crop", "layered-depth", "asymmetric-editorial", "environmental-detail"] },
+              lighting: { type: "string", enum: ["soft-window", "warm-ambient", "directional-natural", "balanced-daylight"] },
+              sensoryCues: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 },
+              truthBoundary: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 },
+              avoid: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 6 },
+            },
+          },
+          { type: "null" },
+        ],
       },
       ctaStrategy: {
         type: "object",

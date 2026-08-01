@@ -20,10 +20,6 @@ export async function performGeneration(
   // カフェは販売品質のv2を既定プレビューにする。従来のv1 URL自体は残すため、
   // 既存レコードや比較確認の後方互換性は維持される。
   const previewUrl = `${origin}/preview/${requestId}${classifyIndustry(brief.industry) === "cafe" ? "/v2" : ""}`;
-  const supplementalImages = await resolveSupplementalImages(brief, requestId);
-  const resolvedBrief: StoreBrief = supplementalImages.length
-    ? { ...brief, realData: { ...brief.realData, supplementalImages } }
-    : brief;
 
   // v2デザインエンジン（カフェ業態専用）が使うBrandPlanは、ここ（生成処理中）で
   // 一度だけ作成しrecordへ保存する。v2プレビューを開く・更新するたびにOpenAIを
@@ -31,6 +27,12 @@ export async function performGeneration(
   // resolveBrandPlanForV2はカフェ以外なら即undefined、失敗時も例外を投げず
   // undefinedを返す設計のため、ここで失敗してもrecordの保存自体は継続する。
   const brandPlan = await resolveBrandPlanForV2(brief, requestId);
+  // 実写真の分析を含むBrandPlanの撮影指示を、不足写真の生成へ渡す。
+  // ここで一度だけ生成し、v2表示時にはOpenAIを呼ばない。
+  const supplementalImages = await resolveSupplementalImages(brief, requestId, brandPlan);
+  const resolvedBrief: StoreBrief = supplementalImages.length
+    ? { ...brief, realData: { ...brief.realData, supplementalImages } }
+    : brief;
 
   const record: StoredGenerationRecord = {
     requestId,

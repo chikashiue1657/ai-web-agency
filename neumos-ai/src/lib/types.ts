@@ -98,7 +98,21 @@ export interface SupplementalImage {
   role: "atmosphere";
   altText: string;
   disclosure: "AI生成イメージ（実際の店舗写真ではありません）";
-  promptVersion: "cafe-atmosphere-v1";
+  promptVersion: "cafe-atmosphere-v1" | "cafe-shot-plan-v2";
+  usage?: SupplementalImageUsage;
+}
+
+export interface SupplementalImageUsage {
+  model: string;
+  quality: string;
+  size: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  /** 公式料金表に基づく画像出力分の概算。入力トークン分は含まない。 */
+  estimatedOutputCostUsd: number | null;
+  /** Images APIレスポンスから残高は取得できないため、現時点では常にnull。 */
+  remainingProjectCreditUsd: null;
 }
 
 /** Google レビュー1件（本文のみ必須。評価者名・個別評価は取得できた場合のみ）。 */

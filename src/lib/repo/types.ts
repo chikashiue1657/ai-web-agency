@@ -19,6 +19,7 @@ import type {
   GenerationType,
   StoreStrategy,
   GeneratedContent,
+  RealMenuItem,
 } from "@/lib/types";
 
 /** 一覧表示用：店舗＋リード概要 */
@@ -133,6 +134,7 @@ export interface Repository {
   getStore(id: string): Promise<Store | null>;
   getStoreDetail(id: string): Promise<StoreDetail | null>;
   upsertStores(stores: NormalizedStore[]): Promise<UpsertResult>;
+  updateStoreMenu(storeId: string, items: RealMenuItem[]): Promise<Store | null>;
   // leads
   saveLead(input: SaveLeadInput): Promise<Lead>;
   updateLeadNotes(storeId: string, notes: string): Promise<Lead | null>;

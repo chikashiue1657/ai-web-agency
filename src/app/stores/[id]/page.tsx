@@ -23,6 +23,8 @@ import { OutreachPanel } from "./outreach-panel";
 import { NeumosPanel } from "./neumos-panel";
 import { DiagnosisPanel } from "./diagnosis-panel";
 import { saveNotesAction } from "@/app/actions";
+import { MenuEditor } from "./menu-editor";
+import type { RealMenuItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +54,9 @@ export default async function StoreDetailPage({ params }: { params: { id: string
   const photoIndexes = store.source === "google_places" && store.place_id
     ? Array.from({ length: Math.min(store.photo_count, 8) }, (_, index) => index)
     : [];
+  const savedMenu = Array.isArray(store.raw_payload?._neumosMenuItems)
+    ? (store.raw_payload!._neumosMenuItems as RealMenuItem[])
+    : [];
 
   return (
     <div className="space-y-4">
@@ -71,6 +76,10 @@ export default async function StoreDetailPage({ params }: { params: { id: string
         </div>
         <ActionsPanel storeId={store.id} />
       </div>
+
+      <Section title="実メニュー（v2サイト用）">
+        <MenuEditor storeId={store.id} initialItems={savedMenu} />
+      </Section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* 基本情報 */}

@@ -20,6 +20,7 @@ import {
   requestContentGeneration,
   refreshContentGenerationStatus,
   runStoreDiagnosis,
+  updateStoreMenu,
 } from "@/lib/services";
 import { ServiceError } from "@/lib/errors";
 import { ContentGenerationError, type NeumosErrorDetail } from "@/lib/neumos/client";
@@ -117,6 +118,32 @@ export async function generateSiteAction(storeId: string): Promise<SimpleActionR
 export async function saveNotesAction(storeId: string, formData: FormData) {
   const notes = String(formData.get("notes") ?? "");
   await updateNotes(storeId, notes);
+  revalidatePath(`/stores/${storeId}`);
+}
+
+export async function saveStoreMenuAction(storeId: string, formData: FormData) {
+  const raw = String(formData.get("menuItems") ?? "[]");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("メニューの形式が正しくありません");
+  }
+  if (!Array.isArray(parsed)) throw new Error("メニューの形式が正しくありません");
+  const items = parsed.slice(0, 20).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    const name = typeof value.name === "string" ? value.name.trim() : "";
+    if (!name) return [];
+    const price = typeof value.price === "string" ? value.price.trim() : "";
+    const description = typeof value.description === "string" ? value.description.trim() : "";
+    return [{
+      name: name.slice(0, 80),
+      ...(price ? { price: price.slice(0, 40) } : {}),
+      ...(description ? { description: description.slice(0, 240) } : {}),
+    }];
+  });
+  await updateStoreMenu(storeId, items);
   revalidatePath(`/stores/${storeId}`);
 }
 

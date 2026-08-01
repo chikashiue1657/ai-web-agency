@@ -68,4 +68,24 @@ describe("Places取得 → 保存 → 重複チェック → 優先度判定", (
     expect(lead.status).toBe("called"); // ステータス保持
     expect(lead.notes).toBe("初回接触済み"); // メモ保持
   });
+
+  it("手入力メニューはPlaces再取り込み後も保持される", async () => {
+    const repo = getMemoryRepository();
+    const normalized = normalizePlacesNew({ ...samplePlace, id: "test_place_menu_preserve" });
+    const { stores } = await repo.upsertStores([normalized]);
+
+    await repo.updateStoreMenu(stores[0].id, [
+      { name: "沖縄黒糖ラテ", price: "680円", description: "黒糖のやさしい甘み" },
+    ]);
+
+    await repo.upsertStores([
+      normalizePlacesNew({ ...samplePlace, id: "test_place_menu_preserve", rating: 4.8 }),
+    ]);
+
+    const saved = await repo.getStore(stores[0].id);
+    expect(saved?.rating).toBe(4.8);
+    expect(saved?.raw_payload?._neumosMenuItems).toEqual([
+      { name: "沖縄黒糖ラテ", price: "680円", description: "黒糖のやさしい甘み" },
+    ]);
+  });
 });

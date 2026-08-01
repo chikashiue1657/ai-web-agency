@@ -68,6 +68,13 @@ export interface Store {
   updated_at: string;
 }
 
+/** 店舗担当者が確認・入力した実メニュー。AIによる推測値は保存しない。 */
+export interface RealMenuItem {
+  name: string;
+  price?: string;
+  description?: string;
+}
+
 /** 正規化関数の出力（id/timestamp はDB側で採番するため持たない） */
 export type NormalizedStore = Omit<
   Store,
@@ -192,6 +199,8 @@ export interface StoreRealData {
    * 存在する場合、Neumos AI側はテキスト検索URLへ作り直さずこの値をそのまま使う。
    */
   googleMapsUrl?: string;
+  /** 管理画面で確認・入力された実在メニューのみ。 */
+  menuItems?: RealMenuItem[];
 }
 
 /** generationType を除いた再利用可能なブリーフ核（StoreStrategy が保持）。 */

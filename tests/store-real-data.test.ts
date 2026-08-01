@@ -263,5 +263,42 @@ describe("buildStoreRealData", () => {
       expect(realData?.websiteUrl).toBe("https://roundtrip-cafe.example.com");
       expect(realData?.googleMapsUrl).toBe("https://maps.google.com/?cid=999999");
     });
+
+    it("管理画面で保存した実メニューだけをNeumosへ渡す", () => {
+      const realData = buildStoreRealData(
+        makeStore({
+          raw_payload: {
+            _neumosMenuItems: [
+              { name: "ハンドドリップ", price: "650円", description: "本日の豆から選べます" },
+              { name: "チーズケーキ", price: "580円" },
+            ],
+          },
+        })
+      );
+
+      expect(realData?.menuItems).toEqual([
+        { name: "ハンドドリップ", price: "650円", description: "本日の豆から選べます" },
+        { name: "チーズケーキ", price: "580円" },
+      ]);
+    });
+
+    it("空の商品名や不正なメニュー行は送信せず、有効な値は整形する", () => {
+      const realData = buildStoreRealData(
+        makeStore({
+          raw_payload: {
+            _neumosMenuItems: [
+              { name: "   " },
+              null,
+              "not-an-item",
+              { name: "  カフェラテ  ", price: "  600円  ", description: "  自家焙煎豆を使用  " },
+            ],
+          },
+        })
+      );
+
+      expect(realData?.menuItems).toEqual([
+        { name: "カフェラテ", price: "600円", description: "自家焙煎豆を使用" },
+      ]);
+    });
   });
 });

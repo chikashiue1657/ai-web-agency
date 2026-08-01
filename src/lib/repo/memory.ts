@@ -16,6 +16,7 @@ import type {
   ActivityEventType,
   ContentGenerationRequest,
   StoreStrategy,
+  RealMenuItem,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
 import { DEFAULT_LEAD_STATUS, isContactStatus } from "@/lib/status";
@@ -161,7 +162,12 @@ class MemoryRepository implements Repository {
     for (const n of input) {
       const existing = this.findExisting(n);
       if (existing) {
-        Object.assign(existing, n, { updated_at: ts });
+        const manualMenu = existing.raw_payload?._neumosMenuItems;
+        const incomingRaw = n.raw_payload ?? {};
+        Object.assign(existing, n, {
+          raw_payload: manualMenu === undefined ? incomingRaw : { ...incomingRaw, _neumosMenuItems: manualMenu },
+          updated_at: ts,
+        });
         updated++;
         affected.push(existing);
       } else {
@@ -178,6 +184,14 @@ class MemoryRepository implements Repository {
       }
     }
     return { inserted, updated, stores: affected };
+  }
+
+  async updateStoreMenu(storeId: string, items: RealMenuItem[]): Promise<Store | null> {
+    const store = this.stores.find((s) => s.id === storeId);
+    if (!store) return null;
+    store.raw_payload = { ...(store.raw_payload ?? {}), _neumosMenuItems: items };
+    store.updated_at = new Date().toISOString();
+    return store;
   }
 
   async saveLead(input: SaveLeadInput): Promise<Lead> {

@@ -38,6 +38,7 @@ import type {
   GenerationType,
   NeumosBrief,
   StoreStrategy,
+  RealMenuItem,
 } from "@/lib/types";
 
 // ------------------------------------------------------------
@@ -258,6 +259,12 @@ export async function updateNotes(storeId: string, notes: string) {
   const lead = await repo.updateLeadNotes(storeId, notes);
   await repo.logActivity(storeId, "lead.note_updated", {});
   return lead;
+}
+
+export async function updateStoreMenu(storeId: string, items: RealMenuItem[]) {
+  const store = await getRepo().updateStoreMenu(storeId, items);
+  if (!store) throw new ServiceError("store_not_found", "店舗が見つかりません");
+  return store;
 }
 
 export async function updateStatus(storeId: string, status: LeadStatus, contactMethod?: string) {

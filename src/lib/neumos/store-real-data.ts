@@ -17,9 +17,29 @@
  * 実画像URLへ302する）を経由したURLにして渡す。Neumos AI側はGoogle API keyを
  * 一切持たずに済む。
  */
-import type { Store, StoreRealData } from "@/lib/types";
+import type { RealMenuItem, Store, StoreRealData } from "@/lib/types";
 
 const MAX_PHOTOS = 6;
+const MAX_MENU_ITEMS = 20;
+
+function resolveMenuItems(store: Store): RealMenuItem[] | undefined {
+  const raw = store.raw_payload?._neumosMenuItems;
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw.slice(0, MAX_MENU_ITEMS).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    const name = typeof value.name === "string" ? value.name.trim() : "";
+    if (!name) return [];
+    const price = typeof value.price === "string" ? value.price.trim() : "";
+    const description = typeof value.description === "string" ? value.description.trim() : "";
+    return [{
+      name: name.slice(0, 80),
+      ...(price ? { price: price.slice(0, 40) } : {}),
+      ...(description ? { description: description.slice(0, 240) } : {}),
+    }];
+  });
+  return items.length > 0 ? items : undefined;
+}
 
 /**
  * このファイル内で実際に確認できるgoogleMapsUriの取得形式（tests/normalize.test.ts・
@@ -118,6 +138,9 @@ export function buildStoreRealData(store: Store): StoreRealData | undefined {
 
   const googleMapsUrl = resolveGoogleMapsUrl(store);
   if (googleMapsUrl) data.googleMapsUrl = googleMapsUrl;
+
+  const menuItems = resolveMenuItems(store);
+  if (menuItems) data.menuItems = menuItems;
 
   return Object.keys(data).length > 0 ? data : undefined;
 }

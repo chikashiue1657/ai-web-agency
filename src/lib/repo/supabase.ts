@@ -14,6 +14,7 @@ import type {
   ActivityEventType,
   ContentGenerationRequest,
   StoreStrategy,
+  RealMenuItem,
 } from "@/lib/types";
 import { similarity } from "@/lib/normalize/helpers";
 import { isContactStatus } from "@/lib/status";
@@ -184,9 +185,15 @@ class SupabaseRepository implements Repository {
       }
 
       if (existing) {
+        const existingRaw = existing.raw_payload ?? {};
+        const incomingRaw = n.raw_payload ?? {};
+        const manualMenu = existingRaw._neumosMenuItems;
+        const mergedRaw = manualMenu === undefined
+          ? incomingRaw
+          : { ...incomingRaw, _neumosMenuItems: manualMenu };
         const { data, error } = await db()
           .from("stores")
-          .update(n)
+          .update({ ...n, raw_payload: mergedRaw })
           .eq("id", existing.id)
           .select("*")
           .single();
@@ -201,6 +208,20 @@ class SupabaseRepository implements Repository {
       }
     }
     return { inserted, updated, stores: affected };
+  }
+
+  async updateStoreMenu(storeId: string, items: RealMenuItem[]): Promise<Store | null> {
+    const store = await this.getStore(storeId);
+    if (!store) return null;
+    const rawPayload = { ...(store.raw_payload ?? {}), _neumosMenuItems: items };
+    const { data, error } = await db()
+      .from("stores")
+      .update({ raw_payload: rawPayload })
+      .eq("id", storeId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    return (data as Store) ?? null;
   }
 
   async saveLead(input: SaveLeadInput): Promise<Lead> {

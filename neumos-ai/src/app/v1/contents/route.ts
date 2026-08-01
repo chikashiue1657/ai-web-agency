@@ -9,6 +9,8 @@ import { getSupabaseProjectRef } from "@/lib/supabase/server";
 import { TABLE_NAME } from "@/lib/store";
 import { checkNeumosApiAuth, neumosApiAuthError } from "@/lib/neumos-api-auth";
 
+export const maxDuration = 60;
+
 /**
  * POST /v1/contents — AI集客支援MVPの `NEUMOS_API_URL` 連携用エンドポイント。
  *

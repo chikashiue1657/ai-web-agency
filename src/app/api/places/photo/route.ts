@@ -25,6 +25,12 @@ function noStore(response: NextResponse): NextResponse {
   return response;
 }
 
+function cacheSuccessfulPhoto(response: NextResponse): NextResponse {
+  response.headers.set("Cache-Control", "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  return response;
+}
+
 function resolvePlaceId(url: URL): string | undefined {
   const placeId = url.searchParams.get("placeId")?.trim();
   if (placeId && PLACE_ID_PATTERN.test(placeId)) return placeId;
@@ -89,7 +95,7 @@ export async function GET(req: Request) {
     if (!json.photoUri) {
       return noStore(NextResponse.json({ ok: false, error: "no photoUri" }, { status: 502 }));
     }
-    return noStore(NextResponse.redirect(json.photoUri, 302));
+    return cacheSuccessfulPhoto(NextResponse.redirect(json.photoUri, 302));
   } catch (err) {
     logger.error("places.photo error", { error: String(err) });
     return noStore(NextResponse.json({ ok: false, error: "internal error" }, { status: 500 }));

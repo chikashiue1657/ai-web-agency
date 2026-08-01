@@ -70,9 +70,15 @@ export interface Store {
 
 /** 店舗担当者が確認・入力した実メニュー。AIによる推測値は保存しない。 */
 export interface RealMenuItem {
+  /** 管理画面内で並び替え・写真差し替えに使う安定ID。Neumosへは送らない。 */
+  id?: string;
   name: string;
   price?: string;
   description?: string;
+  /** Supabase Storageの公開URL。 */
+  imageUrl?: string;
+  /** Storage内の削除・差し替え用パス。Neumosへは送らない。 */
+  imagePath?: string;
 }
 
 /** 正規化関数の出力（id/timestamp はDB側で採番するため持たない） */

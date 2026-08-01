@@ -87,10 +87,11 @@ export const StoreRealDataSchema = z.object({
   menuItems: z
     .array(
       z.object({
-        name: z.string().min(1),
-        price: z.string().optional(),
-        description: z.string().optional(),
-      })
+          name: z.string().min(1),
+          price: z.string().optional(),
+          description: z.string().optional(),
+          imageUrl: safeUrlSchema(["https:"]).optional(),
+        })
     )
     .optional(),
   websiteUrl: WebsiteUrlSchema.optional(),

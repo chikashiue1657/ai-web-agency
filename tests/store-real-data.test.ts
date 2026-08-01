@@ -1,5 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { buildStoreRealData } from "@/lib/neumos/store-real-data";
+import { normalizePlacesNew } from "@/lib/normalize";
+import { getMemoryRepository } from "@/lib/repo/memory";
 import type { Store } from "@/lib/types";
 
 function makeStore(overrides: Partial<Store> = {}): Store {
@@ -243,9 +245,6 @@ describe("buildStoreRealData", () => {
     });
 
     it("memory repositoryを通した取り込み→読み出しでもwebsiteUrl/googleMapsUrlが失われない（正規化→保存→取得の経路一致確認）", async () => {
-      const { normalizePlacesNew } = await import("@/lib/normalize");
-      const { getMemoryRepository } = await import("@/lib/repo/memory");
-
       const normalized = normalizePlacesNew({
         id: "places/roundtrip-test",
         displayName: { text: "ラウンドトリップ喫茶" },

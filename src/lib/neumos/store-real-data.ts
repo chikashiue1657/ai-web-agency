@@ -32,10 +32,21 @@ function resolveMenuItems(store: Store): RealMenuItem[] | undefined {
     if (!name) return [];
     const price = typeof value.price === "string" ? value.price.trim() : "";
     const description = typeof value.description === "string" ? value.description.trim() : "";
+    const imageUrl = typeof value.imageUrl === "string" ? value.imageUrl.trim() : "";
+    let safeImageUrl = "";
+    if (imageUrl) {
+      try {
+        const url = new URL(imageUrl);
+        if (url.protocol === "https:") safeImageUrl = url.toString();
+      } catch {
+        // 不正な写真URLだけを省略し、他のメニュー情報は送信する。
+      }
+    }
     return [{
       name: name.slice(0, 80),
       ...(price ? { price: price.slice(0, 40) } : {}),
       ...(description ? { description: description.slice(0, 240) } : {}),
+      ...(safeImageUrl ? { imageUrl: safeImageUrl } : {}),
     }];
   });
   return items.length > 0 ? items : undefined;

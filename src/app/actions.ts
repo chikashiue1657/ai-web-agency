@@ -9,6 +9,7 @@
  *   Response Body/Network Errorを確認できる）。
  */
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
 import {
   scoreStore,
   generateProposal,
@@ -32,6 +33,13 @@ import type {
   StoreStrategy,
 } from "@/lib/types";
 import type { OutreachChannel } from "@/lib/outreach";
+import {
+  deleteMenuPhoto,
+  getMenuPhotoPublicUrl,
+  uploadMenuPhoto,
+  type MenuPhotoResult,
+} from "@/lib/menu-photos";
+import { getRepo } from "@/lib/repo";
 
 /** ServiceError以外の例外を errorDetail 付きの失敗結果に変換する共通ヘルパー。 */
 function toFailure(err: unknown, fallbackMessage: string): { ok: false; error: string; errorDetail: NeumosErrorDetail | null } {
@@ -137,13 +145,35 @@ export async function saveStoreMenuAction(storeId: string, formData: FormData) {
     if (!name) return [];
     const price = typeof value.price === "string" ? value.price.trim() : "";
     const description = typeof value.description === "string" ? value.description.trim() : "";
+    const id = typeof value.id === "string" && /^[a-zA-Z0-9-]{1,64}$/.test(value.id)
+      ? value.id
+      : randomUUID();
+    const imagePath = typeof value.imagePath === "string" ? value.imagePath : "";
+    const imageUrl = imagePath ? getMenuPhotoPublicUrl(storeId, imagePath) : undefined;
     return [{
+      id,
       name: name.slice(0, 80),
       ...(price ? { price: price.slice(0, 40) } : {}),
       ...(description ? { description: description.slice(0, 240) } : {}),
+      ...(imageUrl ? { imageUrl, imagePath } : {}),
     }];
   });
+  const currentStore = await getRepo().getStore(storeId);
+  const previousItems = Array.isArray(currentStore?.raw_payload?._neumosMenuItems)
+    ? (currentStore.raw_payload._neumosMenuItems as Array<Record<string, unknown>>)
+    : [];
+  const retainedPaths = new Set(items.flatMap((item) => item.imagePath ? [item.imagePath] : []));
+
   await updateStoreMenu(storeId, items);
+
+  // Delete replaced assets only after the database write succeeds. Until the
+  // user saves, the currently published menu therefore keeps its working URL.
+  const removedPaths = previousItems.flatMap((item) =>
+    typeof item.imagePath === "string" && !retainedPaths.has(item.imagePath)
+      ? [item.imagePath]
+      : []
+  );
+  await Promise.allSettled(removedPaths.map((path) => deleteMenuPhoto(storeId, path)));
   revalidatePath(`/stores/${storeId}`);
 }
 
@@ -180,6 +210,12 @@ export async function generateOutreachAction(
   } catch (err) {
     return toFailure(err, "文面生成に失敗しました");
   }
+}
+
+export async function uploadStoreMenuPhotoAction(storeId: string, formData: FormData): Promise<MenuPhotoResult> {
+  const file = formData.get("photo");
+  if (!(file instanceof File)) return { ok: false, error: "写真を選択してください" };
+  return uploadMenuPhoto(storeId, file);
 }
 
 /**

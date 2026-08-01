@@ -132,6 +132,8 @@ export interface RealMenuItem {
   name: string;
   price?: string;
   description?: string;
+  /** 管理画面で登録された実商品の写真。 */
+  imageUrl?: string;
 }
 
 export interface GenerateRequest {

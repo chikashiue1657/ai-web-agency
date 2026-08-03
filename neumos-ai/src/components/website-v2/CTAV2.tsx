@@ -1,6 +1,7 @@
 import type { ContactMethod, WebsiteCta } from "@/lib/types";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { ArtDirection, CtaStyle } from "@/lib/engine/v2-design-system";
+import { InquiryFormV2 } from "./InquiryFormV2";
 
 /**
  * 最終CTA。hrefはbrief.realDataに基づき`buildCtaWithRealLinks`/
@@ -233,6 +234,7 @@ export function CTAV2({
   variant = "primary",
   ctaStyle = "outline-minimal",
   artDirection,
+  inquiryContext,
 }: {
   cta: WebsiteCta;
   contactMethods: ContactMethod[];
@@ -240,6 +242,7 @@ export function CTAV2({
   variant?: "primary" | "compact";
   ctaStyle?: CtaStyle;
   artDirection: ArtDirection;
+  inquiryContext?: { requestId: string; storeName: string };
 }) {
   if (variant === "compact") {
     return (
@@ -250,11 +253,26 @@ export function CTAV2({
     );
   }
 
-  if (artDirection === "japanese-editorial") {
-    return <EditorialCta cta={cta} contactMethods={contactMethods} theme={theme} ctaStyle={ctaStyle} />;
-  }
-  if (artDirection === "sensory-immersive") {
-    return <ImmersiveCta cta={cta} contactMethods={contactMethods} theme={theme} ctaStyle={ctaStyle} />;
-  }
-  return <CraftCta cta={cta} contactMethods={contactMethods} theme={theme} ctaStyle={ctaStyle} />;
+  const primaryCta =
+    artDirection === "japanese-editorial" ? (
+      <EditorialCta cta={cta} contactMethods={contactMethods} theme={theme} ctaStyle={ctaStyle} />
+    ) : artDirection === "sensory-immersive" ? (
+      <ImmersiveCta cta={cta} contactMethods={contactMethods} theme={theme} ctaStyle={ctaStyle} />
+    ) : (
+      <CraftCta cta={cta} contactMethods={contactMethods} theme={theme} ctaStyle={ctaStyle} />
+    );
+
+  return (
+    <>
+      {primaryCta}
+      {inquiryContext && (
+        <InquiryFormV2
+          requestId={inquiryContext.requestId}
+          storeName={inquiryContext.storeName}
+          artDirection={artDirection}
+          theme={theme}
+        />
+      )}
+    </>
+  );
 }

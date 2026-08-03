@@ -61,6 +61,38 @@ alter table neumos_content_generation_requests
 alter table neumos_content_generation_requests
   add column if not exists brand_plan jsonb;
 
+-- 公開v2サイトから受け付けた予約・問い合わせ。
+-- ブラウザからSupabaseへ直接接続せず、Neumosサーバーのservice_roleだけが
+-- 読み書きする。メール通知に失敗しても問い合わせ本体はこのテーブルに残る。
+create table if not exists neumos_site_inquiries (
+  id               uuid primary key default gen_random_uuid(),
+  request_id       text not null references neumos_content_generation_requests(request_id),
+  store_name       text not null,
+  inquiry_type     text not null check (inquiry_type in ('reservation', 'general')),
+  name             text not null,
+  email            text,
+  phone            text,
+  preferred_date   date,
+  message          text not null,
+  status           text not null default 'new' check (status in ('new', 'contacted', 'closed')),
+  dedupe_key       text not null unique,
+  source_ip_hash   text not null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  check (email is not null or phone is not null)
+);
+
+create index if not exists neumos_site_inquiries_created_idx
+  on neumos_site_inquiries (created_at desc);
+create index if not exists neumos_site_inquiries_request_idx
+  on neumos_site_inquiries (request_id, created_at desc);
+create index if not exists neumos_site_inquiries_status_idx
+  on neumos_site_inquiries (status, created_at desc);
+
+alter table neumos_site_inquiries enable row level security;
+revoke all privileges on table neumos_site_inquiries from anon, authenticated;
+grant select, insert, update on table neumos_site_inquiries to service_role;
+
 -- ============================================================
 -- RLS（雛形）: v1はservice role経由のサーバアクセス前提。今は無効のまま。
 -- ------------------------------------------------------------

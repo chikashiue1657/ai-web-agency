@@ -62,10 +62,12 @@ export function WebsiteRendererV2({
   brief,
   contents,
   brandPlan,
+  requestId,
 }: {
   brief: StoreBrief;
   contents: GeneratedWebsiteContents;
   brandPlan?: BrandPlan;
+  requestId?: string;
 }) {
   const category = classifyIndustry(brief.industry);
 
@@ -195,6 +197,7 @@ export function WebsiteRendererV2({
         theme={theme}
         ctaStyle={tokens.ctaStyle}
         artDirection={tokens.artDirection}
+        inquiryContext={requestId ? { requestId, storeName: brief.storeName } : undefined}
       />
     ),
     ctaEarly: (

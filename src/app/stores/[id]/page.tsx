@@ -25,6 +25,8 @@ import { DiagnosisPanel } from "./diagnosis-panel";
 import { saveNotesAction } from "@/app/actions";
 import { MenuEditor } from "./menu-editor";
 import type { RealMenuItem } from "@/lib/types";
+import { assessSiteReadiness } from "@/lib/site-readiness";
+import { SiteReadinessCard } from "./site-readiness-card";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,11 @@ export default async function StoreDetailPage({ params }: { params: { id: string
   const savedMenu = Array.isArray(store.raw_payload?._neumosMenuItems)
     ? (store.raw_payload!._neumosMenuItems as RealMenuItem[])
     : [];
+  const readiness = assessSiteReadiness(
+    store,
+    savedMenu,
+    contentRequests.some((request) => Boolean(request.preview_url))
+  );
 
   return (
     <div className="space-y-4">
@@ -78,7 +85,10 @@ export default async function StoreDetailPage({ params }: { params: { id: string
       </div>
 
       <Section title="実メニュー（v2サイト用）">
-        <MenuEditor storeId={store.id} initialItems={savedMenu} />
+        <SiteReadinessCard readiness={readiness} />
+        <div id="menu-editor" className="mt-4 scroll-mt-20">
+          <MenuEditor storeId={store.id} initialItems={savedMenu} />
+        </div>
       </Section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

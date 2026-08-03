@@ -2,6 +2,18 @@ import type { RealMenuItem, WebsiteSection } from "@/lib/types";
 import type { CafeThemeV2 } from "@/lib/theme-v2";
 import type { ArtDirection, SurfaceClasses } from "@/lib/engine/v2-design-system";
 import { RevealV2 } from "./RevealV2";
+import { SafeImageV2 } from "./SafeImageV2";
+
+function MenuPhoto({ item, className }: { item: RealMenuItem; className: string }) {
+  if (!item.imageUrl) return null;
+  return (
+    <SafeImageV2
+      src={item.imageUrl}
+      alt={`${item.name}のメニュー写真`}
+      className={`h-full w-full object-cover ${className}`}
+    />
+  );
+}
 
 /**
  * 実メニュー品目(`realData.menuItems`)がある場合だけ表示する、品名+価格の
@@ -23,7 +35,13 @@ function EditorialMenuList({ items, theme, surface, sectionHeadingClass }: RealM
 
         <ul className={`mt-10 border-t ${surface.divider}`}>
           {items.map((item, i) => (
-            <li key={`${item.name}-${i}`} className={`flex gap-4 border-b py-6 last:border-b-0 ${surface.divider}`}>
+            <li key={`${item.name}-${i}`} className={`grid gap-4 border-b py-6 last:border-b-0 ${item.imageUrl ? "grid-cols-[6rem_1fr] sm:grid-cols-[8rem_1fr]" : "grid-cols-1"} ${surface.divider}`}>
+              {item.imageUrl && (
+                <div className="aspect-[4/3] overflow-hidden bg-stone-100">
+                  <MenuPhoto item={item} className="transition-transform duration-500 hover:scale-[1.03]" />
+                </div>
+              )}
+              <div className="flex gap-4">
               <span className={`shrink-0 text-xs ${theme.accentTextSoft}`}>{String(i + 1).padStart(2, "0")}</span>
               <RevealV2 variant="fade-up" delayMs={i * 60} className="flex flex-1 items-baseline justify-between gap-6">
                 <div className="min-w-0">
@@ -36,6 +54,7 @@ function EditorialMenuList({ items, theme, surface, sectionHeadingClass }: RealM
                   <span className={`shrink-0 text-sm tabular-nums ${theme.bodyText}`}>{item.price}</span>
                 )}
               </RevealV2>
+              </div>
             </li>
           ))}
         </ul>
@@ -54,20 +73,25 @@ function ImmersiveMenuList({ items, theme, surface, sectionHeadingClass }: RealM
 
         <RevealV2
           variant="fade-up"
-          className={`mt-10 ${surface.cardBg} ${surface.cardBorder} px-6 py-10 sm:px-12 sm:py-14`}
+          className={`mt-10 overflow-hidden ${surface.cardBg} ${surface.cardBorder}`}
         >
-          <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${theme.accentTextSoft}`}>Featured</p>
-          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-4">
-            <h3 className={`text-3xl sm:text-4xl ${theme.displayFont} ${theme.bodyText}`}>{featured.name}</h3>
-            {featured.price && (
-              <span className={`text-xl tabular-nums ${theme.bodyText}`}>{featured.price}</span>
+          {featured.imageUrl && (
+            <div className="aspect-[16/9] overflow-hidden bg-stone-100 sm:aspect-[2/1]">
+              <MenuPhoto item={featured} className="transition-transform duration-700 hover:scale-[1.025]" />
+            </div>
+          )}
+          <div className="px-6 py-10 sm:px-12 sm:py-14">
+            <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${theme.accentTextSoft}`}>Featured</p>
+            <div className="mt-3 flex flex-wrap items-baseline justify-between gap-4">
+              <h3 className={`text-3xl sm:text-4xl ${theme.displayFont} ${theme.bodyText}`}>{featured.name}</h3>
+              {featured.price && <span className={`text-xl tabular-nums ${theme.bodyText}`}>{featured.price}</span>}
+            </div>
+            {featured.description && (
+              <p className={`mt-3 max-w-[46ch] text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
+                {featured.description}
+              </p>
             )}
           </div>
-          {featured.description && (
-            <p className={`mt-3 max-w-[46ch] text-sm leading-relaxed sm:text-base ${theme.bodyTextSoft}`}>
-              {featured.description}
-            </p>
-          )}
         </RevealV2>
 
         {rest.length > 0 && (
@@ -77,8 +101,9 @@ function ImmersiveMenuList({ items, theme, surface, sectionHeadingClass }: RealM
                 key={`${item.name}-${i}`}
                 variant="fade-up"
                 delayMs={i * 60}
-                className={`flex items-baseline justify-between gap-4 border-b py-4 ${surface.divider}`}
+                className={`grid items-center gap-4 border-b py-4 ${item.imageUrl ? "grid-cols-[5rem_1fr_auto]" : "grid-cols-[1fr_auto]"} ${surface.divider}`}
               >
+                {item.imageUrl && <div className="aspect-square overflow-hidden"><MenuPhoto item={item} className="" /></div>}
                 <h4 className={`text-base ${theme.displayFont} ${theme.bodyText}`}>{item.name}</h4>
                 {item.price && <span className={`shrink-0 text-sm tabular-nums ${theme.bodyText}`}>{item.price}</span>}
               </RevealV2>
@@ -100,7 +125,12 @@ function CraftMenuList({ items, theme, surface, sectionHeadingClass }: RealMenuL
         <ul className={`mt-10 border-t ${surface.divider}`}>
           {items.map((item, i) => (
             <li key={`${item.name}-${i}`} className={`border-b py-6 last:border-b-0 ${surface.divider}`}>
-              <RevealV2 variant="fade-up" delayMs={i * 60} className="flex items-baseline justify-between gap-6">
+              <RevealV2 variant="fade-up" delayMs={i * 60} className={`grid items-center gap-5 ${item.imageUrl ? "grid-cols-[7rem_1fr_auto]" : "grid-cols-[1fr_auto]"}`}>
+                {item.imageUrl && (
+                  <div className={`aspect-square overflow-hidden ${i % 2 === 0 ? "rotate-[-1deg]" : "rotate-[1deg]"}`}>
+                    <MenuPhoto item={item} className="transition-transform duration-500 hover:scale-[1.03]" />
+                  </div>
+                )}
                 <div className="min-w-0">
                   <h3 className={`text-lg sm:text-xl ${theme.displayFont} ${theme.bodyText}`}>{item.name}</h3>
                   {item.description && (

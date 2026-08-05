@@ -234,7 +234,7 @@ describe("derivePhotoPlanFromBrandPlan", () => {
     expect(result?.heroPhotoUrl).toBe(realPhotoUrls[2]);
     expect(result?.storyPhotoUrl).toBe(realPhotoUrls[0]);
     expect(result?.galleryPhotoUrls).toEqual([realPhotoUrls[1]]);
-    expect(result?.tier).toBe("few");
+    expect(result?.tier).toBe("moderate");
   });
 
   it("重複URLは1回だけ数える", () => {
@@ -249,7 +249,7 @@ describe("derivePhotoPlanFromBrandPlan", () => {
       ]),
     } as unknown as BrandPlan;
     const result = derivePhotoPlanFromBrandPlan(plan, onlyUrl);
-    expect(result?.tier).toBe("single");
+    expect(result?.tier).toBe("minimal");
     expect(result?.galleryPhotoUrls).toEqual([]);
   });
 
@@ -268,7 +268,8 @@ describe("derivePhotoPlanFromBrandPlan", () => {
     expect(result?.storyPhotoUrl).toBe(realPhotoUrls[1]);
     expect(result?.galleryPhotoUrls).toEqual(expect.arrayContaining([realPhotoUrls[2], "https://example.com/d.jpg"]));
     expect(result?.galleryPhotoUrls).toHaveLength(2);
-    expect(result?.tier).toBe("many");
+    // 合計4枚(hero+story+gallery2枚)は"moderate"(3〜5)であり、"many"(6枚以上)ではない。
+    expect(result?.tier).toBe("moderate");
   });
 
   it("rejectのみ除外し、それ以外のroleはgalleryとして扱う", () => {

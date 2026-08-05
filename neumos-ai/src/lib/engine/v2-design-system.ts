@@ -194,6 +194,12 @@ export function resolveV2DesignTokens(brandPlan: BrandPlan | undefined, photoTie
   // HeroV2側はartDirectionごとに異なる「意図的なno-photo構成」を描き分ける。
   if (photoTier === "none") {
     tokens.heroComposition = "typographic";
+  } else if (photoTier === "minimal") {
+    // 写真1〜2枚: full-bleed-center/overlap-editorialのような写真を大きく
+    // 見せる構図には無理に寄せない。かといって0枚と同じtypographicにすると
+    // せっかくの1枚が使われずに終わるため、既存構図の中で最も控えめな
+    // split-frame（写真は枠内、テキストは外側の独立面）に固定する。
+    tokens.heroComposition = "split-frame";
   }
 
   return tokens;

@@ -170,7 +170,14 @@ describe("WebsiteRendererV2: v1経路への非影響", () => {
 });
 
 describe("WebsiteRendererV2: Hero構図の切り替え", () => {
-  const photoBrief: StoreBrief = { ...cafeBrief, realData: { photoUrls: ["https://example.com/a.jpg"] } };
+  // 3枚(tier="moderate")にする。1〜2枚(tier="minimal")は写真主体の大きな構図に
+  // 無理に寄せず既存の最も控えめな構図(split-frame)へ倒すようになったため
+  // (v2-design-system.ts)、full-bleed-center等の「写真ありの通常構図」を
+  // 検証するにはminimalを超える枚数が必要になった。
+  const photoBrief: StoreBrief = {
+    ...cafeBrief,
+    realData: { photoUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg", "https://example.com/c.jpg"] },
+  };
 
   it("sensory-immersive方向(luxury-quiet)×layoutVariant=immersiveかつ写真ありの場合、full-bleed構図（h-dvh）で描画する", () => {
     const contents = generateWebsiteRuleBased(photoBrief);
@@ -195,6 +202,18 @@ describe("WebsiteRendererV2: Hero構図の切り替え", () => {
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain('id="top"');
     expect(html).not.toContain("h-dvh");
+  });
+
+  it("写真1〜2枚(tier=minimal)の場合、sensory-immersive×immersiveでもfull-bleed-centerへ寄せず、split-frame(控えめな構図)になる", () => {
+    const minimalPhotoBrief: StoreBrief = { ...cafeBrief, realData: { photoUrls: ["https://example.com/only-one.jpg"] } };
+    const contents = generateWebsiteRuleBased(minimalPhotoBrief);
+    const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "immersive" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={minimalPhotoBrief} contents={contents} brandPlan={brandPlan} />);
+    // full-bleed-centerの目印(sm:h-dvh)が無く、split-frameの目印(grid)がある。
+    expect(html).not.toContain("h-dvh");
+    expect(html).toContain("lg:grid-cols-[minmax(0,44%)_1fr]");
+    // 唯一の写真自体は無駄にせず、split-frame内にちゃんと表示される。
+    expect(html).toContain('src="https://example.com/only-one.jpg"');
   });
 
   it("写真0枚の場合、layoutVariantに関わらず破綻せずtypographic構図で描画する", () => {

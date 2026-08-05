@@ -16,6 +16,7 @@
  */
 import { classifyIndustry } from "@/lib/engine/industry";
 import { classifyPhotoTier, type PhotoPlan } from "@/lib/engine/photo-strategy";
+import { DEFAULT_MAX_DISPLAY_PHOTOS, selectDisplayPhotos } from "@/lib/engine/photo-curation";
 import type { StoreBrief } from "@/lib/types";
 import { getBrandDirectionProvider } from "./provider";
 import { redactErrorForLog } from "./redact";
@@ -64,10 +65,12 @@ export async function resolveBrandPlanForV2(brief: StoreBrief, requestId: string
  *
  * BrandPlan.photoAssignmentsはBRAND_PLAN_BOUNDS.photoAssignments.max（6枚）で
  * 上限が設けられているため、実際の写真が7枚以上ある店舗ではBrandPlanが
- * 言及していない写真が発生しうる。buildPhotoPlan()（既存・上限なし）から見て
- * 写真が減って見えることのないよう、BrandPlanが明示的に"reject"とした写真だけを
- * 除外し、言及されていない実写真はGalleryへそのまま残す（実データを優先し、
- * 内部の上限を理由に実在する写真を消さない）。
+ * 言及していない写真が発生しうる。ここではBrandPlanが明示的に"reject"とした
+ * 写真だけを除外し、言及されていない実写真もいったんはGallery候補へ残す
+ * （実データを優先し、内部の上限を理由に実在する写真を最初から捨てない）。
+ * ただし表示直前に`selectDisplayPhotos`（重複排除＋上限12枚の均等サンプリング）
+ * を必ず通すため、最終的にHero/Story/Galleryの合計が12枚を超えることはない
+ * （写真が極端に多い店舗データが来ても、Galleryの表示件数は常に有界になる）。
  */
 export function derivePhotoPlanFromBrandPlan(brandPlan: BrandPlan, realPhotoUrls: string[]): PhotoPlan | undefined {
   const accepted = brandPlan.photoAssignments.filter((a) => a.role !== "reject");
@@ -83,14 +86,18 @@ export function derivePhotoPlanFromBrandPlan(brandPlan: BrandPlan, realPhotoUrls
 
   const mentionedUrls = new Set(brandPlan.photoAssignments.map((a) => a.photoUrl));
   const unmentionedRealUrls = realPhotoUrls.filter((url) => !mentionedUrls.has(url));
-  const galleryPhotoUrls = Array.from(
-    new Set([
-      ...dedupedAccepted.filter((url) => url !== heroPhotoUrl && url !== storyPhotoUrl),
-      ...unmentionedRealUrls,
-    ])
-  );
+  const galleryCandidates = [
+    ...dedupedAccepted.filter((url) => url !== heroPhotoUrl && url !== storyPhotoUrl),
+    ...unmentionedRealUrls,
+  ];
 
-  const totalCount = new Set([heroPhotoUrl, storyPhotoUrl, ...galleryPhotoUrls].filter((u): u is string => !!u)).size;
+  // Hero/Storyで既に使った分を差し引いた残り予算内で、Galleryを重複排除＋
+  // 均等サンプリングする（表示件数の合計が常に12枚以内に収まるようにする）。
+  const heroAndStoryCount = [heroPhotoUrl, storyPhotoUrl].filter((u): u is string => !!u).length;
+  const galleryBudget = Math.max(0, DEFAULT_MAX_DISPLAY_PHOTOS - heroAndStoryCount);
+  const { selected: galleryPhotoUrls } = selectDisplayPhotos(galleryCandidates, galleryBudget);
+
+  const totalCount = heroAndStoryCount + galleryPhotoUrls.length;
 
   return {
     tier: classifyPhotoTier(totalCount),

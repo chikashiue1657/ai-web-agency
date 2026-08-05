@@ -1,0 +1,46 @@
+name: CI
+
+# 最小構成のCI: 型チェックとVitestユニットテストのみ（Phase 0）。
+# 本リポジトリは疎結合な2つの独立したNext.jsアプリ（ルート="AI集客支援MVP"、
+# neumos-ai/="Neumos AI"）で構成されているため、それぞれ独立したジョブとして
+# 並列実行する（マトリクスにしないのは、片方が失敗してももう片方の結果が
+# 隠れず両方とも最後まで実行・報告されるようにするため）。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mvp:
+    name: MVP (root app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  neumos-ai:
+    name: Neumos AI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: neumos-ai/package-lock.json
+      - working-directory: neumos-ai
+        run: npm ci
+      - working-directory: neumos-ai
+        run: npm run typecheck
+      - working-directory: neumos-ai
+        run: npm test

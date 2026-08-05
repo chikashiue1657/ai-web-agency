@@ -5,10 +5,18 @@
  * ローカル専用スクリプト。
  *
  * 録画品質（Phase 1改善分）:
- *  - 録画前にウォームアップ読み込みを1回行い、フォント・画像の読み込み中の
- *    白画面・部分描画が録画の開幕に写らないようにする。
+ *  - 録画前にウォームアップ読み込みを1回行い、フォント適用・画像デコード・
+ *    （初回アクセス時のみ発生し得る）サーバー側の初期化コストを先に消化する。
  *  - フォント適用・img要素の読み込み完了・2フレーム分の描画確定を明示的に
  *    待ってから録画上のスクロールを開始する。
+ *  - 録画コンテキストでのページ読み込み〜レンダリング完了までに実際に
+ *    かかった時間を計測し、MP4変換時にその区間をffmpegの入力側`-ss`で
+ *    トリムする。写真枚数が多い等で読み込みに数秒かかるページでは、
+ *    ウォームアップ後でも録画コンテキスト側の読み込みは（Playwrightの
+ *    コンテキスト分離によりキャッシュを共有しないため）改めて発生するが、
+ *    その区間を最終MP4から取り除くことで、白画面・読み込み中の状態が
+ *    出力に含まれないようにする（実際に写真500枚のページで録画冒頭が
+ *    白画面になる不具合を検証で発見し、この対策で解消したことを確認済み）。
  *  - `reducedMotion: "reduce"`で録画し、scroll-revealのフェード演出を無効化
  *    する（演出自体はv2側のコードを変更せず、既存のprefers-reduced-motion
  *    対応をそのまま利用するだけ）。
@@ -114,6 +122,13 @@ interface ScrollTiming {
  * 動画の合計時間が「短いページでも最低12秒、長いページでも最大30秒」に
  * 収まるよう、スクロール時間と終端静止時間を決める。
  *
+ * `elapsedBeforeHoldMs`は、録画コンテキスト作成〜ページ読み込み〜
+ * waitForRenderReady完了までに実際にかかった時間（＝録画ファイルに既に
+ * 写り込んでいる時間）。写真枚数が多い等でこの読み込み自体に数秒かかる
+ * ページでは、この時間を差し引かずにスクロール予算を決めると、合計時間が
+ * 30秒を超えてしまう（実測で確認した）。そのため上限側の予算計算にだけ
+ * この経過時間を反映する。
+ *
  * スクロール速度自体は常に一定の自然な速さ（≈1画面/秒）を基準にし、ページが
  * 短くて合計時間が最低保証(12秒)に届かない場合は、スクロール速度を不自然に
  * 遅くするのではなく終端の静止時間を延ばして帳尻を合わせる（＝録画は必ず
@@ -121,18 +136,19 @@ interface ScrollTiming {
  * ページが極端に長い場合は、最大時間(30秒)を超えないようスクロール時間の
  * 方を短縮する（この場合のみ、自然な速さの基準より速くスクロールする）。
  */
-function planScrollTiming(scrollDistance: number): ScrollTiming {
+function planScrollTiming(scrollDistance: number, elapsedBeforeHoldMs: number): ScrollTiming {
   const MIN_TOTAL_MS = 12_000;
   const MAX_TOTAL_MS = 30_000;
   const START_HOLD_MS = 1_800;
   const END_HOLD_MS = 1_800;
   const SCROLL_PX_PER_SEC = 950;
 
-  const maxScrollMs = Math.max(0, MAX_TOTAL_MS - START_HOLD_MS - END_HOLD_MS);
+  const remainingForCap = Math.max(0, MAX_TOTAL_MS - elapsedBeforeHoldMs);
+  const maxScrollMs = Math.max(0, remainingForCap - START_HOLD_MS - END_HOLD_MS);
   const naturalScrollMs = scrollDistance > 0 ? (scrollDistance / SCROLL_PX_PER_SEC) * 1000 : 0;
   const scrollMs = Math.min(naturalScrollMs, maxScrollMs);
 
-  const totalBeforePadding = START_HOLD_MS + scrollMs + END_HOLD_MS;
+  const totalBeforePadding = elapsedBeforeHoldMs + START_HOLD_MS + scrollMs + END_HOLD_MS;
   const endHoldMs = END_HOLD_MS + Math.max(0, MIN_TOTAL_MS - totalBeforePadding);
 
   return { startHoldMs: START_HOLD_MS, scrollMs, endHoldMs };
@@ -145,11 +161,11 @@ function planScrollTiming(scrollDistance: number): ScrollTiming {
  * `window.scrollTo`をrAFで駆動することで、実際の指の動き（弾みながら止まる）
  * に近い自然な速度変化を作る。
  */
-async function scrollThroughPage(page: import("playwright").Page): Promise<void> {
+async function scrollThroughPage(page: import("playwright").Page, elapsedBeforeHoldMs: number): Promise<void> {
   const scrollDistance = await page.evaluate(() =>
     Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
   );
-  const { startHoldMs, scrollMs, endHoldMs } = planScrollTiming(scrollDistance);
+  const { startHoldMs, scrollMs, endHoldMs } = planScrollTiming(scrollDistance, elapsedBeforeHoldMs);
 
   await page.waitForTimeout(startHoldMs);
 
@@ -173,10 +189,19 @@ async function scrollThroughPage(page: import("playwright").Page): Promise<void>
   await page.waitForTimeout(endHoldMs);
 }
 
-async function convertToMp4(webmPath: string, outPath: string): Promise<void> {
+/**
+ * webm→mp4変換。`trimStartSeconds`（録画コンテキストでのページ読み込み〜
+ * レンダリング完了までの実測時間）が指定された場合、その区間を入力側`-ss`で
+ * 切り落としてからエンコードする。入力側`-ss`はデコード前にシークするため、
+ * 出力側`-ss`より高速で、かつ「フォント/画像読み込み中の状態」を最終MP4に
+ * 含めないという目的にも合う（不要な区間はエンコード対象にすらしない）。
+ */
+async function convertToMp4(webmPath: string, outPath: string, trimStartSeconds = 0): Promise<void> {
   await mkdir(path.dirname(outPath), { recursive: true });
+  const trimArgs = trimStartSeconds > 0 ? ["-ss", trimStartSeconds.toFixed(3)] : [];
   await execFileAsync(ffmpegPath, [
     "-y",
+    ...trimArgs,
     "-i",
     webmPath,
     "-c:v",
@@ -224,8 +249,10 @@ async function main() {
   try {
     // ウォームアップ: 録画無しの別コンテキストで一度読み込み、フォント適用・
     // 画像デコード・（初回アクセス時のみ発生し得る）サーバー側の初期化コストを
-    // ここで先に消化しておく。録画本体の開幕に読み込み中の白画面・部分描画が
-    // 写り込むリスクを、後段のwaitForRenderReadyだけに頼らず構造的に減らすため。
+    // ここで先に消化しておく。Playwrightのコンテキストはブラウザキャッシュを
+    // 共有しないため、これだけでは録画側の読み込みがゼロにはならないが、
+    // 録画側の実測読み込み時間を後段でMP4からトリムするため、これは主に
+    // サーバー側の初期化コストを減らす目的で行う。
     console.log("[record-demo] ウォームアップ読み込み中...");
     const warmupContext = await browser.newContext({
       viewport: { width: args.width, height: args.height },
@@ -246,6 +273,7 @@ async function main() {
       reducedMotion: "reduce",
     });
     const page = await context.newPage();
+    const recordingPassStart = Date.now();
 
     console.log("[record-demo] ページを読み込み中...");
     await page.goto(args.url, { waitUntil: "networkidle", timeout: 30_000 });
@@ -253,8 +281,15 @@ async function main() {
     console.log("[record-demo] レンダリング完了を待機中...");
     await waitForRenderReady(page);
 
+    // ここまでに実際にかかった時間（＝録画データの先頭に写り込んでいる
+    // 白画面・部分描画の長さ）。30秒上限の計算に反映する（写真枚数が多い
+    // ページ等ではこれ自体が数秒になりうるため）とともに、MP4変換時に
+    // この区間をffmpegでトリムし、最終出力に読み込み中の状態が残らないようにする。
+    const elapsedBeforeHoldMs = Date.now() - recordingPassStart;
+    console.log(`[record-demo] 読み込み〜描画確定まで: ${elapsedBeforeHoldMs}ms（MP4化時にトリムする）`);
+
     console.log("[record-demo] スクロール録画中...");
-    await scrollThroughPage(page);
+    await scrollThroughPage(page, elapsedBeforeHoldMs);
 
     console.log("[record-demo] 録画を確定中（コンテキストを閉じています）...");
     await context.close();
@@ -262,8 +297,12 @@ async function main() {
     const webmPath = await findRecordedWebm(videoDir);
     console.log(`[record-demo] 録画完了: ${webmPath}`);
 
+    // 少し多めにトリムして、読み込み完了直前のフレームが最終MP4に残らないようにする。
+    const TRIM_SAFETY_MARGIN_MS = 200;
+    const trimStartSeconds = (elapsedBeforeHoldMs + TRIM_SAFETY_MARGIN_MS) / 1000;
+
     console.log("[record-demo] MP4へ変換中(ffmpeg)...");
-    await convertToMp4(webmPath, args.out);
+    await convertToMp4(webmPath, args.out, trimStartSeconds);
 
     const finalStat = await stat(args.out);
     if (finalStat.size === 0) {

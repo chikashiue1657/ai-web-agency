@@ -17,11 +17,22 @@
  *    その区間を最終MP4から取り除くことで、白画面・読み込み中の状態が
  *    出力に含まれないようにする（実際に写真500枚のページで録画冒頭が
  *    白画面になる不具合を検証で発見し、この対策で解消したことを確認済み）。
- *  - `reducedMotion: "reduce"`で録画し、scroll-revealのフェード演出を無効化
- *    する（演出自体はv2側のコードを変更せず、既存のprefers-reduced-motion
- *    対応をそのまま利用するだけ）。
+ *  - `reducedMotion`オプションは指定しない（＝ブラウザ既定のno-preferenceの
+ *    まま）で録画する。以前はreducedMotion:"reduce"でscroll-revealの
+ *    フェード演出とParallaxを両方止めていたが、これは録画は安定する一方、
+ *    v2旗艦デザインの見た目を支えている演出が動画に一切写らず、静的で
+ *    のっぺりした印象になっていた。RevealV2・ParallaxImageV2はどちらも
+ *    同じ`prefers-reduced-motion`判定を見ているため、reducedMotionを
+ *    外すだけでサイト側のコードには一切触れずに両方が有効になる。
+ *  - Heroは常にIntersectionObserverの初期判定で「表示済み」扱いになる
+ *    （マウント時に画面内にある要素はRevealV2がフェード演出自体を発火
+ *    させない設計のため）ため、Hero自体には待つべき入場アニメーションが
+ *    無い。これはwaitForRenderReady完了の確認だけで足りる。
  *  - スクロールはease-in-outカーブに沿った自然な加速・減速で行い、ページ最下部
  *    （CTA/店舗情報）まで到達してから終了する。
+ *  - 終端の静止時間(既定1.8秒、動画尺が短い場合はさらに延びる)は、
+ *    RevealV2の遷移時間(0.7秒)より十分長く確保しているため、最後に見せる
+ *    フレームがフェード途中の半透明状態になることはない。
  *  - 動画の合計時間は、短いページでも12秒を下回らず、長いページでも30秒を
  *    超えないようにする。開始・終了それぞれに1.8秒の静止を必ず入れる。
  *
@@ -119,15 +130,25 @@ interface ScrollTiming {
 }
 
 /**
+ * ページ読み込み〜レンダリング完了までの区間をMP4化時にffmpegでトリムする際、
+ * 読み込み完了直前のフレームが残らないよう上乗せする安全マージン。
+ * `planScrollTiming`の最低保証(MIN_TOTAL_MS)にもこの分を上乗せする必要がある
+ * （トリムで削られる分を見込んでおかないと、配信されるMP4の実尺が
+ * MIN_TOTAL_MSを下回ってしまう＝実測で確認した不具合）。
+ */
+const TRIM_SAFETY_MARGIN_MS = 200;
+
+/**
  * 動画の合計時間が「短いページでも最低12秒、長いページでも最大30秒」に
  * 収まるよう、スクロール時間と終端静止時間を決める。
  *
- * `elapsedBeforeHoldMs`は、録画コンテキスト作成〜ページ読み込み〜
- * waitForRenderReady完了までに実際にかかった時間（＝録画ファイルに既に
- * 写り込んでいる時間）。写真枚数が多い等でこの読み込み自体に数秒かかる
- * ページでは、この時間を差し引かずにスクロール予算を決めると、合計時間が
- * 30秒を超えてしまう（実測で確認した）。そのため上限側の予算計算にだけ
- * この経過時間を反映する。
+ * ここで扱う時間は、すべて「MP4化時のトリム後（＝実際に配信されるMP4）」の
+ * 尺を基準にする。録画コンテキストでのページ読み込み〜レンダリング完了
+ * までの区間は、後段でffmpegの入力側`-ss`により丸ごと取り除かれるため
+ * （+安全マージンTRIM_SAFETY_MARGIN_MS分も追加で削られるため）、
+ * この関数の予算計算にその読み込み時間を含める必要は無い。
+ * 含めてしまうと、トリムで既に削られる分を二重に見積もることになり、
+ * 短いページで配信尺がMIN_TOTAL_MSを下回る不具合になる（実測で確認済み）。
  *
  * スクロール速度自体は常に一定の自然な速さ（≈1画面/秒）を基準にし、ページが
  * 短くて合計時間が最低保証(12秒)に届かない場合は、スクロール速度を不自然に
@@ -136,20 +157,24 @@ interface ScrollTiming {
  * ページが極端に長い場合は、最大時間(30秒)を超えないようスクロール時間の
  * 方を短縮する（この場合のみ、自然な速さの基準より速くスクロールする）。
  */
-function planScrollTiming(scrollDistance: number, elapsedBeforeHoldMs: number): ScrollTiming {
+function planScrollTiming(scrollDistance: number): ScrollTiming {
   const MIN_TOTAL_MS = 12_000;
   const MAX_TOTAL_MS = 30_000;
   const START_HOLD_MS = 1_800;
   const END_HOLD_MS = 1_800;
   const SCROLL_PX_PER_SEC = 950;
 
-  const remainingForCap = Math.max(0, MAX_TOTAL_MS - elapsedBeforeHoldMs);
-  const maxScrollMs = Math.max(0, remainingForCap - START_HOLD_MS - END_HOLD_MS);
+  const maxScrollMs = Math.max(0, MAX_TOTAL_MS - START_HOLD_MS - END_HOLD_MS);
   const naturalScrollMs = scrollDistance > 0 ? (scrollDistance / SCROLL_PX_PER_SEC) * 1000 : 0;
   const scrollMs = Math.min(naturalScrollMs, maxScrollMs);
 
-  const totalBeforePadding = elapsedBeforeHoldMs + START_HOLD_MS + scrollMs + END_HOLD_MS;
-  const endHoldMs = END_HOLD_MS + Math.max(0, MIN_TOTAL_MS - totalBeforePadding);
+  // トリムの安全マージンに加え、エンコード・コンテナ化(veryfast/faststart)側の
+  // 誤差も少量ながら生じる（実測でMIN_TOTAL_MS+TRIM_SAFETY_MARGIN_MSちょうど
+  // 狙いだと80ms程度不足するケースを確認した）。ここでも小さな緩衝を足しておく。
+  const ENCODE_OVERHEAD_BUFFER_MS = 400;
+  const totalBeforePadding = START_HOLD_MS + scrollMs + END_HOLD_MS;
+  const minTargetWithMargins = MIN_TOTAL_MS + TRIM_SAFETY_MARGIN_MS + ENCODE_OVERHEAD_BUFFER_MS;
+  const endHoldMs = END_HOLD_MS + Math.max(0, minTargetWithMargins - totalBeforePadding);
 
   return { startHoldMs: START_HOLD_MS, scrollMs, endHoldMs };
 }
@@ -161,11 +186,11 @@ function planScrollTiming(scrollDistance: number, elapsedBeforeHoldMs: number): 
  * `window.scrollTo`をrAFで駆動することで、実際の指の動き（弾みながら止まる）
  * に近い自然な速度変化を作る。
  */
-async function scrollThroughPage(page: import("playwright").Page, elapsedBeforeHoldMs: number): Promise<void> {
+async function scrollThroughPage(page: import("playwright").Page): Promise<void> {
   const scrollDistance = await page.evaluate(() =>
     Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
   );
-  const { startHoldMs, scrollMs, endHoldMs } = planScrollTiming(scrollDistance, elapsedBeforeHoldMs);
+  const { startHoldMs, scrollMs, endHoldMs } = planScrollTiming(scrollDistance);
 
   await page.waitForTimeout(startHoldMs);
 
@@ -256,7 +281,6 @@ async function main() {
     console.log("[record-demo] ウォームアップ読み込み中...");
     const warmupContext = await browser.newContext({
       viewport: { width: args.width, height: args.height },
-      reducedMotion: "reduce",
     });
     const warmupPage = await warmupContext.newPage();
     await warmupPage.goto(args.url, { waitUntil: "networkidle", timeout: 30_000 });
@@ -266,11 +290,10 @@ async function main() {
     const context = await browser.newContext({
       viewport: { width: args.width, height: args.height },
       recordVideo: { dir: videoDir, size: { width: args.width, height: args.height } },
-      // scroll-reveal演出（RevealV2等）はprefers-reduced-motionを尊重して
-      // 即時フル表示になる設計のため、録画中は常にこれを有効にする。これにより
-      // セクションがフェード/スケールの途中で録画される（＝partial-loadに
-      // 見える）ことを避けられる。v2側のコード・演出自体は変更していない。
-      reducedMotion: "reduce",
+      // reducedMotionは指定しない。RevealV2のフェード演出・ParallaxImageV2の
+      // 視差を録画に写すため（詳細はファイル先頭の説明を参照）。
+      // 終端の静止時間(endHoldMs、既定1.8秒以上)がRevealV2の遷移時間(0.7秒)
+      // より十分長いため、最後に見せるフレームが遷移途中になることはない。
     });
     const page = await context.newPage();
     const recordingPassStart = Date.now();
@@ -282,14 +305,13 @@ async function main() {
     await waitForRenderReady(page);
 
     // ここまでに実際にかかった時間（＝録画データの先頭に写り込んでいる
-    // 白画面・部分描画の長さ）。30秒上限の計算に反映する（写真枚数が多い
-    // ページ等ではこれ自体が数秒になりうるため）とともに、MP4変換時に
-    // この区間をffmpegでトリムし、最終出力に読み込み中の状態が残らないようにする。
+    // 白画面・部分描画の長さ）。MP4変換時にこの区間をffmpegでトリムし、
+    // 最終出力に読み込み中の状態が残らないようにする。
     const elapsedBeforeHoldMs = Date.now() - recordingPassStart;
     console.log(`[record-demo] 読み込み〜描画確定まで: ${elapsedBeforeHoldMs}ms（MP4化時にトリムする）`);
 
     console.log("[record-demo] スクロール録画中...");
-    await scrollThroughPage(page, elapsedBeforeHoldMs);
+    await scrollThroughPage(page);
 
     console.log("[record-demo] 録画を確定中（コンテキストを閉じています）...");
     await context.close();
@@ -298,7 +320,6 @@ async function main() {
     console.log(`[record-demo] 録画完了: ${webmPath}`);
 
     // 少し多めにトリムして、読み込み完了直前のフレームが最終MP4に残らないようにする。
-    const TRIM_SAFETY_MARGIN_MS = 200;
     const trimStartSeconds = (elapsedBeforeHoldMs + TRIM_SAFETY_MARGIN_MS) / 1000;
 
     console.log("[record-demo] MP4へ変換中(ffmpeg)...");

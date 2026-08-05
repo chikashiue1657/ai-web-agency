@@ -53,7 +53,9 @@ function PrimaryCtaButton({
       <a
         href={href}
         className={`mt-12 inline-flex items-center justify-center rounded-full px-10 py-4 text-sm font-semibold transition sm:mt-14 sm:text-base ${
-          onLight ? `${theme?.ctaBg ?? "bg-stone-900"} text-white hover:opacity-90` : "bg-white text-stone-950 hover:bg-white/90"
+          onLight
+            ? `${theme?.ctaBg ?? "bg-stone-900"} ${theme?.ctaText ?? "text-white"} hover:opacity-90`
+            : "bg-white text-stone-950 hover:bg-white/90"
         }`}
       >
         {label}
@@ -90,7 +92,7 @@ function CompactCtaButton({
     return (
       <a
         href={href}
-        className={`mt-6 inline-flex items-center justify-center rounded-full ${theme.ctaBg} px-8 py-3 text-sm font-medium text-white transition hover:opacity-90 sm:text-base`}
+        className={`mt-6 inline-flex items-center justify-center rounded-full ${theme.ctaBg} px-8 py-3 text-sm font-medium ${theme.ctaText} transition hover:opacity-90 sm:text-base`}
       >
         {label}
       </a>
@@ -190,7 +192,7 @@ function ImmersiveCta({
     <section id="contact" className={theme.ctaBg}>
       <div className="mx-auto flex max-w-5xl flex-col gap-10 px-5 py-24 sm:py-32 lg:flex-row lg:items-center lg:justify-between lg:px-16 lg:py-28">
         <div className="text-center lg:text-left">
-          <h2 className={`text-2xl text-white sm:text-3xl ${theme.displayFont}`}>{cta.headline}</h2>
+          <h2 className={`text-2xl sm:text-3xl ${theme.ctaText} ${theme.displayFont}`}>{cta.headline}</h2>
           <p className="mt-4 max-w-md text-sm text-white/80 sm:text-base">{cta.body}</p>
         </div>
         <div className="flex flex-col items-center lg:items-end">
@@ -217,7 +219,7 @@ function CraftCta({
   return (
     <section id="contact" className={theme.ctaBg}>
       <div className="mx-auto flex max-w-2xl flex-col items-center px-5 py-32 text-center sm:py-40">
-        <h2 className={`text-2xl text-white sm:text-3xl ${theme.displayFont}`}>{cta.headline}</h2>
+        <h2 className={`text-2xl sm:text-3xl ${theme.ctaText} ${theme.displayFont}`}>{cta.headline}</h2>
         <p className="mt-4 max-w-md text-sm text-white/80 sm:text-base">{cta.body}</p>
         <PrimaryCtaButton href={cta.href} label={cta.buttonLabel} ctaStyle={ctaStyle} />
         <ContactMethodList contactMethods={contactMethods} />

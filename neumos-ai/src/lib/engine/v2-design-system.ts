@@ -165,7 +165,12 @@ export const DEFAULT_TOKENS: V2DesignTokens = {
   typographyScale: "editorial-serif",
   surfaceStyle: "paper-warm",
   ctaStyle: "text-link",
-  colorBalance: "neutral",
+  // BrandPlanが全く無い場合（旧レコード等）の既定パレット。以前はrule-providerの
+  // 既定値(colorBalance:"neutral")と合わせていたが、rule-providerのpaletteHintは
+  // 決定論的にbrief内容へ応じて変わるようになった（archetype-heuristics.ts）ため、
+  // 今はこの2経路を一致させる意味が無い。BrandPlan無し経路の見た目を既存の
+  // amber/serifのまま維持するため、colorBalanceは"warm"に固定する。
+  colorBalance: "warm",
 };
 
 export function resolveV2DesignTokens(brandPlan: BrandPlan | undefined, photoTier: PhotoTier): V2DesignTokens {

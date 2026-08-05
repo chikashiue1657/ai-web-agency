@@ -64,7 +64,7 @@ export function MobileStickyCtaV2({
 
   const buttonClass =
     ctaStyle === "solid-bold"
-      ? `flex-1 rounded-full ${theme.ctaBg} px-5 py-3 text-center text-sm font-semibold text-white transition active:opacity-80`
+      ? `flex-1 rounded-full ${theme.ctaBg} px-5 py-3 text-center text-sm font-semibold ${theme.ctaText} transition active:opacity-80`
       : ctaStyle === "text-link"
       ? `flex-1 rounded-full border border-current px-5 py-3 text-center text-sm font-medium transition active:opacity-70 ${theme.bodyText}`
       : `flex-1 rounded-full border-2 border-current px-5 py-3 text-center text-sm font-semibold transition active:opacity-70 ${theme.bodyText}`;

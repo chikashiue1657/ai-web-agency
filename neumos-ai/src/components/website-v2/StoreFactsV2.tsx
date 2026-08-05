@@ -16,7 +16,7 @@ export function StoreFactsV2({ realData, area, theme }: { realData?: StoreRealDa
 
   if (facts.length < 2) return null;
   return (
-    <section aria-label="店舗の基本情報" className={`${theme.paperRaisedBg} border-y border-stone-200`}>
+    <section aria-label="店舗の基本情報" className={`${theme.paperRaisedBg} border-y ${theme.borderSoft}`}>
       <dl className="mx-auto grid max-w-6xl grid-cols-1 divide-y divide-stone-200 px-5 sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:px-8">
         {facts.map((fact) => (
           <div key={fact.label} className="py-5 sm:px-6 sm:py-6 first:sm:pl-0 last:sm:pr-0">

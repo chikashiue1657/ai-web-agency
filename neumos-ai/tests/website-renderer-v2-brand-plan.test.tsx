@@ -244,7 +244,10 @@ describe("WebsiteRendererV2: モバイル下部固定CTA", () => {
     const contents = generateWebsiteRuleBased(cafeBrief);
     const brandPlan = makeBrandPlan({ ctaStrategy: { placement: "hero", urgency: "high" } });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
-    expect(html).toContain("bg-stone-900");
+    // makeBrandPlan()の既定visualDirection.paletteHintは"neutral"であり、
+    // 4パレットが完全に独立した値を持つようになったため、ctaBgは
+    // neutralパレット固有の値(bg-neutral-900)になる。
+    expect(html).toContain("bg-neutral-900");
   });
 
   it("固定CTAバーの高さ分の安全余白(pb-24)はページ最外側に付与し、Footerの後にも確保する(以前は<main>だけに付いておりFooterがバーの下に隠れ続ける不具合があった)", () => {
@@ -348,8 +351,9 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
     expect(menuHtml).toContain('">01</span>');
     expect(menuHtml).not.toContain(">Featured<");
     // Access: 中央寄せの奥付風。地図は控えめな高さに留め、bg-stone-950(immersive)の
-    // 暗色情報帯は使わない。
-    expect(html).toContain('id="access" class="bg-stone-50"');
+    // 暗色情報帯は使わない。makeBrandPlan()の既定paletteHintは"neutral"のため、
+    // paperBg系の値はneutralパレット固有(bg-neutral-50)になる。
+    expect(html).toContain('id="access" class="bg-neutral-50"');
     expect(html).not.toContain('id="access" class="w-full bg-stone-950"');
   });
 
@@ -371,7 +375,7 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
     expect(menuHtml).not.toContain('">01</span>');
     expect(menuHtml).not.toContain(">Featured<");
     expect(html).not.toContain('id="access" class="w-full bg-stone-950"');
-    expect(html).not.toContain('id="access" class="bg-stone-50"');
+    expect(html).not.toContain('id="access" class="bg-neutral-50"');
   });
 
   it("AccessHoursは3方向すべてでaddressHint(事実に基づく説明文)を必ず表示する(地図の成否に関わらずセクションが空虚に見えないため)", () => {

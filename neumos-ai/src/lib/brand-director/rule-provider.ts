@@ -10,26 +10,10 @@ import type { StoreBrief } from "@/lib/types";
 import type { BrandDirectionProvider } from "./provider";
 import type { BrandDirectionInput, BrandDirectionResult, BrandPlan, EvidenceItem, PhotoAnalysis, PhotoAssignment } from "./types";
 import { BRAND_PLAN_BOUNDS } from "./schema";
+import { deriveArchetypeDecision } from "./archetype-heuristics";
 
 /** qualityScoreの中立値（写真を見て評価していないことを表す、0〜100スケールの中央値）。 */
 const NEUTRAL_QUALITY_SCORE = 50;
-
-function archetypeForIndustry(category: IndustryCategory): BrandPlan["brandArchetype"] {
-  switch (category) {
-    case "cafe":
-      return "artisan";
-    case "hair_salon":
-      return "modern-minimal";
-    case "spa":
-      return "wellness-calm";
-    case "izakaya":
-      return "energetic-casual";
-    case "hotel":
-      return "luxury-quiet";
-    default:
-      return "warm-hospitality";
-  }
-}
 
 function layoutForIndustry(category: IndustryCategory): BrandPlan["layoutVariant"] {
   switch (category) {
@@ -70,11 +54,25 @@ export const ruleBrandDirectionProvider: BrandDirectionProvider = {
     const { brief, requestId } = input;
     const category = classifyIndustry(brief.industry);
     const photoUrls = brief.realData?.photoUrls ?? [];
+    // storeName+areaを種として使うことで、同じ店舗は毎回同じarchetype/paletteHintに
+    // なる（requestIdはリクエストのたびに新しいUUIDになるため種には使わない）。
+    const archetypeDecision = deriveArchetypeDecision(brief, `${brief.storeName}:${brief.area}`);
 
     const evidence: EvidenceItem[] = [
       { field: "industry", basis: "brief", detail: `brief.industry="${brief.industry}"を業種分類した結果` },
       { field: "audiences", basis: "brief", detail: `brief.targetCustomer="${brief.targetCustomer}"をそのまま使用` },
       { field: "customerIntent", basis: "brief", detail: `brief.mainProblem="${brief.mainProblem}"をそのまま使用` },
+      archetypeDecision.usedFallback
+        ? {
+            field: "brandArchetype",
+            basis: "inference",
+            detail: `キーワード一致なし。業種の妥当集合内でハッシュにより"${archetypeDecision.archetype}"を選択`,
+          }
+        : {
+            field: "brandArchetype",
+            basis: "brief",
+            detail: `一致キーワード[${archetypeDecision.matchedKeywords.join("、")}]から"${archetypeDecision.archetype}"を選択`,
+          },
     ];
     if (photoAnalyses && photoAnalyses.length > 0) {
       evidence.push({
@@ -91,14 +89,14 @@ export const ruleBrandDirectionProvider: BrandDirectionProvider = {
     }
 
     const plan: BrandPlan = {
-      brandArchetype: archetypeForIndustry(category),
+      brandArchetype: archetypeDecision.archetype,
       industry: category,
       audiences: [brief.targetCustomer].filter(Boolean),
       customerIntent: brief.mainProblem,
       moodKeywords: safeMoodKeywords(brief, category),
       valueProposition: brief.salesAngle,
       visualDirection: {
-        paletteHint: "neutral",
+        paletteHint: archetypeDecision.paletteHint,
         // cafeは既存v2デザインエンジン（theme-v2.ts）が既にfont-serifを採用済みのため、
         // ここで"clean-sans"を返すとBrand Director接続後にcafeサイトの書体が
         // 無条件で変わってしまう（実際にv2へ接続して初めて判明した不整合）。

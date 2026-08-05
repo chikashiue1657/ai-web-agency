@@ -4,6 +4,19 @@
  * で開き、自然なスクロールだけを行いながら録画し、MP4として書き出す
  * ローカル専用スクリプト。
  *
+ * 録画品質（Phase 1改善分）:
+ *  - 録画前にウォームアップ読み込みを1回行い、フォント・画像の読み込み中の
+ *    白画面・部分描画が録画の開幕に写らないようにする。
+ *  - フォント適用・img要素の読み込み完了・2フレーム分の描画確定を明示的に
+ *    待ってから録画上のスクロールを開始する。
+ *  - `reducedMotion: "reduce"`で録画し、scroll-revealのフェード演出を無効化
+ *    する（演出自体はv2側のコードを変更せず、既存のprefers-reduced-motion
+ *    対応をそのまま利用するだけ）。
+ *  - スクロールはease-in-outカーブに沿った自然な加速・減速で行い、ページ最下部
+ *    （CTA/店舗情報）まで到達してから終了する。
+ *  - 動画の合計時間は、短いページでも12秒を下回らず、長いページでも30秒を
+ *    超えないようにする。開始・終了それぞれに1.8秒の静止を必ず入れる。
+ *
  * スコープ（Phase 1で意図的に含めないもの）:
  *  - GitHub Actions等でのオーケストレーション（Phase 2）
  *  - Supabase Storageへの保存・DBへのメタデータ記録（Phase 2）
@@ -70,33 +83,94 @@ function parseArgs(argv: string[]): Args {
 }
 
 /**
- * ヘッダー→CTA→本文…と自然に見えるよう、一定間隔で小刻みにスクロールする。
- * 実際の閲覧者の指の動きに近づけるため、瞬間ジャンプではなく短いウェイトを
- * 挟んだ複数回のホイール操作にする。ページの実高さから歩数を決めるが、
- * 極端に長いページで録画が延々続かないよう、合計スクロール時間に上限を設ける。
+ * ページ本体（フォント・画像・レイアウト）が実際に描画し終わるまで待つ。
+ * `waitUntil: "networkidle"`だけでは「通信が落ち着いた」ことしか分からず、
+ * Webフォントの適用やimg要素のデコード完了までは保証しないため、録画開始前に
+ * ここで明示的に確認する（開幕が白画面・部分描画のまま録画されるのを防ぐ）。
  */
-async function scrollThroughPage(page: import("playwright").Page, viewportHeight: number): Promise<void> {
-  const MAX_SCROLL_MS = 10_000;
-  const STEP_DELAY_MS = 220;
-  const stepSize = Math.round(viewportHeight * 0.55);
+async function waitForRenderReady(page: import("playwright").Page): Promise<void> {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction(() => Array.from(document.images).every((img) => img.complete));
+  // フォント適用やimg完了直後は、ブラウザがまだそのフレームを塗り終えていない
+  // ことがあるため、2フレーム分描画を進めてから戻ってくるのを待つ。
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      })
+  );
+}
 
-  await page.waitForTimeout(700); // 初期表示・フォント・画像読み込みが落ち着くのを待つ
+interface ScrollTiming {
+  /** 開幕の静止時間(ms)。CTA等が写る前にスクロールが始まらないための下限。 */
+  startHoldMs: number;
+  /** スクロール自体に使う時間(ms)。ページ実高さが無い（=スクロール不要）場合は0。 */
+  scrollMs: number;
+  /** 終端（CTA/店舗情報）の静止時間(ms)。動画の合計最短時間はここで吸収する。 */
+  endHoldMs: number;
+}
 
-  const started = Date.now();
-  while (Date.now() - started < MAX_SCROLL_MS) {
-    const { scrollY, scrollHeight, clientHeight } = await page.evaluate(() => ({
-      scrollY: window.scrollY,
-      scrollHeight: document.documentElement.scrollHeight,
-      clientHeight: document.documentElement.clientHeight,
-    }));
-    const reachedBottom = scrollY + clientHeight >= scrollHeight - 4;
-    if (reachedBottom) break;
+/**
+ * 動画の合計時間が「短いページでも最低12秒、長いページでも最大30秒」に
+ * 収まるよう、スクロール時間と終端静止時間を決める。
+ *
+ * スクロール速度自体は常に一定の自然な速さ（≈1画面/秒）を基準にし、ページが
+ * 短くて合計時間が最低保証(12秒)に届かない場合は、スクロール速度を不自然に
+ * 遅くするのではなく終端の静止時間を延ばして帳尻を合わせる（＝録画は必ず
+ * CTA/店舗情報の静止フレームで終わるという要件と方向性が一致するため）。
+ * ページが極端に長い場合は、最大時間(30秒)を超えないようスクロール時間の
+ * 方を短縮する（この場合のみ、自然な速さの基準より速くスクロールする）。
+ */
+function planScrollTiming(scrollDistance: number): ScrollTiming {
+  const MIN_TOTAL_MS = 12_000;
+  const MAX_TOTAL_MS = 30_000;
+  const START_HOLD_MS = 1_800;
+  const END_HOLD_MS = 1_800;
+  const SCROLL_PX_PER_SEC = 950;
 
-    await page.mouse.wheel(0, stepSize);
-    await page.waitForTimeout(STEP_DELAY_MS);
+  const maxScrollMs = Math.max(0, MAX_TOTAL_MS - START_HOLD_MS - END_HOLD_MS);
+  const naturalScrollMs = scrollDistance > 0 ? (scrollDistance / SCROLL_PX_PER_SEC) * 1000 : 0;
+  const scrollMs = Math.min(naturalScrollMs, maxScrollMs);
+
+  const totalBeforePadding = START_HOLD_MS + scrollMs + END_HOLD_MS;
+  const endHoldMs = END_HOLD_MS + Math.max(0, MIN_TOTAL_MS - totalBeforePadding);
+
+  return { startHoldMs: START_HOLD_MS, scrollMs, endHoldMs };
+}
+
+/**
+ * Hero→Story→Menu→Access→CTA…と自然に見えるよう、加速・減速のあるスクロールで
+ * ページ最下部（CTA/店舗情報）まで進み、開始・終了それぞれで静止する。
+ * 瞬間ジャンプや等速スクロールではなく、ease-in-outカーブに沿って
+ * `window.scrollTo`をrAFで駆動することで、実際の指の動き（弾みながら止まる）
+ * に近い自然な速度変化を作る。
+ */
+async function scrollThroughPage(page: import("playwright").Page): Promise<void> {
+  const scrollDistance = await page.evaluate(() =>
+    Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+  );
+  const { startHoldMs, scrollMs, endHoldMs } = planScrollTiming(scrollDistance);
+
+  await page.waitForTimeout(startHoldMs);
+
+  if (scrollDistance > 0 && scrollMs > 0) {
+    // イージング計算はNode側で行い、page.evaluateへは`window.scrollTo`呼び出し
+    // だけを渡す。ページ内で完結するrAFループ（関数をブラウザへ丸ごと転送する
+    // 形）は、tsxのビルド設定によっては転送先で解決できないヘルパー参照を
+    // 生成することがあるため避け、Node側から一定間隔でスクロール位置を
+    // 押し進める方式にしている。
+    const FRAME_INTERVAL_MS = 50;
+    const start = Date.now();
+    for (;;) {
+      const t = Math.min(1, (Date.now() - start) / scrollMs);
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      await page.evaluate((y) => window.scrollTo(0, y), scrollDistance * eased);
+      if (t >= 1) break;
+      await page.waitForTimeout(FRAME_INTERVAL_MS);
+    }
   }
 
-  await page.waitForTimeout(900); // 最後の見え方で少し静止してから録画終了
+  await page.waitForTimeout(endHoldMs);
 }
 
 async function convertToMp4(webmPath: string, outPath: string): Promise<void> {
@@ -148,17 +222,39 @@ async function main() {
   });
 
   try {
+    // ウォームアップ: 録画無しの別コンテキストで一度読み込み、フォント適用・
+    // 画像デコード・（初回アクセス時のみ発生し得る）サーバー側の初期化コストを
+    // ここで先に消化しておく。録画本体の開幕に読み込み中の白画面・部分描画が
+    // 写り込むリスクを、後段のwaitForRenderReadyだけに頼らず構造的に減らすため。
+    console.log("[record-demo] ウォームアップ読み込み中...");
+    const warmupContext = await browser.newContext({
+      viewport: { width: args.width, height: args.height },
+      reducedMotion: "reduce",
+    });
+    const warmupPage = await warmupContext.newPage();
+    await warmupPage.goto(args.url, { waitUntil: "networkidle", timeout: 30_000 });
+    await waitForRenderReady(warmupPage);
+    await warmupContext.close();
+
     const context = await browser.newContext({
       viewport: { width: args.width, height: args.height },
       recordVideo: { dir: videoDir, size: { width: args.width, height: args.height } },
+      // scroll-reveal演出（RevealV2等）はprefers-reduced-motionを尊重して
+      // 即時フル表示になる設計のため、録画中は常にこれを有効にする。これにより
+      // セクションがフェード/スケールの途中で録画される（＝partial-loadに
+      // 見える）ことを避けられる。v2側のコード・演出自体は変更していない。
+      reducedMotion: "reduce",
     });
     const page = await context.newPage();
 
     console.log("[record-demo] ページを読み込み中...");
     await page.goto(args.url, { waitUntil: "networkidle", timeout: 30_000 });
 
+    console.log("[record-demo] レンダリング完了を待機中...");
+    await waitForRenderReady(page);
+
     console.log("[record-demo] スクロール録画中...");
-    await scrollThroughPage(page, args.height);
+    await scrollThroughPage(page);
 
     console.log("[record-demo] 録画を確定中（コンテキストを閉じています）...");
     await context.close();

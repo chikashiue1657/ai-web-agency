@@ -47,6 +47,14 @@ export interface TextArtifact extends BaseArtifact {
 
 export type Artifact = ImageArtifact | TextArtifact;
 
+export function isImageArtifact(a: Artifact): a is ImageArtifact {
+  return a.media === "image";
+}
+
+export function isTextArtifact(a: Artifact): a is TextArtifact {
+  return a.media === "text";
+}
+
 const MIN_MENU_DESCRIPTION_CHARS = 40;
 
 function makeText(id: string, sourceOrder: number, text: string): TextArtifact | null {

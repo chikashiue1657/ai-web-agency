@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Jimp, rgbaToInt } from "jimp";
@@ -153,5 +155,25 @@ describe("WebsiteRendererV2 (editorialPreview branch)", () => {
     expect(html).toContain("<header");
     expect(html).toContain("<main");
     expect(html).toContain("<footer");
+  });
+
+  it("Motion(RevealV2)が実際に適用されている(既存RevealV2のtransitionクラスが出力に含まれる)", async () => {
+    const brief = makeBrief();
+    const contents = makeContents();
+    const preview = await buildEditorialPreview(brief, contents);
+    const html = renderToStaticMarkup(
+      <WebsiteRendererV2 brief={brief} contents={contents} editorialPreview={preview} />
+    );
+    expect(html).toContain("transition-all");
+  });
+});
+
+describe("Motion対応表の依存方向(指摘3の回帰テスト)", () => {
+  it("presentation.tsはRevealV2/delayMs/motionを一切import/exportしない", () => {
+    const presentationPath = fileURLToPath(new URL("../src/lib/editorial/presentation.ts", import.meta.url));
+    const source = readFileSync(presentationPath, "utf-8");
+    expect(source).not.toMatch(/RevealV2/);
+    expect(source).not.toMatch(/delayMs/);
+    expect(source.toLowerCase()).not.toMatch(/\bmotion\b/);
   });
 });

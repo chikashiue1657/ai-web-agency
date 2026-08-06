@@ -31,6 +31,12 @@ export interface ImageArtifact extends BaseArtifact {
   /** Compressのデコード処理(dHash計算)の副産物として得られる。抽出時点では未設定。 */
   width?: number;
   height?: number;
+  /**
+   * Compressが計算したdHash(64bit)。抽出時点では未設定。Arrangeの同一媒体内
+   * 距離計算がこの値をそのまま再利用する(画像を再フェッチ・再デコードしない)。
+   * デコードに失敗した場合は未設定のまま(Arrange側は距離計算不能として扱う)。
+   */
+  hash?: bigint;
   /** Compress前は常に0。デバッグ・reasons[]トレース専用(Presentationの判定入力にしない)。 */
   absorbedCount: number;
   /** AI生成の雰囲気画像(supplementalImages由来)は開示文言をRenderで必ず保持する。 */

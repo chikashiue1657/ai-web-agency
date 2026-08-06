@@ -48,7 +48,7 @@ async function compressImages(images: readonly ImageArtifact[]): Promise<ImageAr
     const image = images[i];
     const decoded = hashes[i];
     const withDecodedDims: ImageArtifact = decoded
-      ? { ...image, width: decoded.width, height: decoded.height }
+      ? { ...image, width: decoded.width, height: decoded.height, hash: decoded.hash }
       : { ...image };
 
     if (decoded === null) {

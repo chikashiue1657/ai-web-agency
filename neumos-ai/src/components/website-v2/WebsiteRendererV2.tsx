@@ -17,6 +17,10 @@ import type { BrandPlan } from "@/lib/brand-director/types";
 import { splitBulletLines } from "@/components/website/utils";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 import { Footer } from "@/components/website/Footer";
+import type { PresentedRenderable } from "@/lib/editorial/presentation";
+import type { UtilityFacts } from "@/lib/editorial/filter";
+import { PresentedRenderableV2 } from "./editorial/PresentedRenderableV2";
+import { UtilityLayerV2 } from "./editorial/UtilityLayerV2";
 import { HeaderV2 } from "./HeaderV2";
 import { HeroV2 } from "./HeroV2";
 import { SignatureV2 } from "./SignatureV2";
@@ -62,10 +66,20 @@ export function WebsiteRendererV2({
   brief,
   contents,
   brandPlan,
+  editorialPreview,
 }: {
   brief: StoreBrief;
   contents: GeneratedWebsiteContents;
   brandPlan?: BrandPlan;
+  /**
+   * 編集パイプライン(Observation→Artifacts→Filter→Compress→Arrange→
+   * Renderable→Presentation→Render)の試験的な描画経路(Phase 6・限定接続)。
+   * 省略時(既定)は従来通りの描画になり、この分岐は一切実行されない。
+   * 呼び出し側(page.tsx)が非同期のcompressArtifacts()を実行した結果を
+   * ここへ渡す(このコンポーネント自体は同期のまま変更しない)。
+   * neumos-ai/docs/design/editorial-pipeline-design.md 11章・20章。
+   */
+  editorialPreview?: { presented: PresentedRenderable[]; utility: UtilityFacts };
 }) {
   const category = classifyIndustry(brief.industry);
 
@@ -99,6 +113,39 @@ export function WebsiteRendererV2({
   const theme = resolveCafeThemeV2(tokens.colorBalance, tokens.typographyScale);
   const surface = resolveSurfaceClasses(tokens.surfaceStyle);
   const typography = resolveTypographyClasses(tokens.typographyScale);
+
+  // Phase 6限定接続: editorialPreviewが渡された場合のみ、新しい編集パイプラインの
+  // 出力(Editorial Layer + Utility Layer)を描画する。既存のblockRenderer経路
+  // (このif文より下)には一切手を入れず、この分岐が無効(既定)なら従来通り動く。
+  if (editorialPreview) {
+    return (
+      <div className={`pb-24 sm:pb-0 ${theme.paperBg}`}>
+        <HeaderV2
+          storeName={brief.storeName}
+          blocks={plan.blocks}
+          theme={deriveHeaderTheme(tokens.artDirection, tokens.heroComposition)}
+        />
+        <main>
+          {editorialPreview.presented.map((presented) => (
+            <PresentedRenderableV2 key={presented.renderable.id} presented={presented} theme={theme} />
+          ))}
+        </main>
+        <UtilityLayerV2
+          storeName={brief.storeName}
+          access={contents.access}
+          realData={brief.realData}
+          cta={contents.cta}
+          contactMethods={contents.contactMethods}
+          theme={theme}
+          surface={surface}
+          artDirection={tokens.artDirection}
+          ctaStyle={tokens.ctaStyle}
+        />
+        <Footer storeName={brief.storeName} area={brief.area} industry={brief.industry} theme={resolveTheme(brief.industry)} />
+        <MobileStickyCtaV2 cta={contents.cta} theme={theme} surface={surface} ctaStyle={tokens.ctaStyle} />
+      </div>
+    );
+  }
 
   const aboutSections = contents.sections.filter((s) => s.kind === "about");
   const featureSections = contents.sections.filter((s) => s.kind === "feature");

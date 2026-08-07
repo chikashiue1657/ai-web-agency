@@ -3,26 +3,23 @@ import { WebsiteRendererV2 } from "@/components/website-v2/WebsiteRendererV2";
 import { extractErrorDetail } from "@/lib/error-detail";
 import { buildCafeStructuredData, serializeStructuredData } from "@/lib/seo-v2";
 import { getGenerationRecord } from "@/lib/store";
-import { filterArtifacts } from "@/lib/editorial/filter";
-import { compressArtifacts } from "@/lib/editorial/compress";
-import { arrangeArtifacts } from "@/lib/editorial/arrange";
-import { toRenderables } from "@/lib/editorial/renderable";
-import { assignPresentation } from "@/lib/editorial/presentation";
-import type { GeneratedWebsiteContents, StoreBrief } from "@/lib/types";
+import { buildPhotoPlan } from "@/lib/engine/photo-strategy";
+import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
+import { deriveGalleryPhotoOrder } from "@/lib/editorial/gallery";
+import type { BrandPlan } from "@/lib/brand-director/types";
+import type { StoreBrief } from "@/lib/types";
 
 /**
- * Phase 6限定接続: `?editorial=1`のときだけ編集パイプライン
- * (Observation→Artifacts→Filter→Compress→Arrange→Renderable→Presentation)
- * を実行し、その結果を`WebsiteRendererV2`の`editorialPreview`propへ渡す。
- * クエリパラメータを付けない通常アクセスでは一切実行されず、既存の描画に
- * 影響しない(既存分岐は変更しない)。
+ * Gallery(PhotoStoryV2)の写真配列だけを、知覚的重複排除(dHash)+類似度ベースの
+ * 並び替えに通す。Hero/Story/Menu/Trust/Access/CTA/Footerには一切関与しない
+ * (`WebsiteRendererV2`は元々のHero/Story写真選定ロジックをそのまま使う)。
+ * `undefined`を返した場合、`WebsiteRendererV2`は従来通りの計算にフォールバックする。
  */
-async function buildEditorialPreview(brief: StoreBrief, contents: GeneratedWebsiteContents, requestId: string) {
-  const { editorial, utility } = filterArtifacts(brief, contents);
-  const { artifacts: compressed } = await compressArtifacts(editorial);
-  const arranged = arrangeArtifacts(compressed, undefined, requestId);
-  const presented = assignPresentation(toRenderables(arranged));
-  return { presented, utility };
+async function resolveGalleryPhotoOverride(brief: StoreBrief, brandPlan: BrandPlan | undefined): Promise<string[] | undefined> {
+  const overridePhotoPlan = brandPlan ? derivePhotoPlanFromBrandPlan(brandPlan, brief.realData?.photoUrls ?? []) : undefined;
+  const baselinePhotoPlan = overridePhotoPlan ?? buildPhotoPlan(brief.realData?.photoUrls);
+  if (baselinePhotoPlan.galleryPhotoUrls.length === 0) return undefined;
+  return deriveGalleryPhotoOrder(baselinePhotoPlan.galleryPhotoUrls);
 }
 
 /**
@@ -61,13 +58,7 @@ export async function generateMetadata({ params }: { params: { requestId: string
   };
 }
 
-export default async function PreviewV2Page({
-  params,
-  searchParams,
-}: {
-  params: { requestId: string };
-  searchParams?: { editorial?: string };
-}) {
+export default async function PreviewV2Page({ params }: { params: { requestId: string } }) {
   let record;
   try {
     record = await getGenerationRecord(params.requestId);
@@ -100,10 +91,16 @@ export default async function PreviewV2Page({
 
   const structuredData = buildCafeStructuredData(record.brief, record.generatedContents, v2Url(record.previewUrl));
 
-  const editorialPreview =
-    searchParams?.editorial === "1"
-      ? await buildEditorialPreview(record.brief, record.generatedContents, params.requestId)
-      : undefined;
+  let galleryPhotoOverride: string[] | undefined;
+  try {
+    galleryPhotoOverride = await resolveGalleryPhotoOverride(record.brief, record.brandPlan);
+  } catch (err) {
+    // Gallery写真編集エンジンが失敗しても、ページ全体の描画を失敗させない
+    // (galleryPhotoOverride省略時はWebsiteRendererV2が従来通りの計算へ
+    // フォールバックする)。
+    console.warn("[neumos-ai] gallery photo order resolution failed; falling back to default order", extractErrorDetail(err));
+    galleryPhotoOverride = undefined;
+  }
 
   return (
     <>
@@ -112,7 +109,7 @@ export default async function PreviewV2Page({
         brief={record.brief}
         contents={record.generatedContents}
         brandPlan={record.brandPlan}
-        editorialPreview={editorialPreview}
+        galleryPhotoOverride={galleryPhotoOverride}
       />
     </>
   );

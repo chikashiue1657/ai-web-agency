@@ -1,36 +1,29 @@
 /**
- * 編集パイプラインのPresentation段。RenderableへPresentation Primitiveを割り当てる。
- * neumos-ai/docs/design/editorial-pipeline-design.md 10章。
+ * Gallery専用のPresentation段。ページ全体のレイアウトには使わない
+ * (neumos-ai/docs/design/editorial-pipeline-design.mdはページ全体Rendererを
+ * 前提にしていたが、実際のデザイン品質レビューの結果、その用途を撤回した。
+ * PhotoStoryV2(Gallery)内部の構図判定にのみ使う「写真編集ユーティリティ」
+ * として位置付け直す)。
  *
- * Primitive名は配置意図を表す抽象語彙にしてある(UI部品名ではない)。
- *  - Occupy  : 主要な表示領域を占有する(画像のviewport・テキストのfull-widthを統合)
- *  - Sequence: 同種の並びの一部として連続的に現れる
- *  - Isolate : 単独で、控えめな規模で現れる
- *  - Support : 補助的・注釈的な役割
- *  - Pair    : 2つのArtifactを束ねたRenderableに対してのみ発生する(今回未使用)
+ * Renderable層は削除した。将来複数Artifactを束ねる必要が生じた時点で
+ * 改めて設計する(現時点では中継オブジェクトでしかなく価値を生んでいなかった)。
  *
- * 割り当ては単一条件の決め打ちを避け、複数の構造シグナル(媒体種別・文字量・
- * 縦横比・Arrange後の隣接関係・前後のPrimitive・同一Primitiveの連続数)を
- * 組み合わせる。`absorbedCount`(Compressが記録したデバッグ専用フィールド)は
- * 判定に一切使わない(「撮影枚数の多さ」と「情報としての重要度」を混同しない
- * ため。artifact.tsのコメント参照)。
+ * 判定に使うのは解像度・縦横比・隣接関係・連続数のみ。absorbedCount(撮影枚数)
+ * は使わない(「撮影枚数の多さ」と「情報としての重要度」を混同しないため)。
  */
-import { isImageArtifact, isTextArtifact } from "./artifact";
-import type { Renderable } from "./renderable";
+import { type ImageArtifact } from "./artifact";
 
-export type PresentationPrimitive = "Occupy" | "Sequence" | "Isolate" | "Support" | "Pair";
+export type PresentationPrimitive = "Occupy" | "Sequence" | "Isolate";
 
-export interface PresentedRenderable {
-  renderable: Renderable;
+export interface PresentedImage {
+  artifact: ImageArtifact;
   primitive: PresentationPrimitive;
   /** テスト・デバッグ用: なぜこのPrimitiveになったかの根拠トレース。 */
   reasons: string[];
 }
 
-/** Occupy(画像)の技術的な適格条件: 解像度。低解像度の画像を無理に拡大しない。 */
+/** Occupy(大きな1枚)の技術的な適格条件: 解像度。低解像度の画像を無理に拡大しない。 */
 const OCCUPY_MIN_WIDTH = 1200;
-/** Occupy(テキスト)の適格条件: 文字量。 */
-const TEXT_OCCUPY_MIN_CHARS = 120;
 /** 同一Primitiveがこの件数連続したら次を降格する。 */
 const MAX_SAME_PRIMITIVE_RUN = 2;
 
@@ -40,7 +33,7 @@ function isExtremeAspectRatio(width?: number, height?: number): boolean {
   return ratio > 3 || ratio < 1 / 3;
 }
 
-function countTrailingRun(results: readonly PresentedRenderable[], primitive: PresentationPrimitive): number {
+function countTrailingRun(results: readonly PresentedImage[], primitive: PresentationPrimitive): number {
   let run = 0;
   for (let i = results.length - 1; i >= 0; i--) {
     if (results[i].primitive === primitive) run++;
@@ -49,78 +42,37 @@ function countTrailingRun(results: readonly PresentedRenderable[], primitive: Pr
   return run;
 }
 
-function assignImagePrimitive(
-  renderable: Renderable,
-  index: number,
-  ordered: readonly Renderable[],
-  results: readonly PresentedRenderable[]
-): { primitive: PresentationPrimitive; reasons: string[] } {
-  const primary = renderable.artifacts[0];
-  const reasons: string[] = [];
-  if (!isImageArtifact(primary)) return { primitive: "Isolate", reasons: ["invalid-image-artifact"] };
-
-  const { width, height } = primary;
-  const extreme = isExtremeAspectRatio(width, height);
-  const sizeOk = (width ?? 0) >= OCCUPY_MIN_WIDTH;
-  reasons.push(`width=${width ?? "unknown"}`, `aspectExtreme=${extreme}`);
-
-  if (sizeOk && !extreme) {
-    const trailingOccupyRun = countTrailingRun(results, "Occupy");
-    if (trailingOccupyRun >= MAX_SAME_PRIMITIVE_RUN) {
-      reasons.push(`prevPrimitive=Occupy,run=${trailingOccupyRun},demoted-to-Sequence`);
-      return { primitive: "Sequence", reasons };
-    }
-    return { primitive: "Occupy", reasons };
-  }
-
-  const prevIsImage = index > 0 && ordered[index - 1].media === "image";
-  const nextIsImage = index < ordered.length - 1 && ordered[index + 1].media === "image";
-  if (prevIsImage || nextIsImage) {
-    reasons.push("adjacentImage=true");
-    return { primitive: "Sequence", reasons };
-  }
-  return { primitive: "Isolate", reasons };
-}
-
-function assignTextPrimitive(
-  renderable: Renderable,
-  results: readonly PresentedRenderable[]
-): { primitive: PresentationPrimitive; reasons: string[] } {
-  const primary = renderable.artifacts[0];
-  const reasons: string[] = [];
-  if (!isTextArtifact(primary)) return { primitive: "Support", reasons: ["invalid-text-artifact"] };
-
-  const { charCount } = primary;
-  reasons.push(`charCount=${charCount}`);
-
-  if (charCount >= TEXT_OCCUPY_MIN_CHARS) {
-    const prev = results[results.length - 1];
-    if (prev?.primitive === "Occupy") {
-      reasons.push("prevPrimitive=Occupy,demoted-to-Support");
-      return { primitive: "Support", reasons };
-    }
-    return { primitive: "Occupy", reasons };
-  }
-  return { primitive: "Support", reasons };
-}
-
-export function assignPresentation(ordered: readonly Renderable[]): PresentedRenderable[] {
-  const results: PresentedRenderable[] = [];
+export function assignPresentation(ordered: readonly ImageArtifact[]): PresentedImage[] {
+  const results: PresentedImage[] = [];
 
   for (let i = 0; i < ordered.length; i++) {
-    const renderable = ordered[i];
-    let outcome: { primitive: PresentationPrimitive; reasons: string[] };
+    const artifact = ordered[i];
+    const reasons: string[] = [];
+    const { width, height } = artifact;
+    const extreme = isExtremeAspectRatio(width, height);
+    const sizeOk = (width ?? 0) >= OCCUPY_MIN_WIDTH;
+    reasons.push(`width=${width ?? "unknown"}`, `aspectExtreme=${extreme}`);
 
-    if (renderable.media === "image") {
-      outcome = assignImagePrimitive(renderable, i, ordered, results);
-    } else if (renderable.media === "text") {
-      outcome = assignTextPrimitive(renderable, results);
+    let primitive: PresentationPrimitive;
+    if (sizeOk && !extreme) {
+      const trailingOccupyRun = countTrailingRun(results, "Occupy");
+      if (trailingOccupyRun >= MAX_SAME_PRIMITIVE_RUN) {
+        reasons.push(`prevPrimitive=Occupy,run=${trailingOccupyRun},demoted-to-Sequence`);
+        primitive = "Sequence";
+      } else {
+        primitive = "Occupy";
+      }
+    } else if (ordered.length > 1) {
+      // Gallery内は常に他の写真と隣接する(画像しか入らないため)。
+      // Occupy不適格な写真は、他に並ぶ写真がある限りSequence(列の一部)として扱う。
+      reasons.push("adjacentImage=true");
+      primitive = "Sequence";
     } else {
-      // "mixed"(複数Artifactを束ねたRenderable)は今回未使用の拡張点。
-      outcome = { primitive: "Pair", reasons: ["media=mixed(reserved-for-future-bundling)"] };
+      // 写真が1枚だけのGalleryでOccupy不適格な場合のみIsolate。
+      primitive = "Isolate";
     }
 
-    results.push({ renderable, primitive: outcome.primitive, reasons: outcome.reasons });
+    results.push({ artifact, primitive, reasons });
   }
 
   return results;

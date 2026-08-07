@@ -14,13 +14,10 @@ import {
 } from "@/lib/engine/v2-design-system";
 import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
 import type { BrandPlan } from "@/lib/brand-director/types";
+import { buildPhotoPlan } from "@/lib/engine/photo-strategy";
 import { splitBulletLines } from "@/components/website/utils";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 import { Footer } from "@/components/website/Footer";
-import type { PresentedRenderable } from "@/lib/editorial/presentation";
-import type { UtilityFacts } from "@/lib/editorial/filter";
-import { PresentedRenderableV2 } from "./editorial/PresentedRenderableV2";
-import { UtilityLayerV2 } from "./editorial/UtilityLayerV2";
 import { HeaderV2 } from "./HeaderV2";
 import { HeroV2 } from "./HeroV2";
 import { SignatureV2 } from "./SignatureV2";
@@ -39,6 +36,17 @@ function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): Cafe
   const storyIndex = blocks.indexOf("story");
   if (storyIndex === -1 || blocks.includes(blockId)) return blocks;
   return [...blocks.slice(0, storyIndex + 1), blockId, ...blocks.slice(storyIndex + 1)];
+}
+
+/**
+ * `galleryPhotoOverride`(editorial/gallery.tsのdHash重複排除+並び替え結果)を
+ * 元のgalleryPhotoUrlsへ適用する。overrideに元集合へ存在しないURLが混入して
+ * いた場合は安全側に倒し、元の配列をそのまま使う(実データを捏造しないため)。
+ */
+function applyGalleryOverride(original: string[], override: readonly string[]): string[] {
+  const originalSet = new Set(original);
+  const filtered = override.filter((url) => originalSet.has(url));
+  return filtered.length > 0 ? filtered : original;
 }
 
 /**
@@ -66,20 +74,21 @@ export function WebsiteRendererV2({
   brief,
   contents,
   brandPlan,
-  editorialPreview,
+  galleryPhotoOverride,
 }: {
   brief: StoreBrief;
   contents: GeneratedWebsiteContents;
   brandPlan?: BrandPlan;
   /**
-   * 編集パイプライン(Observation→Artifacts→Filter→Compress→Arrange→
-   * Renderable→Presentation→Render)の試験的な描画経路(Phase 6・限定接続)。
-   * 省略時(既定)は従来通りの描画になり、この分岐は一切実行されない。
-   * 呼び出し側(page.tsx)が非同期のcompressArtifacts()を実行した結果を
+   * Gallery(PhotoStoryV2)専用の写真編集エンジン(editorial/gallery.ts)の出力。
+   * 省略時(既定)は従来通り、Hero/Story等と同じ`buildPhotoPlan`/
+   * `derivePhotoPlanFromBrandPlan`の結果をそのまま使う。渡された場合、
+   * Gallery(photoStory/photoStory2)にだけ、この重複排除・並び替え済みの
+   * 配列を適用する(Hero/Story写真の選定には一切影響しない)。
+   * 呼び出し側(page.tsx)が非同期の`deriveGalleryPhotoOrder`を実行した結果を
    * ここへ渡す(このコンポーネント自体は同期のまま変更しない)。
-   * neumos-ai/docs/design/editorial-pipeline-design.md 11章・20章。
    */
-  editorialPreview?: { presented: PresentedRenderable[]; utility: UtilityFacts };
+  galleryPhotoOverride?: string[];
 }) {
   const category = classifyIndustry(brief.industry);
 
@@ -101,8 +110,17 @@ export function WebsiteRendererV2({
   const overridePhotoPlan = brandPlan
     ? derivePhotoPlanFromBrandPlan(brandPlan, brief.realData?.photoUrls ?? [])
     : undefined;
+  // baselinePhotoPlanは、以前buildCafeV2Plan内部で暗黙に計算していたのと
+  // 同じ純関数呼び出しをここで明示的に行っているだけで、galleryPhotoOverride
+  // 省略時の結果は従来と完全に同一になる。galleryPhotoOverride指定時のみ、
+  // galleryPhotoUrlsだけをGallery写真編集エンジン(editorial/gallery.ts)の
+  // 出力へ差し替える(heroPhotoUrl/storyPhotoUrlは一切変更しない)。
+  const baselinePhotoPlan = overridePhotoPlan ?? buildPhotoPlan(brief.realData?.photoUrls);
+  const effectivePhotoPlan = galleryPhotoOverride
+    ? { ...baselinePhotoPlan, galleryPhotoUrls: applyGalleryOverride(baselinePhotoPlan.galleryPhotoUrls, galleryPhotoOverride) }
+    : baselinePhotoPlan;
   const basePlan = buildCafeV2Plan(brief, contents, {
-    photoPlan: overridePhotoPlan,
+    photoPlan: effectivePhotoPlan,
     layoutVariant: brandPlan?.layoutVariant,
     artDirection,
   });
@@ -113,39 +131,6 @@ export function WebsiteRendererV2({
   const theme = resolveCafeThemeV2(tokens.colorBalance, tokens.typographyScale);
   const surface = resolveSurfaceClasses(tokens.surfaceStyle);
   const typography = resolveTypographyClasses(tokens.typographyScale);
-
-  // Phase 6限定接続: editorialPreviewが渡された場合のみ、新しい編集パイプラインの
-  // 出力(Editorial Layer + Utility Layer)を描画する。既存のblockRenderer経路
-  // (このif文より下)には一切手を入れず、この分岐が無効(既定)なら従来通り動く。
-  if (editorialPreview) {
-    return (
-      <div className={`pb-24 sm:pb-0 ${theme.paperBg}`}>
-        <HeaderV2
-          storeName={brief.storeName}
-          blocks={plan.blocks}
-          theme={deriveHeaderTheme(tokens.artDirection, tokens.heroComposition)}
-        />
-        <main>
-          {editorialPreview.presented.map((presented) => (
-            <PresentedRenderableV2 key={presented.renderable.id} presented={presented} theme={theme} />
-          ))}
-        </main>
-        <UtilityLayerV2
-          storeName={brief.storeName}
-          access={contents.access}
-          realData={brief.realData}
-          cta={contents.cta}
-          contactMethods={contents.contactMethods}
-          theme={theme}
-          surface={surface}
-          artDirection={tokens.artDirection}
-          ctaStyle={tokens.ctaStyle}
-        />
-        <Footer storeName={brief.storeName} area={brief.area} industry={brief.industry} theme={resolveTheme(brief.industry)} />
-        <MobileStickyCtaV2 cta={contents.cta} theme={theme} surface={surface} ctaStyle={tokens.ctaStyle} />
-      </div>
-    );
-  }
 
   const aboutSections = contents.sections.filter((s) => s.kind === "about");
   const featureSections = contents.sections.filter((s) => s.kind === "feature");

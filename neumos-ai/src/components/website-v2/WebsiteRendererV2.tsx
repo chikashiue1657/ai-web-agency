@@ -14,7 +14,7 @@ import {
 } from "@/lib/engine/v2-design-system";
 import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
 import type { BrandPlan } from "@/lib/brand-director/types";
-import { buildPhotoPlan } from "@/lib/engine/photo-strategy";
+import { buildPhotoPlan, type PhotoPlan } from "@/lib/engine/photo-strategy";
 import { splitBulletLines } from "@/components/website/utils";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 import { Footer } from "@/components/website/Footer";
@@ -36,17 +36,6 @@ function insertAfterStory(blocks: CafeV2BlockId[], blockId: CafeV2BlockId): Cafe
   const storyIndex = blocks.indexOf("story");
   if (storyIndex === -1 || blocks.includes(blockId)) return blocks;
   return [...blocks.slice(0, storyIndex + 1), blockId, ...blocks.slice(storyIndex + 1)];
-}
-
-/**
- * `galleryPhotoOverride`(editorial/gallery.tsのdHash重複排除+並び替え結果)を
- * 元のgalleryPhotoUrlsへ適用する。overrideに元集合へ存在しないURLが混入して
- * いた場合は安全側に倒し、元の配列をそのまま使う(実データを捏造しないため)。
- */
-function applyGalleryOverride(original: string[], override: readonly string[]): string[] {
-  const originalSet = new Set(original);
-  const filtered = override.filter((url) => originalSet.has(url));
-  return filtered.length > 0 ? filtered : original;
 }
 
 /**
@@ -74,21 +63,21 @@ export function WebsiteRendererV2({
   brief,
   contents,
   brandPlan,
-  galleryPhotoOverride,
+  photoPlanOverride,
 }: {
   brief: StoreBrief;
   contents: GeneratedWebsiteContents;
   brandPlan?: BrandPlan;
   /**
-   * Gallery(PhotoStoryV2)専用の写真編集エンジン(editorial/gallery.ts)の出力。
-   * 省略時(既定)は従来通り、Hero/Story等と同じ`buildPhotoPlan`/
-   * `derivePhotoPlanFromBrandPlan`の結果をそのまま使う。渡された場合、
-   * Gallery(photoStory/photoStory2)にだけ、この重複排除・並び替え済みの
-   * 配列を適用する(Hero/Story写真の選定には一切影響しない)。
-   * 呼び出し側(page.tsx)が非同期の`deriveGalleryPhotoOrder`を実行した結果を
-   * ここへ渡す(このコンポーネント自体は同期のまま変更しない)。
+   * 写真プール全体(Hero/Story/Gallery役割分担の前)に知覚的重複排除(dHash)を
+   * 適用し、Gallery候補だけをさらに並び替え・構図判定した結果の`PhotoPlan`。
+   * 省略時(既定)は従来通り、`buildPhotoPlan`/`derivePhotoPlanFromBrandPlan`を
+   * このコンポーネント内でそのまま計算する(結果は完全に同一になる)。
+   * 呼び出し側(page.tsx)が非同期の`photo-curation.ts`の
+   * `compressPhotoUrls`/`orderGalleryPhotos`を実行した結果を渡す
+   * (このコンポーネント自体は同期のまま変更しない)。
    */
-  galleryPhotoOverride?: string[];
+  photoPlanOverride?: PhotoPlan;
 }) {
   const category = classifyIndustry(brief.industry);
 
@@ -107,18 +96,13 @@ export function WebsiteRendererV2({
   // resolveV2DesignTokens()より前に単独で導出できる（buildCafeV2Plan自体が
   // artDirectionに応じたセクション構成・写真の前後分割を必要とするため）。
   const artDirection = brandPlan ? deriveArtDirection(brandPlan.brandArchetype) : "warm-craft";
+  // photoPlanOverride省略時は、以前buildCafeV2Plan内部で暗黙に計算していたのと
+  // 同じ純関数呼び出しをここで明示的に行うだけで、結果は従来と完全に同一になる。
   const overridePhotoPlan = brandPlan
     ? derivePhotoPlanFromBrandPlan(brandPlan, brief.realData?.photoUrls ?? [])
     : undefined;
-  // baselinePhotoPlanは、以前buildCafeV2Plan内部で暗黙に計算していたのと
-  // 同じ純関数呼び出しをここで明示的に行っているだけで、galleryPhotoOverride
-  // 省略時の結果は従来と完全に同一になる。galleryPhotoOverride指定時のみ、
-  // galleryPhotoUrlsだけをGallery写真編集エンジン(editorial/gallery.ts)の
-  // 出力へ差し替える(heroPhotoUrl/storyPhotoUrlは一切変更しない)。
-  const baselinePhotoPlan = overridePhotoPlan ?? buildPhotoPlan(brief.realData?.photoUrls);
-  const effectivePhotoPlan = galleryPhotoOverride
-    ? { ...baselinePhotoPlan, galleryPhotoUrls: applyGalleryOverride(baselinePhotoPlan.galleryPhotoUrls, galleryPhotoOverride) }
-    : baselinePhotoPlan;
+  const fallbackPhotoPlan = overridePhotoPlan ?? buildPhotoPlan(brief.realData?.photoUrls);
+  const effectivePhotoPlan = photoPlanOverride ?? fallbackPhotoPlan;
   const basePlan = buildCafeV2Plan(brief, contents, {
     photoPlan: effectivePhotoPlan,
     layoutVariant: brandPlan?.layoutVariant,

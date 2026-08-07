@@ -1,18 +1,26 @@
 /**
- * v2で実際に表示する写真配列を選び出す（純関数・副作用なし）。
+ * v2で実際に表示する写真配列を選び出す（副作用なし）。
  *
  * `StoreRealData.photoUrls`（実データ）は生成元の情報として一切変更せず、
  * ここでは「表示用に選抜した結果」だけを新しい配列として返す。呼び出し側は
  * 元の`photoUrls`をそのまま保持しつつ、v2の描画にはこの関数の戻り値
  * （`selected`）だけを渡す。
  *
- * 行うのは以下の2点のみ：
- *  1. クエリ文字列だけが異なる実質同一URLの重複排除（出現順維持）
- *  2. 上限（既定12枚）を超える場合の均等サンプリング
- * 画像デコード・知覚的類似度判定・外部API（Vision等）は一切使わない
- * （追加費用ゼロ・外部API不使用という既定方針を守るため、URL文字列の
- * 正規化比較だけを「実質同一画像」の判定基準にする）。
+ * `selectDisplayPhotos`/`dedupePhotoUrls`/`canonicalizePhotoUrl`はURL文字列
+ * レベルの重複排除+上限適用のみを行う純関数(外部API不使用・追加費用ゼロ)。
+ *
+ * `compressPhotoUrls`/`orderGalleryPhotos`は知覚的類似度(dHash、
+ * `@/lib/editorial/`の計算プリミティブ)を使う非同期関数。Hero/Story/Gallery
+ * という役割分担の**前に**、写真プール全体に対して一度だけ知覚的重複排除を
+ * かけることで、「同じ写真がHeroにもGalleryにも出る」問題を構造的に防ぐ。
+ * `@/lib/editorial/`は計算の仕組み(dHash・クラスタリング・構図判定の
+ * アルゴリズム)を持つ層、このファイルは「いつ・どの写真プールに対して
+ * それを使うか」という方針を持つ層、という役割分担にしてある。
  */
+import { compressArtifacts } from "@/lib/editorial/compress";
+import { arrangeArtifacts } from "@/lib/editorial/arrange";
+import { assignPresentation } from "@/lib/editorial/presentation";
+import { isImageArtifact, type ImageArtifact } from "@/lib/editorial/artifact";
 
 export const DEFAULT_MAX_DISPLAY_PHOTOS = 12;
 
@@ -109,4 +117,47 @@ export function selectDisplayPhotos(
     truncated: deduped.length > max,
     maxAllowed: max,
   };
+}
+
+function toImageArtifacts(urls: readonly string[]): ImageArtifact[] {
+  return urls
+    .filter((url) => url.trim().length > 0)
+    .map((url, i) => ({ id: `photo:${i}`, media: "image" as const, sourceOrder: i, url, absorbedCount: 0 }));
+}
+
+/**
+ * 写真プール全体(Hero/Story/Galleryへ役割分担される前)に対して、知覚的
+ * 重複排除(dHash)を一度だけ適用する。呼び出し側は、この結果をHero/Story/
+ * Gallery選定(`buildPhotoPlan`/`derivePhotoPlanFromBrandPlan`)へ渡す
+ * `photoUrls`としてそのまま使う。これにより、別ファイルだが視覚的にほぼ
+ * 同一の写真(連写・エクスポート違い等)が、Heroにも Galleryにも重複して
+ * 現れることを構造的に防ぐ(意味判断ではなく、単なる重複除去)。
+ *
+ * `selectDisplayPhotos`(URL文字列レベルの重複排除+12枚上限)を先に通してから
+ * dHash計算を行うため、実際に画像をデコードする件数は常に有界(最大12件)。
+ */
+export async function compressPhotoUrls(rawUrls: readonly string[] | undefined): Promise<string[]> {
+  const { selected } = selectDisplayPhotos(rawUrls);
+  if (selected.length === 0) return [];
+
+  const artifacts = toImageArtifacts(selected);
+  const { artifacts: compressed } = await compressArtifacts(artifacts);
+  return compressed.filter(isImageArtifact).map((a) => a.url);
+}
+
+/**
+ * Gallery役割に割り当てられた写真だけを、知覚的類似度に基づく並び替え
+ * (arrange)と、構図判定(Occupy/Sequence/Isolate)による強調写真の前寄せ
+ * (presentation)に通す。Hero/Story写真の選定には一切関与しない。
+ */
+export async function orderGalleryPhotos(galleryPhotoUrls: readonly string[]): Promise<string[]> {
+  if (galleryPhotoUrls.length === 0) return [];
+
+  const artifacts = toImageArtifacts(galleryPhotoUrls);
+  const arranged = arrangeArtifacts(artifacts).filter(isImageArtifact);
+  const presented = assignPresentation(arranged);
+
+  const occupy = presented.filter((p) => p.primitive === "Occupy").map((p) => p.artifact.url);
+  const rest = presented.filter((p) => p.primitive !== "Occupy").map((p) => p.artifact.url);
+  return [...occupy, ...rest];
 }

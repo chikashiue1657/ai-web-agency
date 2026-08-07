@@ -1,14 +1,51 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Jimp, rgbaToInt } from "jimp";
 import {
   DEFAULT_MAX_DISPLAY_PHOTOS,
   canonicalizePhotoUrl,
+  compressPhotoUrls,
   dedupePhotoUrls,
+  orderGalleryPhotos,
   selectDisplayPhotos,
 } from "@/lib/engine/photo-curation";
 
 function urls(count: number, prefix = "https://example.test/photo"): string[] {
   return Array.from({ length: count }, (_, i) => `${prefix}-${i}.svg`);
 }
+
+async function makeCheckerboard(opts: { size?: number; square?: number; invert?: boolean } = {}): Promise<Buffer> {
+  const size = opts.size ?? 60;
+  const square = opts.square ?? 10;
+  const img = new Jimp({ width: size, height: size, color: 0x000000ff });
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const cell = (Math.floor(x / square) + Math.floor(y / square)) % 2;
+      let v = cell === 0 ? 30 : 220;
+      if (opts.invert) v = 255 - v;
+      img.setPixelColor(rgbaToInt(v, v, v, 255), x, y);
+    }
+  }
+  return img.getBuffer("image/png");
+}
+
+function stubFetchWithImages(buffersByUrl: Record<string, Buffer>) {
+  const original = global.fetch;
+  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const buf = buffersByUrl[url];
+    if (!buf) throw new Error(`unexpected fetch: ${url}`);
+    return new Response(new Uint8Array(buf), { status: 200 });
+  }) as typeof fetch;
+  return () => {
+    global.fetch = original;
+  };
+}
+
+let restoreFetch: (() => void) | null = null;
+afterEach(() => {
+  restoreFetch?.();
+  restoreFetch = null;
+});
 
 describe("canonicalizePhotoUrl", () => {
   it("クエリ文字列・フラグメントを取り除く", () => {
@@ -136,5 +173,75 @@ describe("selectDisplayPhotos", () => {
     const result = selectDisplayPhotos(input, 5);
     expect(result.selected).toHaveLength(5);
     expect(result.maxAllowed).toBe(5);
+  });
+});
+
+describe("compressPhotoUrls", () => {
+  it("空配列・undefinedでは空配列を返す", async () => {
+    expect(await compressPhotoUrls([])).toEqual([]);
+    expect(await compressPhotoUrls(undefined)).toEqual([]);
+  });
+
+  it("ほぼ同一画像(Hero候補とGallery候補が視覚的に重複する状況を想定)は1枚に畳まれる", async () => {
+    const buf = await makeCheckerboard({});
+    restoreFetch = stubFetchWithImages({
+      "https://example.test/a.jpg": buf,
+      "https://example.test/b.jpg": buf,
+      "https://example.test/c.jpg": buf,
+    });
+    const result = await compressPhotoUrls(["https://example.test/a.jpg", "https://example.test/b.jpg", "https://example.test/c.jpg"]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("明確に異なる画像は畳まれずに残る", async () => {
+    const a = await makeCheckerboard({});
+    const b = await makeCheckerboard({ invert: true });
+    restoreFetch = stubFetchWithImages({ "https://example.test/a.jpg": a, "https://example.test/b.jpg": b });
+    const result = await compressPhotoUrls(["https://example.test/a.jpg", "https://example.test/b.jpg"]);
+    expect(result).toHaveLength(2);
+  });
+
+  it("URL文字列レベルの重複排除+12枚上限を先に適用する(デコード対象を有界に保つ)", async () => {
+    const buf = await makeCheckerboard({});
+    const many = Array.from({ length: 30 }, (_, i) => `https://example.test/only-one.jpg?v=${i}`);
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array(buf), { status: 200 }));
+    const original = global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
+    restoreFetch = () => {
+      global.fetch = original;
+    };
+    await compressPhotoUrls(many);
+    // 同一画像のクエリ違いはselectDisplayPhotos段階で1件に減るため、fetchは高々1回。
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+
+  it("画像デコードに失敗しても例外を投げない", async () => {
+    const original = global.fetch;
+    global.fetch = vi.fn(async () => new Response(new Uint8Array(Buffer.from("not-an-image")), { status: 200 })) as typeof fetch;
+    restoreFetch = () => {
+      global.fetch = original;
+    };
+    const result = await compressPhotoUrls(["https://example.test/broken.jpg"]);
+    expect(result).toEqual(["https://example.test/broken.jpg"]);
+  });
+});
+
+describe("orderGalleryPhotos", () => {
+  it("空配列では空配列を返す", async () => {
+    expect(await orderGalleryPhotos([])).toEqual([]);
+  });
+
+  it("結果に含まれるURLは入力に実在するものだけ(捏造しない)", async () => {
+    const input = ["https://example.test/a.jpg", "https://example.test/b.jpg"];
+    const result = await orderGalleryPhotos(input);
+    expect(result.every((url) => input.includes(url))).toBe(true);
+    expect(new Set(result)).toEqual(new Set(input));
+  });
+
+  it("決定性: 同一入力を2回実行しても同一出力になる", async () => {
+    const input = ["https://example.test/a.jpg", "https://example.test/b.jpg", "https://example.test/c.jpg"];
+    const first = await orderGalleryPhotos(input);
+    const second = await orderGalleryPhotos(input);
+    expect(first).toEqual(second);
   });
 });

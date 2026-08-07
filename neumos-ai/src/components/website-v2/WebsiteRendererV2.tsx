@@ -14,6 +14,7 @@ import {
 } from "@/lib/engine/v2-design-system";
 import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
 import type { BrandPlan } from "@/lib/brand-director/types";
+import { buildPhotoPlan, type PhotoPlan } from "@/lib/engine/photo-strategy";
 import { splitBulletLines } from "@/components/website/utils";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 import { Footer } from "@/components/website/Footer";
@@ -62,10 +63,21 @@ export function WebsiteRendererV2({
   brief,
   contents,
   brandPlan,
+  photoPlanOverride,
 }: {
   brief: StoreBrief;
   contents: GeneratedWebsiteContents;
   brandPlan?: BrandPlan;
+  /**
+   * 写真プール全体(Hero/Story/Gallery役割分担の前)に知覚的重複排除(dHash)を
+   * 適用し、Gallery候補だけをさらに並び替え・構図判定した結果の`PhotoPlan`。
+   * 省略時(既定)は従来通り、`buildPhotoPlan`/`derivePhotoPlanFromBrandPlan`を
+   * このコンポーネント内でそのまま計算する(結果は完全に同一になる)。
+   * 呼び出し側(page.tsx)が非同期の`photo-curation.ts`の
+   * `compressPhotoUrls`/`orderGalleryPhotos`を実行した結果を渡す
+   * (このコンポーネント自体は同期のまま変更しない)。
+   */
+  photoPlanOverride?: PhotoPlan;
 }) {
   const category = classifyIndustry(brief.industry);
 
@@ -84,11 +96,15 @@ export function WebsiteRendererV2({
   // resolveV2DesignTokens()より前に単独で導出できる（buildCafeV2Plan自体が
   // artDirectionに応じたセクション構成・写真の前後分割を必要とするため）。
   const artDirection = brandPlan ? deriveArtDirection(brandPlan.brandArchetype) : "warm-craft";
+  // photoPlanOverride省略時は、以前buildCafeV2Plan内部で暗黙に計算していたのと
+  // 同じ純関数呼び出しをここで明示的に行うだけで、結果は従来と完全に同一になる。
   const overridePhotoPlan = brandPlan
     ? derivePhotoPlanFromBrandPlan(brandPlan, brief.realData?.photoUrls ?? [])
     : undefined;
+  const fallbackPhotoPlan = overridePhotoPlan ?? buildPhotoPlan(brief.realData?.photoUrls);
+  const effectivePhotoPlan = photoPlanOverride ?? fallbackPhotoPlan;
   const basePlan = buildCafeV2Plan(brief, contents, {
-    photoPlan: overridePhotoPlan,
+    photoPlan: effectivePhotoPlan,
     layoutVariant: brandPlan?.layoutVariant,
     artDirection,
   });

@@ -32,3 +32,6 @@ yarn-error.log*
 
 # test
 /coverage
+
+# demo video output (Phase 1: ローカル生成MP4を出力する。コミットしない)
+/scripts/demo-video-output/

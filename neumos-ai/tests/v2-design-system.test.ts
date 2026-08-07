@@ -47,7 +47,7 @@ describe("deriveArtDirection", () => {
 
 describe("resolveV2DesignTokens", () => {
   it("brandPlanが無い場合はDEFAULT_TOKENSを返す(warm-craft方向)", () => {
-    expect(resolveV2DesignTokens(undefined, "few")).toEqual(DEFAULT_TOKENS);
+    expect(resolveV2DesignTokens(undefined, "moderate")).toEqual(DEFAULT_TOKENS);
     expect(DEFAULT_TOKENS.artDirection).toBe("warm-craft");
   });
 
@@ -56,30 +56,30 @@ describe("resolveV2DesignTokens", () => {
     for (const layoutVariant of ["immersive", "editorial", "direct"] as const) {
       const tokens = resolveV2DesignTokens(
         makeBrandPlan({ brandArchetype: "modern-minimal", layoutVariant }),
-        "few"
+        "moderate"
       );
       expect(tokens.heroComposition).toBe("split-frame");
     }
     // sensory-immersive: immersive/editorialはfull-bleed-center、directはoverlap-editorial。
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "immersive" }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "immersive" }), "moderate")
         .heroComposition
     ).toBe("full-bleed-center");
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "editorial" }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "editorial" }), "moderate")
         .heroComposition
     ).toBe("full-bleed-center");
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "direct" }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "direct" }), "moderate")
         .heroComposition
     ).toBe("overlap-editorial");
     // warm-craft: immersive/directはoverlap-editorial、editorialはsplit-frame。
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", layoutVariant: "immersive" }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", layoutVariant: "immersive" }), "moderate")
         .heroComposition
     ).toBe("overlap-editorial");
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", layoutVariant: "editorial" }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", layoutVariant: "editorial" }), "moderate")
         .heroComposition
     ).toBe("split-frame");
   });
@@ -95,21 +95,21 @@ describe("resolveV2DesignTokens", () => {
   });
 
   it("typographyScale/surfaceStyle/imageTreatmentはartDirectionごとに固定される", () => {
-    const editorial = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "heritage-traditional" }), "few");
+    const editorial = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "heritage-traditional" }), "moderate");
     expect(editorial.typographyScale).toBe("editorial-serif");
     expect(editorial.surfaceStyle).toBe("flat-minimal");
     expect(editorial.imageTreatment).toBe("framed");
 
-    const immersiveQuiet = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet" }), "few");
+    const immersiveQuiet = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet" }), "moderate");
     expect(immersiveQuiet.typographyScale).toBe("clean-sans");
     expect(immersiveQuiet.surfaceStyle).toBe("framed-card");
     expect(immersiveQuiet.imageTreatment).toBe("mixed");
 
-    const immersiveEnergetic = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "energetic-casual" }), "few");
+    const immersiveEnergetic = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "energetic-casual" }), "moderate");
     expect(immersiveEnergetic.typographyScale).toBe("bold-display");
     expect(immersiveEnergetic.surfaceStyle).toBe("framed-card");
 
-    const craft = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "warm-hospitality" }), "few");
+    const craft = resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "warm-hospitality" }), "moderate");
     expect(craft.typographyScale).toBe("editorial-serif");
     expect(craft.surfaceStyle).toBe("paper-warm");
     expect(craft.imageTreatment).toBe("full-bleed");
@@ -118,25 +118,25 @@ describe("resolveV2DesignTokens", () => {
   it("ctaStyleはurgency由来の値をartDirectionの許容範囲へクランプする", () => {
     // japanese-editorial/warm-craftはsolid-boldを許さない → outline-minimalへ丸める。
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "modern-minimal", ctaStrategy: { placement: "hero", urgency: "high" } }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "modern-minimal", ctaStrategy: { placement: "hero", urgency: "high" } }), "moderate")
         .ctaStyle
     ).toBe("outline-minimal");
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", ctaStrategy: { placement: "hero", urgency: "high" } }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", ctaStrategy: { placement: "hero", urgency: "high" } }), "moderate")
         .ctaStyle
     ).toBe("outline-minimal");
     // sensory-immersiveはtext-linkを許さない → outline-minimalへ丸める。
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", ctaStrategy: { placement: "hero", urgency: "low" } }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "luxury-quiet", ctaStrategy: { placement: "hero", urgency: "low" } }), "moderate")
         .ctaStyle
     ).toBe("outline-minimal");
     // 範囲内の値はそのまま通す。
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "energetic-casual", ctaStrategy: { placement: "hero", urgency: "high" } }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "energetic-casual", ctaStrategy: { placement: "hero", urgency: "high" } }), "moderate")
         .ctaStyle
     ).toBe("solid-bold");
     expect(
-      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", ctaStrategy: { placement: "hero", urgency: "low" } }), "few")
+      resolveV2DesignTokens(makeBrandPlan({ brandArchetype: "artisan", ctaStrategy: { placement: "hero", urgency: "low" } }), "moderate")
         .ctaStyle
     ).toBe("text-link");
   });

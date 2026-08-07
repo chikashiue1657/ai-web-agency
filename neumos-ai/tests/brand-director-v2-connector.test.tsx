@@ -98,16 +98,22 @@ describe("resolveBrandPlanForV2", () => {
     expect(brandSpy).toHaveBeenCalledWith(expect.objectContaining({ requestId: "req-photo-analysis" }), analyses);
   });
 
-  it("回帰確認: 既定経路（OPENAI_API_KEY未設定）でv2ページを最後まで組み立てても、" +
-    "既存のLuxury Layout Engineの見た目（serif書体・写真の位置ベース割当て）は変わらない", async () => {
+  it("既定経路（OPENAI_API_KEY未設定）でv2ページを最後まで組み立てても壊れない。" +
+    "archetype-heuristics.tsによりarchetype/paletteHintはbrief内容から決定論的に決まる" +
+    "（cafeBriefのtone/siteConceptは決定論的にwellness-calm(→japanese-editorial)/" +
+    "neutralへ解決される。以前のように業種だけでartisan/warmへ固定されるわけではない）", async () => {
     const contents = generateWebsiteRuleBased(cafeBrief);
     const brandPlan = await resolveBrandPlanForV2(cafeBrief, "req-2b");
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
+    // japanese-editorial方向はarchetypeに関わらず常にeditorial-serifを使うため、
+    // このbriefがどのarchetypeに解決されても書体自体は変わらない。
     expect(html).toContain("font-serif");
     // Hero見出し内のstoreName部分だけは、ブランド名として独立させるため
     // 常にfont-sansの小さめスパンで囲む（他は引き続きfont-serif）。
     expect(html).toContain("font-sans");
-    expect(html).toContain("text-amber-900");
+    // このbriefのtone("落ち着いた・上質")はneutralパレットのキーワードと一致するため、
+    // paletteHint="neutral"に決定論的に解決される(アクセント色はtext-neutral-900)。
+    expect(html).toContain("text-neutral-900");
   });
 
   it("OpenAI成功時、providerが返したBrandPlanがそのまま返る", async () => {
@@ -228,7 +234,7 @@ describe("derivePhotoPlanFromBrandPlan", () => {
     expect(result?.heroPhotoUrl).toBe(realPhotoUrls[2]);
     expect(result?.storyPhotoUrl).toBe(realPhotoUrls[0]);
     expect(result?.galleryPhotoUrls).toEqual([realPhotoUrls[1]]);
-    expect(result?.tier).toBe("few");
+    expect(result?.tier).toBe("moderate");
   });
 
   it("重複URLは1回だけ数える", () => {
@@ -243,7 +249,7 @@ describe("derivePhotoPlanFromBrandPlan", () => {
       ]),
     } as unknown as BrandPlan;
     const result = derivePhotoPlanFromBrandPlan(plan, onlyUrl);
-    expect(result?.tier).toBe("single");
+    expect(result?.tier).toBe("minimal");
     expect(result?.galleryPhotoUrls).toEqual([]);
   });
 
@@ -262,7 +268,8 @@ describe("derivePhotoPlanFromBrandPlan", () => {
     expect(result?.storyPhotoUrl).toBe(realPhotoUrls[1]);
     expect(result?.galleryPhotoUrls).toEqual(expect.arrayContaining([realPhotoUrls[2], "https://example.com/d.jpg"]));
     expect(result?.galleryPhotoUrls).toHaveLength(2);
-    expect(result?.tier).toBe("many");
+    // 合計4枚(hero+story+gallery2枚)は"moderate"(3〜5)であり、"many"(6枚以上)ではない。
+    expect(result?.tier).toBe("moderate");
   });
 
   it("rejectのみ除外し、それ以外のroleはgalleryとして扱う", () => {

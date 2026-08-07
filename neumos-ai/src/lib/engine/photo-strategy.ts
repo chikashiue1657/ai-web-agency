@@ -6,13 +6,20 @@
  * ここでは Places が返す並び順（先頭を代表写真として扱う実務上の慣習）を
  * そのままHero優先度として使う、位置ベースの割当てにとどめる。
  *
+ * 表示前に必ず`photo-curation.ts`の`selectDisplayPhotos`を通す。クエリ文字列
+ * だけが異なる実質同一URLの重複排除と、上限（既定12枚）を超える場合の均等
+ * サンプリングをここで一度だけ行い、以降のHero/Story/Gallery配分は常に
+ * 「表示してよいと確定した配列」だけを対象にする（実データ自体は変更しない）。
+ *
  * 同じ写真を複数セクションへ重複して渡さないよう、必ず重複排除してから
  * Hero→Story→Gallery の順に1枚ずつ優先確保し、残りをGalleryへ渡す。
  * Storyは「本文を写真に重ねる」演出（Phase3）のため専用に1枚確保するが、
  * 写真がHero用の1枚しか無い場合はStoryを文章のみの構成に留める
  * （無理に同じ写真を使い回さない）。
  */
-export type PhotoTier = "none" | "single" | "few" | "many";
+import { selectDisplayPhotos } from "./photo-curation";
+
+export type PhotoTier = "none" | "minimal" | "moderate" | "many";
 
 export interface PhotoPlan {
   tier: PhotoTier;
@@ -24,26 +31,33 @@ export interface PhotoPlan {
   galleryPhotoUrls: string[];
 }
 
-/** 2〜3枚を"few"、4枚以上を"many"として扱う閾値（合計枚数の分類）。 */
-const FEW_MAX = 3;
+/**
+ * 表示に使う写真の総枚数（重複排除・上限適用後）に応じた4段階の分類。
+ *  - none    : 0枚
+ *  - minimal : 1〜2枚（写真主体の大きな構図には無理に寄せない）
+ *  - moderate: 3〜5枚
+ *  - many    : 6枚以上（`selectDisplayPhotos`の上限により実際には最大12枚）
+ */
+const MINIMAL_MAX = 2;
+const MODERATE_MAX = 5;
 
 export function classifyPhotoTier(count: number): PhotoTier {
   if (count <= 0) return "none";
-  if (count === 1) return "single";
-  if (count <= FEW_MAX) return "few";
+  if (count <= MINIMAL_MAX) return "minimal";
+  if (count <= MODERATE_MAX) return "moderate";
   return "many";
 }
 
 export function buildPhotoPlan(photoUrls?: string[]): PhotoPlan {
-  const deduped = photoUrls ? Array.from(new Set(photoUrls)) : [];
-  const tier = classifyPhotoTier(deduped.length);
+  const { selected } = selectDisplayPhotos(photoUrls);
+  const tier = classifyPhotoTier(selected.length);
 
   if (tier === "none") {
     return { tier, galleryPhotoUrls: [] };
   }
 
-  const [heroPhotoUrl, storyPhotoUrl, ...galleryPhotoUrls] = deduped;
-  if (deduped.length === 1) {
+  const [heroPhotoUrl, storyPhotoUrl, ...galleryPhotoUrls] = selected;
+  if (selected.length === 1) {
     return { tier, heroPhotoUrl, galleryPhotoUrls: [] };
   }
   return { tier, heroPhotoUrl, storyPhotoUrl, galleryPhotoUrls };

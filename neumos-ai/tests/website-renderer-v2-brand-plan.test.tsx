@@ -170,7 +170,14 @@ describe("WebsiteRendererV2: v1経路への非影響", () => {
 });
 
 describe("WebsiteRendererV2: Hero構図の切り替え", () => {
-  const photoBrief: StoreBrief = { ...cafeBrief, realData: { photoUrls: ["https://example.com/a.jpg"] } };
+  // 3枚(tier="moderate")にする。1〜2枚(tier="minimal")は写真主体の大きな構図に
+  // 無理に寄せず既存の最も控えめな構図(split-frame)へ倒すようになったため
+  // (v2-design-system.ts)、full-bleed-center等の「写真ありの通常構図」を
+  // 検証するにはminimalを超える枚数が必要になった。
+  const photoBrief: StoreBrief = {
+    ...cafeBrief,
+    realData: { photoUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg", "https://example.com/c.jpg"] },
+  };
 
   it("sensory-immersive方向(luxury-quiet)×layoutVariant=immersiveかつ写真ありの場合、full-bleed構図（h-dvh）で描画する", () => {
     const contents = generateWebsiteRuleBased(photoBrief);
@@ -195,6 +202,18 @@ describe("WebsiteRendererV2: Hero構図の切り替え", () => {
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={photoBrief} contents={contents} brandPlan={brandPlan} />);
     expect(html).toContain('id="top"');
     expect(html).not.toContain("h-dvh");
+  });
+
+  it("写真1〜2枚(tier=minimal)の場合、sensory-immersive×immersiveでもfull-bleed-centerへ寄せず、split-frame(控えめな構図)になる", () => {
+    const minimalPhotoBrief: StoreBrief = { ...cafeBrief, realData: { photoUrls: ["https://example.com/only-one.jpg"] } };
+    const contents = generateWebsiteRuleBased(minimalPhotoBrief);
+    const brandPlan = makeBrandPlan({ brandArchetype: "luxury-quiet", layoutVariant: "immersive" });
+    const html = renderToStaticMarkup(<WebsiteRendererV2 brief={minimalPhotoBrief} contents={contents} brandPlan={brandPlan} />);
+    // full-bleed-centerの目印(sm:h-dvh)が無く、split-frameの目印(grid)がある。
+    expect(html).not.toContain("h-dvh");
+    expect(html).toContain("lg:grid-cols-[minmax(0,44%)_1fr]");
+    // 唯一の写真自体は無駄にせず、split-frame内にちゃんと表示される。
+    expect(html).toContain('src="https://example.com/only-one.jpg"');
   });
 
   it("写真0枚の場合、layoutVariantに関わらず破綻せずtypographic構図で描画する", () => {
@@ -244,7 +263,10 @@ describe("WebsiteRendererV2: モバイル下部固定CTA", () => {
     const contents = generateWebsiteRuleBased(cafeBrief);
     const brandPlan = makeBrandPlan({ ctaStrategy: { placement: "hero", urgency: "high" } });
     const html = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} brandPlan={brandPlan} />);
-    expect(html).toContain("bg-stone-900");
+    // makeBrandPlan()の既定visualDirection.paletteHintは"neutral"であり、
+    // 4パレットが完全に独立した値を持つようになったため、ctaBgは
+    // neutralパレット固有の値(bg-neutral-900)になる。
+    expect(html).toContain("bg-neutral-900");
   });
 
   it("固定CTAバーの高さ分の安全余白(pb-24)はページ最外側に付与し、Footerの後にも確保する(以前は<main>だけに付いておりFooterがバーの下に隠れ続ける不具合があった)", () => {
@@ -348,8 +370,9 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
     expect(menuHtml).toContain('">01</span>');
     expect(menuHtml).not.toContain(">Featured<");
     // Access: 中央寄せの奥付風。地図は控えめな高さに留め、bg-stone-950(immersive)の
-    // 暗色情報帯は使わない。
-    expect(html).toContain('id="access" class="bg-stone-50"');
+    // 暗色情報帯は使わない。makeBrandPlan()の既定paletteHintは"neutral"のため、
+    // paperBg系の値はneutralパレット固有(bg-neutral-50)になる。
+    expect(html).toContain('id="access" class="bg-neutral-50"');
     expect(html).not.toContain('id="access" class="w-full bg-stone-950"');
   });
 
@@ -371,7 +394,7 @@ describe("WebsiteRendererV2: 3方向でMenu/AccessHours/CTAの構造そのもの
     expect(menuHtml).not.toContain('">01</span>');
     expect(menuHtml).not.toContain(">Featured<");
     expect(html).not.toContain('id="access" class="w-full bg-stone-950"');
-    expect(html).not.toContain('id="access" class="bg-stone-50"');
+    expect(html).not.toContain('id="access" class="bg-neutral-50"');
   });
 
   it("AccessHoursは3方向すべてでaddressHint(事実に基づく説明文)を必ず表示する(地図の成否に関わらずセクションが空虚に見えないため)", () => {

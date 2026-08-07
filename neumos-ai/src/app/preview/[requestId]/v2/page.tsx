@@ -3,6 +3,26 @@ import { WebsiteRendererV2 } from "@/components/website-v2/WebsiteRendererV2";
 import { extractErrorDetail } from "@/lib/error-detail";
 import { buildCafeStructuredData, serializeStructuredData } from "@/lib/seo-v2";
 import { getGenerationRecord } from "@/lib/store";
+import { buildPhotoPlan, type PhotoPlan } from "@/lib/engine/photo-strategy";
+import { compressPhotoUrls, orderGalleryPhotos } from "@/lib/engine/photo-curation";
+import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
+import type { BrandPlan } from "@/lib/brand-director/types";
+import type { StoreBrief } from "@/lib/types";
+
+/**
+ * 写真プール全体(Hero/Story/Gallery役割分担の前)に知覚的重複排除(dHash)を
+ * 一度だけ適用してからHero/Story/Gallery選定を行い、最後にGallery候補だけを
+ * 並び替える。Hero/Story選定ロジック自体(`buildPhotoPlan`/
+ * `derivePhotoPlanFromBrandPlan`)は無変更で、入力が重複排除済みになるだけ
+ * ("同じ写真がHeroにもGalleryにもある"問題を構造的に防ぐ)。
+ */
+async function resolvePhotoPlan(brief: StoreBrief, brandPlan: BrandPlan | undefined): Promise<PhotoPlan> {
+  const dedupedUrls = await compressPhotoUrls(brief.realData?.photoUrls);
+  const overridePlan = brandPlan ? derivePhotoPlanFromBrandPlan(brandPlan, dedupedUrls) : undefined;
+  const basePlan = overridePlan ?? buildPhotoPlan(dedupedUrls);
+  const orderedGallery = await orderGalleryPhotos(basePlan.galleryPhotoUrls);
+  return { ...basePlan, galleryPhotoUrls: orderedGallery };
+}
 
 /**
  * v2デザインエンジンのプレビュー。既存の`/preview/[requestId]`（v1）は
@@ -72,10 +92,27 @@ export default async function PreviewV2Page({ params }: { params: { requestId: s
   }
 
   const structuredData = buildCafeStructuredData(record.brief, record.generatedContents, v2Url(record.previewUrl));
+
+  let photoPlanOverride: PhotoPlan | undefined;
+  try {
+    photoPlanOverride = await resolvePhotoPlan(record.brief, record.brandPlan);
+  } catch (err) {
+    // 写真キュレーションが失敗しても、ページ全体の描画を失敗させない
+    // (photoPlanOverride省略時はWebsiteRendererV2が従来通りの計算へ
+    // フォールバックする)。
+    console.warn("[neumos-ai] photo plan resolution failed; falling back to default plan", extractErrorDetail(err));
+    photoPlanOverride = undefined;
+  }
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structuredData) }} />
-      <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} brandPlan={record.brandPlan} />
+      <WebsiteRendererV2
+        brief={record.brief}
+        contents={record.generatedContents}
+        brandPlan={record.brandPlan}
+        photoPlanOverride={photoPlanOverride}
+      />
     </>
   );
 }

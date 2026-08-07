@@ -19,7 +19,7 @@
  */
 import { compressArtifacts } from "@/lib/editorial/compress";
 import { arrangeArtifacts } from "@/lib/editorial/arrange";
-import { assignPresentation } from "@/lib/editorial/presentation";
+import { assignGalleryLayout } from "@/lib/editorial/gallery-layout";
 import { isImageArtifact, type ImageArtifact } from "@/lib/editorial/artifact";
 
 export const DEFAULT_MAX_DISPLAY_PHOTOS = 12;
@@ -147,17 +147,18 @@ export async function compressPhotoUrls(rawUrls: readonly string[] | undefined):
 
 /**
  * Gallery役割に割り当てられた写真だけを、知覚的類似度に基づく並び替え
- * (arrange)と、構図判定(Occupy/Sequence/Isolate)による強調写真の前寄せ
- * (presentation)に通す。Hero/Story写真の選定には一切関与しない。
+ * (arrange)と、Gallery内のレイアウト判定(Occupy/Sequence/Isolate、
+ * `editorial/gallery-layout.ts`)による強調写真の前寄せに通す。Hero/Story
+ * 写真の選定には一切関与しない。
  */
 export async function orderGalleryPhotos(galleryPhotoUrls: readonly string[]): Promise<string[]> {
   if (galleryPhotoUrls.length === 0) return [];
 
   const artifacts = toImageArtifacts(galleryPhotoUrls);
   const arranged = arrangeArtifacts(artifacts).filter(isImageArtifact);
-  const presented = assignPresentation(arranged);
+  const assigned = assignGalleryLayout(arranged);
 
-  const occupy = presented.filter((p) => p.primitive === "Occupy").map((p) => p.artifact.url);
-  const rest = presented.filter((p) => p.primitive !== "Occupy").map((p) => p.artifact.url);
+  const occupy = assigned.filter((p) => p.layout === "Occupy").map((p) => p.artifact.url);
+  const rest = assigned.filter((p) => p.layout !== "Occupy").map((p) => p.artifact.url);
   return [...occupy, ...rest];
 }

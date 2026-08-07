@@ -12,6 +12,14 @@
  * `arrangeArtifacts`は画像列・テキスト列をそれぞれ独立に`strategy.buildPath`へ
  * 渡し、種別をまたぐ配置は同一種別の連続数の固定上限によるマージでのみ決める
  * (周期的な固定リズムのテンプレートではなく、上限に達した場合のみ発動する)。
+ *
+ * TODO(将来検討・今回は実装しない): `nearestNeighborThenTwoOpt`は現在
+ * 「グループ化(似たものをひとまとまりにする)」と「並び(ひとまとまりの中の
+ * 順序を決める)」の両方を1つのアルゴリズムで同時に行っている。Galleryの
+ * リズム生成やグリッド最適化を将来発展させる場合、この2つを
+ * `cluster()`(グループ化)と`arrange()`(グループ内の順序付け)に分離すると、
+ * 責務が単純になり、`RhythmStrategy`(交互配置)のような将来戦略も実装しやすく
+ * なる可能性がある。実データでの検証を経てから着手を検討する。
  */
 import { hashToIndex } from "@/lib/engine/deterministic-hash";
 import { type Artifact, isImageArtifact, isTextArtifact } from "./artifact";

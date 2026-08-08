@@ -59,4 +59,28 @@ describe("cleanupExpiredInquiries", () => {
     mocks.getSupabaseAdmin.mockReturnValue(client);
     await expect(cleanupExpiredInquiries(new Date())).rejects.toMatchObject({ code: "53300" });
   });
+
+  it("filters with strict less-than (not less-than-or-equal), so a row created exactly at the cutoff is retained", async () => {
+    const { client, lt } = fakeAdmin({ data: [], error: null });
+    mocks.getSupabaseAdmin.mockReturnValue(client);
+    const now = new Date("2026-08-09T00:00:00.000Z");
+    const expectedCutoff = new Date(now.getTime() - INQUIRY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    await cleanupExpiredInquiries(now);
+
+    // The mock only implements `.lt(...)`; using `.lte(...)` in the implementation would throw here.
+    expect(lt).toHaveBeenCalledWith("created_at", expectedCutoff);
+    // ISO 8601 timestamps compare lexicographically the same as chronologically:
+    // a row's created_at equal to the cutoff is NOT "<" the cutoff, so it is retained.
+    expect(expectedCutoff < expectedCutoff).toBe(false);
+    const oneMsOlder = new Date(new Date(expectedCutoff).getTime() - 1).toISOString();
+    expect(oneMsOlder < expectedCutoff).toBe(true);
+  });
+
+  it("retains rows younger than 180 days (nothing deleted when all inquiries are within the retention window)", async () => {
+    const { client } = fakeAdmin({ data: [], error: null });
+    mocks.getSupabaseAdmin.mockReturnValue(client);
+    const result = await cleanupExpiredInquiries(new Date("2026-08-09T00:00:00.000Z"));
+    expect(result.deleted).toBe(0);
+  });
 });

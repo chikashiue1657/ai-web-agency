@@ -57,4 +57,40 @@ describe("checkInquiryCleanupCronAuth", () => {
     process.env.NEUMOS_API_KEY = "cron-secret-value";
     expect(checkInquiryCleanupCronAuth(request())).toEqual({ authorized: false, status: 503 });
   });
+
+  it("returns 401 when the provided token has a different length than CRON_SECRET", () => {
+    expect(checkInquiryCleanupCronAuth(request("Bearer short"))).toEqual({ authorized: false, status: 401 });
+  });
+
+  it("returns 401 when the provided token has the same length as CRON_SECRET but differs", () => {
+    // Same length as "cron-secret-value", last char changed.
+    expect(checkInquiryCleanupCronAuth(request("Bearer cron-secret-valuf"))).toEqual({
+      authorized: false,
+      status: 401,
+    });
+  });
+
+  it("fails closed with 404 when CRON_SECRET is an empty string", () => {
+    process.env.CRON_SECRET = "";
+    expect(checkInquiryCleanupCronAuth(request("Bearer cron-secret-value"))).toEqual({
+      authorized: false,
+      status: 404,
+    });
+  });
+
+  it("returns 401 for malformed Authorization headers (wrong scheme, missing token, empty token)", () => {
+    expect(checkInquiryCleanupCronAuth(request("Basic cron-secret-value"))).toEqual({
+      authorized: false,
+      status: 401,
+    });
+    expect(checkInquiryCleanupCronAuth(request("Bearer"))).toEqual({ authorized: false, status: 401 });
+    expect(checkInquiryCleanupCronAuth(request("Bearer "))).toEqual({ authorized: false, status: 401 });
+  });
+
+  it("ignores a secret placed in the query string or elsewhere outside the Authorization header", () => {
+    const req = new NextRequest("http://localhost/api/internal/inquiries/cleanup?secret=cron-secret-value", {
+      headers: {},
+    });
+    expect(checkInquiryCleanupCronAuth(req)).toEqual({ authorized: false, status: 401 });
+  });
 });

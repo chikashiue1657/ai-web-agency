@@ -91,4 +91,33 @@ describe("GET /api/internal/inquiries/cleanup", () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
   });
+
+  it("rejects a secret placed in the query string with no Authorization header, and never calls cleanup", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/internal/inquiries/cleanup?secret=cron-secret-value&cron_secret=cron-secret-value",
+      { headers: {} }
+    );
+    const response = await GET(req);
+    expect(response.status).toBe(401);
+    expect(mocks.cleanupExpiredInquiries).not.toHaveBeenCalled();
+  });
+
+  it("never exposes CRON_SECRET in the response body on any auth failure path", async () => {
+    const secret = process.env.CRON_SECRET as string;
+
+    delete process.env.CRON_SECRET;
+    const unset = await GET(request("Bearer x"));
+    process.env.CRON_SECRET = secret;
+
+    const wrong = await GET(request("Bearer wrong-token"));
+
+    process.env.NEUMOS_API_KEY = secret;
+    const reused = await GET(request(`Bearer ${secret}`));
+    delete process.env.NEUMOS_API_KEY;
+
+    for (const response of [unset, wrong, reused]) {
+      const bodyText = await response.text();
+      expect(bodyText).not.toContain(secret);
+    }
+  });
 });

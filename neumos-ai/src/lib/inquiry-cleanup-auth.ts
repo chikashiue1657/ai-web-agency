@@ -14,7 +14,7 @@
  * 未設定時は404（ルートの存在自体を隠す。NEUMOS_API_KEY未設定時と同じ方針）。
  * トークンはAuthorizationヘッダーからのみ読む。
  */
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 export type CronAuthResult =
   | { authorized: true }
@@ -24,15 +24,16 @@ export type CronAuthResult =
 
 const AUTHORIZATION_PATTERN = /^Bearer (.+)$/;
 
+// SHA-256のダイジェストは入力長に関わらず常に32バイト固定になるため、
+// timingSafeEqual自体に長さの早期リターンが発生しない
+// （timingSafeEqualは長さが異なるBufferを渡すと例外を投げるため、
+// 生の値同士を直接比較すると入力長がタイミングから漏れうる）。
+function digest(value: string): Buffer {
+  return createHash("sha256").update(value, "utf8").digest();
+}
+
 function safeEquals(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  const paddedLength = Math.max(bufA.length, bufB.length, 1);
-  const paddedA = Buffer.alloc(paddedLength);
-  const paddedB = Buffer.alloc(paddedLength);
-  bufA.copy(paddedA);
-  bufB.copy(paddedB);
-  return bufA.length === bufB.length && timingSafeEqual(paddedA, paddedB);
+  return timingSafeEqual(digest(a), digest(b));
 }
 
 function equalsEnv(secret: string, envValue: string | undefined): boolean {

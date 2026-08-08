@@ -355,3 +355,83 @@ Only the `Authorization` header is accepted; query parameters and request bodies
 never used for authentication. If the server key is unset or empty, these routes
 fail closed with `404`. Missing, malformed, empty, or mismatched Bearer credentials
 return `401`. Authentication failures include `Cache-Control: no-store`.
+
+## 予約・問い合わせ受付（v2公開サイト）
+
+公開v2サイトのCTA直後に、予約相談・問い合わせフォームを表示できる
+（`InquiryFormV2`。`requestId`が渡され、かつ`INQUIRY_ENABLED=true`の場合のみ表示）。
+
+### 機能フラグ `INQUIRY_ENABLED`
+
+秘密値ではなく単純な公開可否スイッチ。`"true"`の完全一致（trim後）のみ有効。
+未設定・空・`"true"`以外の値は全て無効として扱う。
+
+- 無効時: サーバーコンポーネント（`WebsiteRendererV2`）側でフォーム自体を
+  描画しない（クライアント側で隠すのではなく、SSR時点でHTMLに含めない）。
+  `POST /api/public/inquiries`も、本文を読む前に`404`を返す。
+- **重要**: `INQUIRY_HASH_SALT`の設定・`schema.sql`の適用・自動削除または
+  承認済みの手動削除運用のいずれかが整う前に、このコードがmainへ入っても
+  壊れたフォーム（送信できない・削除されない問い合わせが溜まり続ける等）を
+  公開しないための保険。**自動削除の仕組み、または承認済みの手動削除運用が
+  準備できるまで、Productionで`INQUIRY_ENABLED=true`にしないこと。**
+
+### `POST /api/public/inquiries`（公開・未認証）
+
+処理順序（この順で早期リターンする。本文読取・DB処理より前に判定できるものを
+先に置く）:
+
+1. `INQUIRY_ENABLED`が有効でなければ`404`。
+2. `INQUIRY_HASH_SALT`（undefined・空文字・空白のみは未設定扱い）を読み取り、
+   未設定なら`503`。**ここで検証した値だけをこのリクエストの処理中で使う
+   （途中で`process.env`を再読込しない）。以降のIPハッシュ・レート制限
+   バケットキーの両方に、この同じ値を引数として渡す。**
+3. 本文サイズ（20KB、ストリーミング読み取りで超過時点で即座に打ち切り。
+   `request.text()`で全文読み切ってから判定する方式は採用しない。
+   `reader.cancel()`自体が失敗しても413判定は変えない）。
+4. JSON解析・Zod検証。
+5. honeypot・入力時間検査（成功風レスポンスを返し、回避条件を公開しない）。
+6. レート制限（後述）。
+7. 保存・通知。
+
+- 送信元IPは`x-vercel-forwarded-for` → `x-forwarded-for` → `x-real-ip`の順で
+  候補を評価し、各候補はカンマ区切りの最左をtrimして、空文字・空白のみなら
+  次の候補へ進む（末尾を信頼する変更はしていない）。生のIPアドレスはログへ
+  出さず、`INQUIRY_HASH_SALT`によるHMAC-SHA256のハッシュ値のみを保存する。
+- レート制限はSupabase/Postgres側の原子的なUPSERT関数
+  （`inquiry_rate_limit_hit`、`supabase/schema.sql`）で行う。サーバーレス環境で
+  複数インスタンスをまたいでも正確にカウントするため、プロセスローカルな
+  インメモリ実装は採用していない。**DBのbucket_key列には生のIP・requestIdは
+  保存されない**——`computeRateLimitBucketKey`が`INQUIRY_HASH_SALT`で
+  HMAC-SHA256化した64文字hexダイジェストだけを渡す。この判定自体が失敗した
+  場合（Supabase未設定・接続エラー等）は、警告を出して通す（fail-open）のでは
+  なく`503`を返す（fail-closed）。
+- メール通知（Resend、任意設定）が失敗しても、問い合わせ本体のDB保存は
+  必ず先に完了しており失われない。
+- エラーログには、Supabase/Postgres等サードパーティ由来の`error.message`を
+  そのまま出さない。固定メッセージ・安全なエラー型/コード・関連するID
+  （requestId等）のみを出す。氏名・メール・電話・本文・IP・salt・
+  `Authorization`ヘッダーはいずれもログへ出さない。
+
+### `GET /v1/inquiries`（管理者・`NEUMOS_API_KEY`認証）
+
+一覧取得。`Cache-Control: no-store`。
+
+### `DELETE /v1/inquiries/{id}`（管理者・`NEUMOS_API_KEY`認証）
+
+個別の**物理削除**。論理削除（`deleted_at`等のフラグを立てるだけ）は採用しない。
+`id`はUUID形式を検証し、不正な形式は`400`を返す。レスポンス・ログには
+氏名・メール・電話・本文などのPIIを一切含めない（IDと結果のみ）。
+
+### 保持期間・削除方針
+
+- 初期値: **180日**（`created_at`基準）。
+- 個別削除は上記`DELETE /v1/inquiries/{id}`で可能。
+- 180日超過分の**自動削除は未実装**。Supabaseの実プランで`pg_cron`拡張が
+  利用可能かどうかを確認できていないため、推測でスケジュール削除を
+  有効化していない。確認でき次第、`pg_cron`によるDB内スケジュール削除、
+  またはVercel Cron経由の削除エンドポイントのいずれかを別PRで追加する
+  （`supabase/schema.sql`の該当箇所にコメントで詳細を記載）。それまでは
+  手動運用（個別削除、または`created_at < now() - interval '180 days'`を
+  条件とした手動SQL実行）を前提とする。
+- 削除権限（`DELETE`）はDB上`service_role`にのみ付与している。公開エンドポイント
+  （`POST /api/public/inquiries`）のコード経路には削除処理を一切実装していない。

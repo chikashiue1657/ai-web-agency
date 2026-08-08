@@ -75,7 +75,12 @@ export default async function PreviewV2Page({ params }: { params: { requestId: s
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structuredData) }} />
-      <WebsiteRendererV2 brief={record.brief} contents={record.generatedContents} brandPlan={record.brandPlan} />
+      <WebsiteRendererV2
+        brief={record.brief}
+        contents={record.generatedContents}
+        brandPlan={record.brandPlan}
+        requestId={record.requestId}
+      />
     </>
   );
 }

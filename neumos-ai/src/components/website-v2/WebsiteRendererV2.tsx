@@ -14,6 +14,7 @@ import {
 } from "@/lib/engine/v2-design-system";
 import { derivePhotoPlanFromBrandPlan } from "@/lib/brand-director/v2-connector";
 import type { BrandPlan } from "@/lib/brand-director/types";
+import { isInquiryFeatureEnabled } from "@/lib/inquiry-flag";
 import { splitBulletLines } from "@/components/website/utils";
 import { WebsiteRenderer } from "@/components/website/WebsiteRenderer";
 import { Footer } from "@/components/website/Footer";
@@ -62,10 +63,12 @@ export function WebsiteRendererV2({
   brief,
   contents,
   brandPlan,
+  requestId,
 }: {
   brief: StoreBrief;
   contents: GeneratedWebsiteContents;
   brandPlan?: BrandPlan;
+  requestId?: string;
 }) {
   const category = classifyIndustry(brief.industry);
 
@@ -195,6 +198,9 @@ export function WebsiteRendererV2({
         theme={theme}
         ctaStyle={tokens.ctaStyle}
         artDirection={tokens.artDirection}
+        inquiryContext={
+          requestId && isInquiryFeatureEnabled() ? { requestId, storeName: brief.storeName } : undefined
+        }
       />
     ),
     ctaEarly: (

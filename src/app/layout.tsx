@@ -26,9 +26,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Link href="/stores" className="text-sm text-gray-600 hover:text-gray-900">
                   店舗一覧
                 </Link>
-                <Link href="/cad" className="text-sm text-gray-600 hover:text-gray-900">
-                  CAD
-                </Link>
               </nav>
               {mock && (
                 <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800">

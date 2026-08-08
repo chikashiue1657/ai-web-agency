@@ -28,7 +28,12 @@ export async function readBodyWithLimit(
       if (done) break;
       total += value.byteLength;
       if (total > maxBytes) {
-        await reader.cancel();
+        try {
+          await reader.cancel();
+        } catch {
+          // cancel自体の失敗はサイズ超過の判定を変えない。読み取りはどのみち
+          // ここで打ち切るため、BodyTooLargeErrorを投げることを優先する。
+        }
         throw new BodyTooLargeError();
       }
       chunks.push(value);

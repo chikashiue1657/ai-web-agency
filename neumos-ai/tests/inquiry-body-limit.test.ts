@@ -61,4 +61,40 @@ describe("readBodyWithLimit", () => {
     });
     await expect(readBodyWithLimit(stream, 20_000)).resolves.toHaveLength(20_000);
   });
+
+  it("still throws BodyTooLargeError even when reader.cancel() itself rejects", async () => {
+    let cancelAttempted = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(25_000));
+      },
+      cancel() {
+        cancelAttempted = true;
+        throw new Error("cancel failed unexpectedly");
+      },
+    });
+
+    await expect(readBodyWithLimit(stream, 20_000)).rejects.toBeInstanceOf(BodyTooLargeError);
+    expect(cancelAttempted).toBe(true);
+  });
+
+  it("correctly decodes a multi-byte UTF-8 character split across a chunk boundary", async () => {
+    // "あ" (U+3042) is E3 81 82 in UTF-8. Split the 3 bytes across two chunks
+    // to make sure decoding happens once on the concatenated buffer, not
+    // per-chunk (which would corrupt characters split at a chunk boundary).
+    const encoded = new TextEncoder().encode("hello あ world");
+    const splitAt = encoded.indexOf(0x81); // middle byte of "あ"'s 3-byte sequence
+    const first = encoded.slice(0, splitAt);
+    const second = encoded.slice(splitAt);
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(first);
+        controller.enqueue(second);
+        controller.close();
+      },
+    });
+
+    await expect(readBodyWithLimit(stream, 20_000)).resolves.toBe("hello あ world");
+  });
 });

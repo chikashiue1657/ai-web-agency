@@ -54,19 +54,43 @@ describe("WebsiteRendererV2: brandPlan省略時（既存動作の回帰確認）
     expect(html).toContain("font-serif");
   });
 
-  it("requestIdがある場合だけ公開問い合わせフォームを表示する", () => {
-    const contents = generateWebsiteRuleBased(cafeBrief);
-    const withForm = renderToStaticMarkup(
-      <WebsiteRendererV2
-        brief={cafeBrief}
-        contents={contents}
-        requestId="97e73c6c-520e-48d9-8e04-c152c42baf9d"
-      />
-    );
-    const withoutForm = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} />);
-    expect(withForm).toContain("ご予約・お問い合わせ");
-    expect(withForm).toContain('name="consent"');
-    expect(withoutForm).not.toContain('name="consent"');
+  it("requestIdがあり、かつINQUIRY_ENABLED=trueの場合だけ公開問い合わせフォームを表示する", () => {
+    const originalFlag = process.env.INQUIRY_ENABLED;
+    process.env.INQUIRY_ENABLED = "true";
+    try {
+      const contents = generateWebsiteRuleBased(cafeBrief);
+      const withForm = renderToStaticMarkup(
+        <WebsiteRendererV2
+          brief={cafeBrief}
+          contents={contents}
+          requestId="97e73c6c-520e-48d9-8e04-c152c42baf9d"
+        />
+      );
+      const withoutForm = renderToStaticMarkup(<WebsiteRendererV2 brief={cafeBrief} contents={contents} />);
+      expect(withForm).toContain("ご予約・お問い合わせ");
+      expect(withForm).toContain('name="consent"');
+      expect(withoutForm).not.toContain('name="consent"');
+    } finally {
+      process.env.INQUIRY_ENABLED = originalFlag;
+    }
+  });
+
+  it("INQUIRY_ENABLEDが未設定の場合、requestIdがあってもフォームを描画しない", () => {
+    const originalFlag = process.env.INQUIRY_ENABLED;
+    delete process.env.INQUIRY_ENABLED;
+    try {
+      const contents = generateWebsiteRuleBased(cafeBrief);
+      const html = renderToStaticMarkup(
+        <WebsiteRendererV2
+          brief={cafeBrief}
+          contents={contents}
+          requestId="97e73c6c-520e-48d9-8e04-c152c42baf9d"
+        />
+      );
+      expect(html).not.toContain('name="consent"');
+    } finally {
+      process.env.INQUIRY_ENABLED = originalFlag;
+    }
   });
 });
 

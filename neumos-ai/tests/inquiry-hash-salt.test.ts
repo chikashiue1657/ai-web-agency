@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/store", () => ({ getGenerationRecord: mocks.getGenerationRecord }));
 vi.mock("@/lib/supabase/server", () => ({ getSupabaseAdmin: mocks.getSupabaseAdmin }));
 
-import { InquiryHashSaltMissingError, savePublicInquiry, type PublicInquiryInput } from "@/lib/inquiries";
+import { InquiryHashSaltMissingError, resolveInquiryHashSalt, savePublicInquiry, type PublicInquiryInput } from "@/lib/inquiries";
 
 const input: PublicInquiryInput = {
   requestId: "97e73c6c-520e-48d9-8e04-c152c42baf9d",
@@ -21,38 +21,56 @@ const input: PublicInquiryInput = {
   startedAt: Date.now() - 3_000,
 };
 
-describe("INQUIRY_HASH_SALT fail-closed behavior", () => {
+describe("resolveInquiryHashSalt", () => {
   const ORIGINAL_ENV = { ...process.env };
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
 
+  it("returns undefined when unset", () => {
+    delete process.env.INQUIRY_HASH_SALT;
+    expect(resolveInquiryHashSalt()).toBeUndefined();
+  });
+
+  it("returns undefined when empty", () => {
+    process.env.INQUIRY_HASH_SALT = "";
+    expect(resolveInquiryHashSalt()).toBeUndefined();
+  });
+
+  it("returns undefined when whitespace-only", () => {
+    process.env.INQUIRY_HASH_SALT = "   ";
+    expect(resolveInquiryHashSalt()).toBeUndefined();
+  });
+
+  it("returns the trimmed value when set", () => {
+    process.env.INQUIRY_HASH_SALT = "  a-real-salt-value  ";
+    expect(resolveInquiryHashSalt()).toBe("a-real-salt-value");
+  });
+});
+
+describe("savePublicInquiry salt handling (defense in depth)", () => {
   beforeEach(() => {
     mocks.getGenerationRecord.mockReset().mockResolvedValue({ brief: { storeName: "BB-Coffee" } });
     mocks.getSupabaseAdmin.mockReset().mockReturnValue({
       from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ data: {}, error: null }) }) }) }),
     });
   });
-  afterEach(() => {
-    process.env = { ...ORIGINAL_ENV };
+
+  it("throws InquiryHashSaltMissingError when called with an empty salt", async () => {
+    await expect(savePublicInquiry(input, "203.0.113.1", "")).rejects.toBeInstanceOf(InquiryHashSaltMissingError);
   });
 
-  it("throws InquiryHashSaltMissingError when INQUIRY_HASH_SALT is unset", async () => {
-    delete process.env.INQUIRY_HASH_SALT;
-    delete process.env.NEUMOS_API_KEY;
-    await expect(savePublicInquiry(input, "203.0.113.1")).rejects.toBeInstanceOf(InquiryHashSaltMissingError);
-  });
-
-  it("does not fall back to NEUMOS_API_KEY even when it is set", async () => {
-    delete process.env.INQUIRY_HASH_SALT;
-    process.env.NEUMOS_API_KEY = "some-other-secret-used-for-bearer-auth";
-    await expect(savePublicInquiry(input, "203.0.113.1")).rejects.toBeInstanceOf(InquiryHashSaltMissingError);
-  });
-
-  it("succeeds once INQUIRY_HASH_SALT is set", async () => {
-    process.env.INQUIRY_HASH_SALT = "a-sufficiently-random-salt-value";
-    await expect(savePublicInquiry(input, "203.0.113.1")).resolves.toBeDefined();
+  it("succeeds when called with a non-empty salt", async () => {
+    await expect(savePublicInquiry(input, "203.0.113.1", "a-real-salt-value")).resolves.toBeDefined();
   });
 
   it("the source file never contains the hardcoded fallback string 'local-development'", () => {
     const source = readFileSync(new URL("../src/lib/inquiries.ts", import.meta.url), "utf8");
     expect(source).not.toContain("local-development");
+  });
+
+  it("the source file never reads NEUMOS_API_KEY as an IP-hash fallback", () => {
+    const source = readFileSync(new URL("../src/lib/inquiries.ts", import.meta.url), "utf8");
+    expect(source).not.toContain("NEUMOS_API_KEY");
   });
 });

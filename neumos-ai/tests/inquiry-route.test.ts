@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
@@ -43,6 +43,8 @@ function request(payload: unknown = body, ip = "203.0.113.1") {
 
 describe("POST /api/public/inquiries", () => {
   beforeEach(() => {
+    process.env.INQUIRY_ENABLED = "true";
+    process.env.INQUIRY_HASH_SALT = "a-sufficiently-random-salt-value";
     mocks.isInquiryRateLimited.mockReset().mockResolvedValue(false);
     mocks.savePublicInquiry.mockReset().mockResolvedValue({
       id: "inquiry-1",
@@ -57,6 +59,10 @@ describe("POST /api/public/inquiries", () => {
       createdAt: new Date().toISOString(),
     });
     mocks.sendInquiryNotification.mockReset().mockResolvedValue("sent");
+  });
+  afterEach(() => {
+    delete process.env.INQUIRY_ENABLED;
+    delete process.env.INQUIRY_HASH_SALT;
   });
 
   it("saves a valid inquiry and prevents caching", async () => {
@@ -103,5 +109,13 @@ describe("POST /api/public/inquiries", () => {
     const response = await POST(request({ ...body, message: "x".repeat(25_000) }));
     expect(response.status).toBe(413);
     expect(mocks.savePublicInquiry).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when INQUIRY_ENABLED is not 'true'", async () => {
+    delete process.env.INQUIRY_ENABLED;
+    const response = await POST(request());
+    expect(response.status).toBe(404);
+    expect(mocks.savePublicInquiry).not.toHaveBeenCalled();
+    expect(mocks.isInquiryRateLimited).not.toHaveBeenCalled();
   });
 });

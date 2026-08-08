@@ -128,29 +128,33 @@ grant select, insert, update, delete on table neumos_inquiry_rate_limit to servi
 -- 1つのUPSERT文でread-modify-writeを原子化する。Postgresの行ロックにより、
 -- 同一bucket_keyへの同時アクセスはこの文の中で直列化されるため、サーバーレス
 -- の複数インスタンスから同時にヒットしてもカウントが正確に保たれる。
--- search_pathを明示し、関数解決が呼び出し側のsearch_path設定に影響されない
--- ようにする（同名オブジェクトの差し替え等によるなりすましを防ぐ）。
+--
+-- search_pathを空文字にし、テーブル参照を`public.neumos_inquiry_rate_limit`と
+-- 完全修飾する。search_path乗っ取り（同名オブジェクトを別スキーマへ差し替えて
+-- 関数解決を誤誘導する攻撃）を防ぐための標準的な硬化パターン。now()や
+-- interval等の組み込み関数・型はpg_catalogにあり、search_pathの設定に
+-- 関わらず常に解決されるため空文字でも問題ない。
 create or replace function inquiry_rate_limit_hit(p_key text, p_window_seconds int, p_max int)
 returns boolean
 language plpgsql
 security invoker
-set search_path = public, pg_temp
+set search_path = ''
 as $$
 declare
   v_count int;
 begin
-  insert into neumos_inquiry_rate_limit (bucket_key, window_start, count, updated_at)
+  insert into public.neumos_inquiry_rate_limit (bucket_key, window_start, count, updated_at)
   values (p_key, now(), 1, now())
   on conflict (bucket_key) do update
     set count = case
-          when neumos_inquiry_rate_limit.window_start < now() - (p_window_seconds || ' seconds')::interval
+          when public.neumos_inquiry_rate_limit.window_start < now() - (p_window_seconds || ' seconds')::interval
             then 1
-          else neumos_inquiry_rate_limit.count + 1
+          else public.neumos_inquiry_rate_limit.count + 1
         end,
         window_start = case
-          when neumos_inquiry_rate_limit.window_start < now() - (p_window_seconds || ' seconds')::interval
+          when public.neumos_inquiry_rate_limit.window_start < now() - (p_window_seconds || ' seconds')::interval
             then now()
-          else neumos_inquiry_rate_limit.window_start
+          else public.neumos_inquiry_rate_limit.window_start
         end,
         updated_at = now()
   returning count into v_count;
@@ -160,7 +164,9 @@ end;
 $$;
 
 -- 実行権限を明示的に絞る。デフォルトではPUBLICにEXECUTEが付与されうるため、
--- 明示的にrevokeしたうえでservice_roleにのみ許可する。
+-- 明示的にrevokeしたうえでservice_roleにのみ許可する。create or replace
+-- functionは既存のGRANT/REVOKEをリセットしないため、schema.sqlを複数回
+-- 実行しても最終状態は変わらない（冪等）。
 revoke execute on function inquiry_rate_limit_hit(text, integer, integer)
   from public, anon, authenticated;
 grant execute on function inquiry_rate_limit_hit(text, integer, integer)

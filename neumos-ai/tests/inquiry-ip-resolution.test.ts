@@ -34,4 +34,23 @@ describe("resolveClientIp", () => {
     const request = headers({ "x-vercel-forwarded-for": "", "x-forwarded-for": "198.51.100.1" });
     expect(resolveClientIp(request)).toBe("198.51.100.1");
   });
+
+  it("skips a whitespace-only x-vercel-forwarded-for and falls back to x-forwarded-for", () => {
+    const request = headers({ "x-vercel-forwarded-for": "   ", "x-forwarded-for": "198.51.100.1" });
+    expect(resolveClientIp(request)).toBe("198.51.100.1");
+  });
+
+  it("skips whitespace-only values through the whole chain down to x-real-ip", () => {
+    const request = headers({
+      "x-vercel-forwarded-for": "  ",
+      "x-forwarded-for": " , ",
+      "x-real-ip": "192.0.2.55",
+    });
+    expect(resolveClientIp(request)).toBe("192.0.2.55");
+  });
+
+  it("returns 'unknown' when every candidate is whitespace-only or absent", () => {
+    const request = headers({ "x-vercel-forwarded-for": "  ", "x-forwarded-for": "" });
+    expect(resolveClientIp(request)).toBe("unknown");
+  });
 });

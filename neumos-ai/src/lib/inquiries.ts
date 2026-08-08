@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getGenerationRecord } from "@/lib/store";
+import { describeErrorSafely } from "@/lib/inquiry-log";
 
 export const INQUIRY_TABLE = "neumos_site_inquiries";
 
@@ -81,10 +82,23 @@ export class InquiryHashSaltMissingError extends Error {
   }
 }
 
-function hashIp(ip: string): string {
-  const secret = process.env.INQUIRY_HASH_SALT;
-  if (!secret) throw new InquiryHashSaltMissingError();
-  return createHmac("sha256", secret).update(ip).digest("hex");
+/**
+ * INQUIRY_HASH_SALTの読み取り・検証はPOSTルートの先頭で一度だけ行い、以降は
+ * 検証済みの値を引数として渡し回す（処理途中でprocess.envを再読込しない）。
+ * undefined・空文字・空白のみは未設定として扱う。
+ */
+export function resolveInquiryHashSalt(): string | undefined {
+  const trimmed = process.env.INQUIRY_HASH_SALT?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * saltは呼び出し側（route.ts）が`resolveInquiryHashSalt()`で検証済みの値を
+ * 渡す前提。ここでも空値ならエラーにする（多重防御。process.envの再読込はしない）。
+ */
+function hashIp(ip: string, salt: string): string {
+  if (!salt) throw new InquiryHashSaltMissingError();
+  return createHmac("sha256", salt).update(ip).digest("hex");
 }
 
 function dedupeKey(input: PublicInquiryInput): string {
@@ -100,7 +114,11 @@ function dedupeKey(input: PublicInquiryInput): string {
   return createHash("sha256").update(normalized).digest("hex");
 }
 
-export async function savePublicInquiry(input: PublicInquiryInput, sourceIp: string): Promise<StoredInquiry> {
+export async function savePublicInquiry(
+  input: PublicInquiryInput,
+  sourceIp: string,
+  salt: string
+): Promise<StoredInquiry> {
   const generation = await getGenerationRecord(input.requestId);
   if (!generation) throw new Error("generation_not_found");
 
@@ -120,7 +138,7 @@ export async function savePublicInquiry(input: PublicInquiryInput, sourceIp: str
     message: input.message,
     status: "new",
     dedupe_key: dedupeKey(input),
-    source_ip_hash: hashIp(sourceIp),
+    source_ip_hash: hashIp(sourceIp, salt),
   };
 
   const { data, error } = await admin.from(INQUIRY_TABLE).insert(row).select("*").single();
@@ -181,7 +199,7 @@ export async function deleteInquiryById(id: string): Promise<DeleteInquiryResult
 
   const { data, error } = await admin.from(INQUIRY_TABLE).delete().eq("id", id).select("id");
   if (error) {
-    console.error("[neumos-ai] inquiry delete failed", { id, outcome: "error" });
+    console.error("[neumos-ai] inquiry delete failed", { id, ...describeErrorSafely(error) });
     throw error;
   }
   const outcome: DeleteInquiryResult = data && data.length > 0 ? "deleted" : "not_found";

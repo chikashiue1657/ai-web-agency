@@ -356,37 +356,125 @@ never used for authentication. If the server key is unset or empty, these routes
 fail closed with `404`. Missing, malformed, empty, or mismatched Bearer credentials
 return `401`. Authentication failures include `Cache-Control: no-store`.
 
-## 問い合わせPIIの180日自動削除（PR #36とは別の独立PR）
+## 予約・問い合わせ受付（v2公開サイト）
 
-`GET /api/internal/inquiries/cleanup` は、`neumos_site_inquiries`（PR #36
-`agent/public-inquiry-capture`で追加。本PRとは独立にマージ可能で、どちらが先でも
-構わない）のうち `created_at` が180日を超えた行だけを物理削除する、Vercel Cron
-専用のエンドポイント。180日未満の行には触れない。
+公開v2サイトのCTA直後に、予約相談・問い合わせフォームを表示できる
+（`InquiryFormV2`。`requestId`が渡され、かつ`INQUIRY_ENABLED=true`の場合のみ表示）。
+
+### 機能フラグ `INQUIRY_ENABLED`
+
+秘密値ではなく単純な公開可否スイッチ。`"true"`の完全一致（trim後）のみ有効。
+未設定・空・`"true"`以外の値は全て無効として扱う。
+
+- 無効時: サーバーコンポーネント（`WebsiteRendererV2`）側でフォーム自体を
+  描画しない（クライアント側で隠すのではなく、SSR時点でHTMLに含めない）。
+  `POST /api/public/inquiries`も、本文を読む前に`404`を返す。
+- **重要**: `INQUIRY_HASH_SALT`の設定・`schema.sql`の適用・自動削除または
+  承認済みの手動削除運用のいずれかが整う前に、このコードがmainへ入っても
+  壊れたフォーム（送信できない・削除されない問い合わせが溜まり続ける等）を
+  公開しないための保険。**自動削除の仕組み、または承認済みの手動削除運用が
+  準備できるまで、Productionで`INQUIRY_ENABLED=true`にしないこと。**
+
+### `POST /api/public/inquiries`（公開・未認証）
+
+処理順序（この順で早期リターンする。本文読取・DB処理より前に判定できるものを
+先に置く）:
+
+1. `INQUIRY_ENABLED`が有効でなければ`404`。
+2. `INQUIRY_HASH_SALT`（undefined・空文字・空白のみは未設定扱い）を読み取り、
+   未設定なら`503`。**ここで検証した値だけをこのリクエストの処理中で使う
+   （途中で`process.env`を再読込しない）。以降のIPハッシュ・レート制限
+   バケットキーの両方に、この同じ値を引数として渡す。**
+3. 本文サイズ（20KB、ストリーミング読み取りで超過時点で即座に打ち切り。
+   `request.text()`で全文読み切ってから判定する方式は採用しない。
+   `reader.cancel()`自体が失敗しても413判定は変えない）。
+4. JSON解析・Zod検証。
+5. honeypot・入力時間検査（成功風レスポンスを返し、回避条件を公開しない）。
+6. レート制限（後述）。
+7. 保存・通知。
+
+- 送信元IPは`x-vercel-forwarded-for` → `x-forwarded-for` → `x-real-ip`の順で
+  候補を評価し、各候補はカンマ区切りの最左をtrimして、空文字・空白のみなら
+  次の候補へ進む（末尾を信頼する変更はしていない）。生のIPアドレスはログへ
+  出さず、`INQUIRY_HASH_SALT`によるHMAC-SHA256のハッシュ値のみを保存する。
+- レート制限はSupabase/Postgres側の原子的なUPSERT関数
+  （`inquiry_rate_limit_hit`、`supabase/schema.sql`）で行う。サーバーレス環境で
+  複数インスタンスをまたいでも正確にカウントするため、プロセスローカルな
+  インメモリ実装は採用していない。**DBのbucket_key列には生のIP・requestIdは
+  保存されない**——`computeRateLimitBucketKey`が`INQUIRY_HASH_SALT`で
+  HMAC-SHA256化した64文字hexダイジェストだけを渡す。この判定自体が失敗した
+  場合（Supabase未設定・接続エラー等）は、警告を出して通す（fail-open）のでは
+  なく`503`を返す（fail-closed）。
+- メール通知（Resend、任意設定）が失敗しても、問い合わせ本体のDB保存は
+  必ず先に完了しており失われない。
+- エラーログには、Supabase/Postgres等サードパーティ由来の`error.message`を
+  そのまま出さない。固定メッセージ・安全なエラー型/コード・関連するID
+  （requestId等）のみを出す。氏名・メール・電話・本文・IP・salt・
+  `Authorization`ヘッダーはいずれもログへ出さない。
+
+### `GET /v1/inquiries`（管理者・`NEUMOS_API_KEY`認証）
+
+一覧取得。`Cache-Control: no-store`。
+
+### `DELETE /v1/inquiries/{id}`（管理者・`NEUMOS_API_KEY`認証）
+
+個別の**物理削除**。論理削除（`deleted_at`等のフラグを立てるだけ）は採用しない。
+`id`はUUID形式を検証し、不正な形式は`400`を返す。レスポンス・ログには
+氏名・メール・電話・本文などのPIIを一切含めない（IDと結果のみ）。
+
+### 保持期間・削除方針
+
+- 初期値: **180日**（`created_at`基準）。
+- 個別削除は上記`DELETE /v1/inquiries/{id}`で可能。
+- 180日超過分の自動削除は、下記「問い合わせPIIの180日自動削除」に記載の
+  `GET /api/internal/inquiries/cleanup`（Vercel Cron専用エンドポイント）で行う。
+  `pg_cron`拡張は使わず、Vercel Cronからの呼び出しのみでスケジュール削除する
+  設計を採用した。ただし後述のとおり、Production環境で`CRON_SECRET`を設定し
+  Cronを有効化するまでは自動削除は起きず、手動運用（個別削除、または
+  `created_at < now() - interval '180 days'`を条件とした手動SQL実行）が前提となる。
+- 削除権限（`DELETE`）はDB上`service_role`にのみ付与している。公開エンドポイント
+  （`POST /api/public/inquiries`）のコード経路には削除処理を一切実装していない。
+
+## 問い合わせPIIの180日自動削除
+
+`GET /api/internal/inquiries/cleanup` は、上記「予約・問い合わせ受付」で保存される
+`neumos_site_inquiries`のうち `created_at` が180日を超えた行だけを物理削除する、
+Vercel Cron専用のエンドポイント。180日未満の行には触れない。
 
 - **スケジュール**: `vercel.json` で1日1回（`0 18 * * *` = UTC 18:00 = JST 3:00）
-  Vercelがこのパスを呼び出す。
-- **認証**: `Authorization: Bearer <CRON_SECRET>`。`CRON_SECRET`という環境変数名は
+  Vercelがこのパスを呼び出す。**Vercel Cronはこのスケジュール実行を
+  Productionデプロイに対してのみ自動起動する（Preview環境では自動実行されない。
+  Preview上での動作確認は下記の手動`curl`で行う）。**
+- **認証**: `Authorization: Bearer <CRON_SECRET>`のみを受け付ける（クエリ文字列や
+  リクエストボディ経由の値は一切見ない）。`CRON_SECRET`という環境変数名は
   固定（Vercelがこの名前の変数を検出した場合のみ、Cron実行時のリクエストへ自動で
-  同ヘッダーを付与する仕様のため）。未設定なら常に`404`（ルートの存在自体を隠す）。
-  トークン不一致・欠落は`401`。**`NEUMOS_API_KEY`・`INQUIRY_HASH_SALT`と同じ値を
-  設定した場合はfail-closedで`503`**（別の認証境界の使い回しを検知した扱い）。
+  同ヘッダーを付与する仕様のため）。未設定・空文字なら常に`404`（ルートの存在
+  自体を隠す、fail-closed）。ヘッダー欠落・`Bearer`形式が不正・空・トークン
+  不一致は`401`。**`NEUMOS_API_KEY`・`INQUIRY_HASH_SALT`と同じ値を設定した場合は
+  fail-closedで`503`**（別の認証境界の使い回しを検知した扱い）。認証失敗の
+  応答にはいずれも`Cache-Control: no-store`を付与し、認証が成立するまで
+  Supabaseへの問い合わせ・削除処理は一切呼び出さない。
 - **冪等性**: 削除条件は`created_at`のみ。同じ期間に対して複数回実行しても、
   2回目以降は削除対象が無いため`{ deleted: 0 }`を返すだけで副作用は増えない。
 - **PIIをログに残さない**: 削除条件の判定・応答・ログのいずれも氏名・メール・
   電話・本文等のPIIカラムを一切読み書きしない（削除件数とカットオフ時刻のみ）。
+  `CRON_SECRET`自体もレスポンス・ログ・テスト出力に出さない。
 - **失敗の検知**: Supabase未設定は`503`、想定外のDBエラーは`500`で返す
-  （Vercel側のCron実行ログ・関数エラーレートで検知できる）。PR #36が先に
-  マージされていない場合の「テーブル未作成」（Postgres `42P01`）だけは例外的に
-  失敗として扱わず`{ deleted: 0, skipped: true }`を返す（マージ順序に依存しない
-  ための意図的な区別であり、実際の障害を隠すものではない）。
+  （Vercel側のCron実行ログ・関数エラーレートで検知できる）。テーブル未作成
+  （Postgres `42P01`。通常の運用では発生しない想定だが、安全側の防御として）
+  だけは例外的に失敗として扱わず`{ deleted: 0, skipped: true }`を返す。
 
 ### Production Enable前の必須作業
 
+まだVercel Production環境に`CRON_SECRET`を設定しておらず、Cronも実行していない。
+有効化する際は以下を順に行う。
+
 1. Vercel（neumos-ai Production）に `CRON_SECRET` を設定する
    （`NEUMOS_API_KEY`・`INQUIRY_HASH_SALT`とは異なる値にすること）。
-2. PR #36をマージし、`neumos-ai/supabase/schema.sql` を実DBへ適用する
-   （順序はこのPRの前でも後でも良いが、`CRON_SECRET`設定とschema適用の
-   両方が揃うまでは実際の削除は起きない）。
+2. `neumos-ai/supabase/schema.sql`（`neumos_site_inquiries`テーブル定義を含む）を
+   実Production DBへ適用済みであることを確認する。
 3. Vercel Cron Jobsが有効なプラン・設定になっていることを確認する。
 4. 手動で1回 `curl -H "Authorization: Bearer $CRON_SECRET" https://<neumos-ai-domain>/api/internal/inquiries/cleanup`
    を実行し、`{ "ok": true, ... }` が返ることを確認する。
+5. 上記が揃った状態で初めて、Vercelの自動Cronスケジュール実行（Production
+   デプロイに対してのみ）が有効になる。

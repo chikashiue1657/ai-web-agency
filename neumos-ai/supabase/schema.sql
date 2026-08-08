@@ -62,9 +62,26 @@ alter table neumos_content_generation_requests
   add column if not exists brand_plan jsonb;
 
 -- ============================================================
--- RLS（雛形）: v1はservice role経由のサーバアクセス前提。今は無効のまま。
+-- 権限退行防止: v1はservice role経由のサーバアクセス前提。
 -- ------------------------------------------------------------
--- alter table neumos_content_generation_requests enable row level security;
+-- 既存Production（既にRLS有効・anon/authenticatedへのGRANTなし・
+-- service_roleのみCRUD可能な状態）には影響しない。この節の目的は、
+-- schema.sqlから新規環境（fresh Staging等）を構築した際に、この
+-- テーブルがRLS無効・anon/authenticatedにData API経由の匿名CRUDを
+-- 許してしまう権限退行を防ぐこと。anon/authenticated向けのpolicyは
+-- 意図的に作らない（サーバー側のservice_role経由アクセスのみを許可する
+-- 設計を維持するため）。以下はいずれも複数回実行して安全（RLS有効化は
+-- 既に有効な場合はno-op、revoke/grantは何度実行しても同じ結果になる）。
+alter table neumos_content_generation_requests
+  enable row level security;
+
+revoke all privileges
+  on table neumos_content_generation_requests
+  from public, anon, authenticated;
+
+grant select, insert, update, delete
+  on table neumos_content_generation_requests
+  to service_role;
 
 -- ============================================================
 -- PostgRESTスキーマキャッシュの強制リロード

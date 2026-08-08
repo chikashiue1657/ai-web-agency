@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   savePublicInquiry: vi.fn(),
   sendInquiryNotification: vi.fn(),
+  isInquiryRateLimited: vi.fn(),
 }));
 
 vi.mock("@/lib/inquiries", async (importOriginal) => ({
@@ -11,9 +12,13 @@ vi.mock("@/lib/inquiries", async (importOriginal) => ({
   savePublicInquiry: mocks.savePublicInquiry,
 }));
 vi.mock("@/lib/inquiry-notification", () => ({ sendInquiryNotification: mocks.sendInquiryNotification }));
+vi.mock("@/lib/inquiry-rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/inquiry-rate-limit")>()),
+  isInquiryRateLimited: mocks.isInquiryRateLimited,
+}));
 
 import { POST } from "@/app/api/public/inquiries/route";
-import { resetInquiryRateLimitForTests } from "@/lib/inquiry-rate-limit";
+import { RateLimitCheckFailedError } from "@/lib/inquiry-rate-limit";
 
 const body = {
   requestId: "97e73c6c-520e-48d9-8e04-c152c42baf9d",
@@ -38,7 +43,7 @@ function request(payload: unknown = body, ip = "203.0.113.1") {
 
 describe("POST /api/public/inquiries", () => {
   beforeEach(() => {
-    resetInquiryRateLimitForTests();
+    mocks.isInquiryRateLimited.mockReset().mockResolvedValue(false);
     mocks.savePublicInquiry.mockReset().mockResolvedValue({
       id: "inquiry-1",
       requestId: body.requestId,
@@ -80,8 +85,23 @@ describe("POST /api/public/inquiries", () => {
     expect(mocks.savePublicInquiry).not.toHaveBeenCalled();
   });
 
-  it("rate limits repeated submissions for one visitor and request", async () => {
-    for (let index = 0; index < 5; index += 1) expect((await POST(request({ ...body, message: `message-${index}` }))).status).toBe(201);
-    expect((await POST(request({ ...body, message: "sixth" }))).status).toBe(429);
+  it("returns 429 when the rate limiter reports the limit hit", async () => {
+    mocks.isInquiryRateLimited.mockResolvedValue(true);
+    const response = await POST(request());
+    expect(response.status).toBe(429);
+    expect(mocks.savePublicInquiry).not.toHaveBeenCalled();
+  });
+
+  it("fails closed with 503 when the rate limit check itself fails (does not silently allow through)", async () => {
+    mocks.isInquiryRateLimited.mockRejectedValue(new RateLimitCheckFailedError("db unreachable"));
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(mocks.savePublicInquiry).not.toHaveBeenCalled();
+  });
+
+  it("returns 413 for an oversized body instead of buffering it fully", async () => {
+    const response = await POST(request({ ...body, message: "x".repeat(25_000) }));
+    expect(response.status).toBe(413);
+    expect(mocks.savePublicInquiry).not.toHaveBeenCalled();
   });
 });

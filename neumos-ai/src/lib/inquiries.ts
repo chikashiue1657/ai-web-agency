@@ -69,8 +69,21 @@ export class InquiryStorageUnavailableError extends Error {
   }
 }
 
+/**
+ * INQUIRY_HASH_SALT未設定時にfail-openなフォールバック（他用途の秘密の流用や
+ * ハードコード文字列）へ落ちないようにするための専用エラー。呼び出し側
+ * （route.ts）はこれを503として扱う。
+ */
+export class InquiryHashSaltMissingError extends Error {
+  constructor() {
+    super("INQUIRY_HASH_SALT is not configured");
+    this.name = "InquiryHashSaltMissingError";
+  }
+}
+
 function hashIp(ip: string): string {
-  const secret = process.env.INQUIRY_HASH_SALT || process.env.NEUMOS_API_KEY || "local-development";
+  const secret = process.env.INQUIRY_HASH_SALT;
+  if (!secret) throw new InquiryHashSaltMissingError();
   return createHmac("sha256", secret).update(ip).digest("hex");
 }
 
@@ -153,4 +166,25 @@ export async function listInquiries(limit = 100): Promise<StoredInquiry[]> {
     .limit(safeLimit);
   if (error) throw error;
   return (data ?? []).map((row) => rowToInquiry(row as Record<string, unknown>));
+}
+
+export type DeleteInquiryResult = "deleted" | "not_found";
+
+/**
+ * 管理者による個別の物理削除（DELETE /v1/inquiries/[id]用）。論理削除
+ * （deleted_atを立てるだけ）は採用しない方針のため、行そのものを削除する。
+ * ログにはID・結果のみを残し、氏名・メール・電話・本文等のPIIは一切出さない。
+ */
+export async function deleteInquiryById(id: string): Promise<DeleteInquiryResult> {
+  const admin = getSupabaseAdmin();
+  if (!admin) throw new InquiryStorageUnavailableError();
+
+  const { data, error } = await admin.from(INQUIRY_TABLE).delete().eq("id", id).select("id");
+  if (error) {
+    console.error("[neumos-ai] inquiry delete failed", { id, outcome: "error" });
+    throw error;
+  }
+  const outcome: DeleteInquiryResult = data && data.length > 0 ? "deleted" : "not_found";
+  console.log("[neumos-ai] inquiry delete", { id, outcome });
+  return outcome;
 }

@@ -64,6 +64,16 @@ alter table neumos_content_generation_requests
 -- 公開v2サイトから受け付けた予約・問い合わせ。
 -- ブラウザからSupabaseへ直接接続せず、Neumosサーバーのservice_roleだけが
 -- 読み書きする。メール通知に失敗しても問い合わせ本体はこのテーブルに残る。
+--
+-- 保持期間の運用方針: 初期値180日。created_at基準で180日を超えたレコードは
+-- 削除対象とする。個別削除はDELETE /v1/inquiries/[id]（NEUMOS_API_KEY認証、
+-- 物理削除。deleted_at等の論理削除フラグは持たない設計）で可能。
+-- 180日超過分の定期削除（自動化）は、Supabaseの実プランでpg_cron拡張が
+-- 利用可能かどうかを確認できていないため本schema.sqlには含めていない
+-- （利用可否を推測でスキーマに書かない）。確認でき次第、別PRで
+-- pg_cronによるスケジュール削除、またはVercel Cron経由の削除エンドポイントを
+-- 追加する。それまでは手動運用（個別削除、または本schema.sqlのコメントを
+-- 参照した手動SQL実行）を前提とする。
 create table if not exists neumos_site_inquiries (
   id               uuid primary key default gen_random_uuid(),
   request_id       text not null references neumos_content_generation_requests(request_id),
@@ -91,7 +101,70 @@ create index if not exists neumos_site_inquiries_status_idx
 
 alter table neumos_site_inquiries enable row level security;
 revoke all privileges on table neumos_site_inquiries from anon, authenticated;
-grant select, insert, update on table neumos_site_inquiries to service_role;
+-- deleteはDELETE /v1/inquiries/[id]（管理者・NEUMOS_API_KEY認証）用。
+-- 公開エンドポイント（POST /api/public/inquiries）のコード経路には
+-- 削除処理を実装しない。
+grant select, insert, update, delete on table neumos_site_inquiries to service_role;
+
+-- ============================================================
+-- 問い合わせのレート制限（サーバーレス環境でインスタンスをまたいで
+-- 正確に機能させるため、プロセスローカルなインメモリではなくPostgres側で
+-- 原子的にカウントする）。
+-- ============================================================
+create table if not exists neumos_inquiry_rate_limit (
+  bucket_key   text primary key,
+  window_start timestamptz not null,
+  count        integer not null default 1,
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists neumos_inquiry_rate_limit_updated_idx
+  on neumos_inquiry_rate_limit (updated_at);
+
+alter table neumos_inquiry_rate_limit enable row level security;
+revoke all privileges on table neumos_inquiry_rate_limit from anon, authenticated;
+grant select, insert, update, delete on table neumos_inquiry_rate_limit to service_role;
+
+-- 1つのUPSERT文でread-modify-writeを原子化する。Postgresの行ロックにより、
+-- 同一bucket_keyへの同時アクセスはこの文の中で直列化されるため、サーバーレス
+-- の複数インスタンスから同時にヒットしてもカウントが正確に保たれる。
+-- search_pathを明示し、関数解決が呼び出し側のsearch_path設定に影響されない
+-- ようにする（同名オブジェクトの差し替え等によるなりすましを防ぐ）。
+create or replace function inquiry_rate_limit_hit(p_key text, p_window_seconds int, p_max int)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_count int;
+begin
+  insert into neumos_inquiry_rate_limit (bucket_key, window_start, count, updated_at)
+  values (p_key, now(), 1, now())
+  on conflict (bucket_key) do update
+    set count = case
+          when neumos_inquiry_rate_limit.window_start < now() - (p_window_seconds || ' seconds')::interval
+            then 1
+          else neumos_inquiry_rate_limit.count + 1
+        end,
+        window_start = case
+          when neumos_inquiry_rate_limit.window_start < now() - (p_window_seconds || ' seconds')::interval
+            then now()
+          else neumos_inquiry_rate_limit.window_start
+        end,
+        updated_at = now()
+  returning count into v_count;
+
+  return v_count > p_max;
+end;
+$$;
+
+-- 実行権限を明示的に絞る。デフォルトではPUBLICにEXECUTEが付与されうるため、
+-- 明示的にrevokeしたうえでservice_roleにのみ許可する。
+revoke execute on function inquiry_rate_limit_hit(text, integer, integer)
+  from public, anon, authenticated;
+grant execute on function inquiry_rate_limit_hit(text, integer, integer)
+  to service_role;
 
 -- ============================================================
 -- RLS（雛形）: v1はservice role経由のサーバアクセス前提。今は無効のまま。

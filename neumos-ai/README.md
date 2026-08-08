@@ -355,3 +355,52 @@ Only the `Authorization` header is accepted; query parameters and request bodies
 never used for authentication. If the server key is unset or empty, these routes
 fail closed with `404`. Missing, malformed, empty, or mismatched Bearer credentials
 return `401`. Authentication failures include `Cache-Control: no-store`.
+
+## 予約・問い合わせ受付（v2公開サイト）
+
+公開v2サイトのCTA直後に、予約相談・問い合わせフォームを表示できる
+（`InquiryFormV2`。`requestId`が渡された場合のみ表示）。
+
+### `POST /api/public/inquiries`（公開・未認証）
+
+- 入力検証（Zod）、20KB本文サイズ制限（ストリーミング読み取りで超過時点で
+  即座に打ち切り、`request.text()`で全文読み切ってから判定する方式は採用しない）、
+  honeypot、入力時間検査、レート制限（後述）、重複排除を行う。
+- 送信元IPは`x-vercel-forwarded-for`を優先し（Vercel独自ヘッダー、前段に別
+  プロキシを挟む構成でも信頼できる）、無ければ`x-forwarded-for`をフォールバックに
+  使う。生のIPアドレスはログへ出さず、`INQUIRY_HASH_SALT`によるHMAC-SHA256の
+  ハッシュ値のみを保存する。**`INQUIRY_HASH_SALT`が未設定の場合、この
+  エンドポイントは`503`を返す**（他用途の秘密の流用やハードコードされた
+  既定値へのフォールバックはしない）。
+- レート制限はSupabase/Postgres側の原子的なUPSERT関数
+  （`inquiry_rate_limit_hit`、`supabase/schema.sql`）で行う。サーバーレス環境で
+  複数インスタンスをまたいでも正確にカウントするため、プロセスローカルな
+  インメモリ実装は採用していない。この判定自体が失敗した場合（Supabase未設定・
+  接続エラー等）は、警告を出して通す（fail-open）のではなく`503`を返す
+  （fail-closed）。
+- メール通知（Resend、任意設定）が失敗しても、問い合わせ本体のDB保存は
+  必ず先に完了しており失われない。
+
+### `GET /v1/inquiries`（管理者・`NEUMOS_API_KEY`認証）
+
+一覧取得。`Cache-Control: no-store`。
+
+### `DELETE /v1/inquiries/{id}`（管理者・`NEUMOS_API_KEY`認証）
+
+個別の**物理削除**。論理削除（`deleted_at`等のフラグを立てるだけ）は採用しない。
+`id`はUUID形式を検証し、不正な形式は`400`を返す。レスポンス・ログには
+氏名・メール・電話・本文などのPIIを一切含めない（IDと結果のみ）。
+
+### 保持期間・削除方針
+
+- 初期値: **180日**（`created_at`基準）。
+- 個別削除は上記`DELETE /v1/inquiries/{id}`で可能。
+- 180日超過分の**自動削除は未実装**。Supabaseの実プランで`pg_cron`拡張が
+  利用可能かどうかを確認できていないため、推測でスケジュール削除を
+  有効化していない。確認でき次第、`pg_cron`によるDB内スケジュール削除、
+  またはVercel Cron経由の削除エンドポイントのいずれかを別PRで追加する
+  （`supabase/schema.sql`の該当箇所にコメントで詳細を記載）。それまでは
+  手動運用（個別削除、または`created_at < now() - interval '180 days'`を
+  条件とした手動SQL実行）を前提とする。
+- 削除権限（`DELETE`）はDB上`service_role`にのみ付与している。公開エンドポイント
+  （`POST /api/public/inquiries`）のコード経路には削除処理を一切実装していない。

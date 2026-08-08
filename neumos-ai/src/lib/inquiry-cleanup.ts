@@ -11,6 +11,10 @@
  * 削除件数はSupabaseの`count: "exact"`オプションで取得し、削除された行の
  * ID等は取得・保持しない（PIIカラムはそもそも一切SELECTしない）。ログにも
  * 削除件数とカットオフ時刻のみを残す。
+ *
+ * `count: "exact"`を指定したにもかかわらずerrorなしで`count`が
+ * null・負数・非整数として返る場合は、実際に何件削除されたか確定できない
+ * 異常事態として扱う（`deleted: 0`のような憶測値で成功扱いにはしない）。
  */
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
@@ -28,6 +32,13 @@ export class InquiryTableUnavailableError extends Error {
   constructor() {
     super("Inquiry table is not available");
     this.name = "InquiryTableUnavailableError";
+  }
+}
+
+export class InquiryDeleteCountUnavailableError extends Error {
+  constructor() {
+    super("Inquiry delete count is not available");
+    this.name = "InquiryDeleteCountUnavailableError";
   }
 }
 
@@ -60,6 +71,13 @@ function isUndefinedTableError(error: unknown): boolean {
   return !!error && typeof error === "object" && (error as { code?: unknown }).code === "42P01";
 }
 
+// Supabaseが`count: "exact"`でerrorなしに返す`count`は、型上`number | null`
+// だが、実際に信頼できるのは0以上の整数のみ。null・NaN・負数・小数は
+// 「何件削除されたか確定できない」異常として扱い、0件成功と取り違えない。
+function isValidDeletedCount(count: number | null): count is number {
+  return typeof count === "number" && Number.isInteger(count) && count >= 0;
+}
+
 /**
  * 冪等: created_at基準のカットオフより古い行だけを対象にするため、削除対象が
  * 既に無い状態で再実行しても副作用なく`{ deleted: 0 }`を返す。
@@ -81,7 +99,11 @@ export async function cleanupExpiredInquiries(now: Date = new Date()): Promise<C
     throw error;
   }
 
-  const deleted = count ?? 0;
-  console.log("[neumos-ai] inquiry cleanup completed", { cutoff, deleted });
-  return { deleted, cutoff };
+  if (!isValidDeletedCount(count)) {
+    console.error("[neumos-ai] inquiry cleanup failed: delete count unavailable", { cutoff });
+    throw new InquiryDeleteCountUnavailableError();
+  }
+
+  console.log("[neumos-ai] inquiry cleanup completed", { cutoff, deleted: count });
+  return { deleted: count, cutoff };
 }

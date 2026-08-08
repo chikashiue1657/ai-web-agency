@@ -8,7 +8,11 @@ vi.mock("@/lib/inquiry-cleanup", async (importOriginal) => ({
 }));
 
 import { GET } from "@/app/api/internal/inquiries/cleanup/route";
-import { InquiryStorageUnavailableError, InquiryTableUnavailableError } from "@/lib/inquiry-cleanup";
+import {
+  InquiryDeleteCountUnavailableError,
+  InquiryStorageUnavailableError,
+  InquiryTableUnavailableError,
+} from "@/lib/inquiry-cleanup";
 
 function request(authorization?: string) {
   return new NextRequest("http://localhost/api/internal/inquiries/cleanup", {
@@ -58,6 +62,32 @@ describe("GET /api/internal/inquiries/cleanup", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     const body = (await response.json()) as Record<string, unknown>;
     expect(body).toEqual({ ok: true, deleted: 3, cutoff: "2026-02-10T00:00:00.000Z" });
+  });
+
+  it("returns 200 with deleted: 0 when a confirmed exact count of zero is reported", async () => {
+    mocks.cleanupExpiredInquiries.mockResolvedValue({ deleted: 0, cutoff: "2026-02-10T00:00:00.000Z" });
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toEqual({ ok: true, deleted: 0, cutoff: "2026-02-10T00:00:00.000Z" });
+  });
+
+  it("returns 200 with the exact large deleted count reported (e.g. 1001), not capped", async () => {
+    mocks.cleanupExpiredInquiries.mockResolvedValue({ deleted: 1001, cutoff: "2026-02-10T00:00:00.000Z" });
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toEqual({ ok: true, deleted: 1001, cutoff: "2026-02-10T00:00:00.000Z" });
+  });
+
+  it("returns 503 with no-store and no leaked ok/deleted when the delete count is unavailable (null/negative/non-integer)", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryDeleteCountUnavailableError());
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(body.deleted).toBeUndefined();
   });
 
   it("returns 503 with no-store and no leaked details when the table is not provisioned (42P01)", async () => {

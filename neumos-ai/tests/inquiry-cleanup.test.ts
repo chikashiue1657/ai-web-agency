@@ -5,6 +5,7 @@ vi.mock("@/lib/supabase/server", () => ({ getSupabaseAdmin: mocks.getSupabaseAdm
 
 import {
   INQUIRY_RETENTION_DAYS,
+  InquiryDeleteCountUnavailableError,
   InquiryStorageUnavailableError,
   InquiryTableUnavailableError,
   cleanupExpiredInquiries,
@@ -48,11 +49,48 @@ describe("cleanupExpiredInquiries", () => {
     expect(result.deleted).toBe(1001);
   });
 
-  it("treats a null count with no error as zero deleted (does not crash or return undefined)", async () => {
+  it("treats a null count with no error as an unavailable-count failure, not zero deleted", async () => {
     const { client } = fakeAdmin({ count: null, error: null });
     mocks.getSupabaseAdmin.mockReturnValue(client);
-    const result = await cleanupExpiredInquiries(new Date("2026-08-09T00:00:00.000Z"));
-    expect(result.deleted).toBe(0);
+    await expect(cleanupExpiredInquiries(new Date("2026-08-09T00:00:00.000Z"))).rejects.toBeInstanceOf(
+      InquiryDeleteCountUnavailableError
+    );
+  });
+
+  it("does not report a successful ok/deleted result when count is null with no error", async () => {
+    const { client } = fakeAdmin({ count: null, error: null });
+    mocks.getSupabaseAdmin.mockReturnValue(client);
+    let caught: unknown;
+    try {
+      await cleanupExpiredInquiries(new Date("2026-08-09T00:00:00.000Z"));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(InquiryDeleteCountUnavailableError);
+  });
+
+  it("treats a negative count with no error as an unavailable-count failure", async () => {
+    const { client } = fakeAdmin({ count: -1, error: null });
+    mocks.getSupabaseAdmin.mockReturnValue(client);
+    await expect(cleanupExpiredInquiries(new Date("2026-08-09T00:00:00.000Z"))).rejects.toBeInstanceOf(
+      InquiryDeleteCountUnavailableError
+    );
+  });
+
+  it("treats a NaN count with no error as an unavailable-count failure", async () => {
+    const { client } = fakeAdmin({ count: NaN, error: null });
+    mocks.getSupabaseAdmin.mockReturnValue(client);
+    await expect(cleanupExpiredInquiries(new Date("2026-08-09T00:00:00.000Z"))).rejects.toBeInstanceOf(
+      InquiryDeleteCountUnavailableError
+    );
+  });
+
+  it("treats a non-integer (fractional) count with no error as an unavailable-count failure", async () => {
+    const { client } = fakeAdmin({ count: 2.5, error: null });
+    mocks.getSupabaseAdmin.mockReturnValue(client);
+    await expect(cleanupExpiredInquiries(new Date("2026-08-09T00:00:00.000Z"))).rejects.toBeInstanceOf(
+      InquiryDeleteCountUnavailableError
+    );
   });
 
   it("is idempotent: rerunning with nothing left to delete reports zero and no error", async () => {

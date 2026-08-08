@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkInquiryCleanupCronAuth } from "@/lib/inquiry-cleanup-auth";
-import { InquiryStorageUnavailableError, cleanupExpiredInquiries } from "@/lib/inquiry-cleanup";
+import { InquiryStorageUnavailableError, InquiryTableUnavailableError, cleanupExpiredInquiries } from "@/lib/inquiry-cleanup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const result = await cleanupExpiredInquiries();
     return json({ ok: true, ...result }, 200);
   } catch (error) {
-    if (error instanceof InquiryStorageUnavailableError) {
+    if (error instanceof InquiryStorageUnavailableError || error instanceof InquiryTableUnavailableError) {
       return json({ ok: false, error: "inquiry storage unavailable" }, 503);
     }
     console.error("[neumos-ai] inquiry cleanup route failed");

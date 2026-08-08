@@ -3,13 +3,14 @@
  * `supabase/schema.sql`で定義される名前と一致させるため、テーブル名はここで
  * 直接文字列として保持し、`@/lib/inquiries`等の他ファイルには依存しない）。
  *
- * テーブルがまだ実DBへ適用されていない環境でこのcronが実行された場合に備え、
- * Postgresの42P01（relation does not exist）を検知して0件・skipped扱いにし、
- * 失敗としては検知しない（本来のバグ検知を阻害しないための区別。通常の
- * 運用では発生しない想定の安全側の防御）。
+ * テーブル未作成（Postgres 42P01: relation does not exist）は、削除が実際には
+ * 一切行われていない失敗として扱う（`{ deleted: 0, skipped: true }`のような
+ * 成功扱いにはしない。Vercel Cron側が非2xxとして検知できるよう、routeは
+ * 503を返す）。
  *
- * 削除条件はcreated_atのみで判定し、氏名・メール・電話・本文等のPIIカラムは
- * 一切SELECTしない。ログにも削除件数とカットオフ時刻のみを残す。
+ * 削除件数はSupabaseの`count: "exact"`オプションで取得し、削除された行の
+ * ID等は取得・保持しない（PIIカラムはそもそも一切SELECTしない）。ログにも
+ * 削除件数とカットオフ時刻のみを残す。
  */
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
@@ -23,10 +24,16 @@ export class InquiryStorageUnavailableError extends Error {
   }
 }
 
+export class InquiryTableUnavailableError extends Error {
+  constructor() {
+    super("Inquiry table is not available");
+    this.name = "InquiryTableUnavailableError";
+  }
+}
+
 export interface CleanupResult {
   deleted: number;
   cutoff: string;
-  skipped?: true;
 }
 
 interface SafeErrorInfo {
@@ -63,18 +70,18 @@ export async function cleanupExpiredInquiries(now: Date = new Date()): Promise<C
 
   const cutoff = new Date(now.getTime() - INQUIRY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await admin.from(INQUIRY_TABLE).delete().lt("created_at", cutoff).select("id");
+  const { count, error } = await admin.from(INQUIRY_TABLE).delete({ count: "exact" }).lt("created_at", cutoff);
 
   if (error) {
     if (isUndefinedTableError(error)) {
-      console.log("[neumos-ai] inquiry cleanup skipped: table not provisioned yet", { cutoff });
-      return { deleted: 0, cutoff, skipped: true };
+      console.error("[neumos-ai] inquiry cleanup failed: table not provisioned", { cutoff, code: "42P01" });
+      throw new InquiryTableUnavailableError();
     }
     console.error("[neumos-ai] inquiry cleanup failed", { cutoff, ...describeErrorSafely(error) });
     throw error;
   }
 
-  const deleted = data?.length ?? 0;
+  const deleted = count ?? 0;
   console.log("[neumos-ai] inquiry cleanup completed", { cutoff, deleted });
   return { deleted, cutoff };
 }

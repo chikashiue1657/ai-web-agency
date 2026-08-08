@@ -93,4 +93,27 @@ describe("checkInquiryCleanupCronAuth", () => {
     });
     expect(checkInquiryCleanupCronAuth(req)).toEqual({ authorized: false, status: 401 });
   });
+
+  it("fails closed with 503 when INQUIRY_HASH_SALT reuses CRON_SECRET with surrounding whitespace", () => {
+    process.env.INQUIRY_HASH_SALT = " cron-secret-value ";
+    expect(checkInquiryCleanupCronAuth(request("Bearer cron-secret-value"))).toEqual({
+      authorized: false,
+      status: 503,
+    });
+  });
+
+  it("fails closed with 503 when NEUMOS_API_KEY reuses CRON_SECRET with surrounding whitespace", () => {
+    process.env.NEUMOS_API_KEY = " cron-secret-value ";
+    expect(checkInquiryCleanupCronAuth(request("Bearer cron-secret-value"))).toEqual({
+      authorized: false,
+      status: 503,
+    });
+  });
+
+  it("does not mutate process.env while normalizing values for reuse comparison", () => {
+    process.env.INQUIRY_HASH_SALT = " cron-secret-value ";
+    checkInquiryCleanupCronAuth(request("Bearer cron-secret-value"));
+    expect(process.env.CRON_SECRET).toBe("cron-secret-value");
+    expect(process.env.INQUIRY_HASH_SALT).toBe(" cron-secret-value ");
+  });
 });

@@ -8,7 +8,7 @@ vi.mock("@/lib/inquiry-cleanup", async (importOriginal) => ({
 }));
 
 import { GET } from "@/app/api/internal/inquiries/cleanup/route";
-import { InquiryStorageUnavailableError } from "@/lib/inquiry-cleanup";
+import { InquiryStorageUnavailableError, InquiryTableUnavailableError } from "@/lib/inquiry-cleanup";
 
 function request(authorization?: string) {
   return new NextRequest("http://localhost/api/internal/inquiries/cleanup", {
@@ -60,24 +60,38 @@ describe("GET /api/internal/inquiries/cleanup", () => {
     expect(body).toEqual({ ok: true, deleted: 3, cutoff: "2026-02-10T00:00:00.000Z" });
   });
 
-  it("returns 200 with skipped=true when the table is not provisioned yet (PR #36 unmerged)", async () => {
-    mocks.cleanupExpiredInquiries.mockResolvedValue({ deleted: 0, cutoff: "2026-02-10T00:00:00.000Z", skipped: true });
+  it("returns 503 with no-store and no leaked details when the table is not provisioned (42P01)", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryTableUnavailableError());
     const response = await GET(request("Bearer cron-secret-value"));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     const body = (await response.json()) as Record<string, unknown>;
-    expect(body).toEqual({ ok: true, deleted: 0, cutoff: "2026-02-10T00:00:00.000Z", skipped: true });
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("relation");
+    expect(JSON.stringify(body)).not.toContain("42P01");
+    expect(JSON.stringify(body)).not.toContain("neumos_site_inquiries");
+  });
+
+  it("does not report a successful deleted/skipped result when the table is not provisioned", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryTableUnavailableError());
+    const response = await GET(request("Bearer cron-secret-value"));
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.deleted).toBeUndefined();
+    expect(body.skipped).toBeUndefined();
   });
 
   it("returns 503 when inquiry storage is not configured", async () => {
     mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryStorageUnavailableError());
     const response = await GET(request("Bearer cron-secret-value"));
     expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("returns 500 without leaking error details on unexpected failure", async () => {
+  it("returns 500 with no-store and without leaking error details on unexpected failure", async () => {
     mocks.cleanupExpiredInquiries.mockRejectedValue(new Error("boom with sensitive detail"));
     const response = await GET(request("Bearer cron-secret-value"));
     expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     const body = (await response.json()) as Record<string, unknown>;
     expect(JSON.stringify(body)).not.toContain("sensitive detail");
     expect(Object.keys(body).sort()).toEqual(["error", "ok"]);

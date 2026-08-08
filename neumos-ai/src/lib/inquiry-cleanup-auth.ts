@@ -36,8 +36,15 @@ function safeEquals(a: string, b: string): boolean {
   return timingSafeEqual(digest(a), digest(b));
 }
 
+// INQUIRY_HASH_SALTは実際の利用箇所（inquiries.ts）でtrimされた値が使われる
+// ため、ここでも同じ規則で正規化する。NEUMOS_API_KEYは本来の用途では
+// trimしないが、再利用検知の目的（誤って同じ値を設定していないかの判定）では
+// 前後の空白だけを付けた値も同一の秘密値とみなして検知すべきため、こちらも
+// trimしてから比較する。ここで生値のままequalsEnvへ渡すと、空白差分だけで
+// 再利用検知（503）を回避されてしまう。
 function equalsEnv(secret: string, envValue: string | undefined): boolean {
-  return !!envValue && safeEquals(secret, envValue);
+  const normalized = envValue?.trim();
+  return !!normalized && safeEquals(secret, normalized);
 }
 
 export function checkInquiryCleanupCronAuth(request: Request): CronAuthResult {

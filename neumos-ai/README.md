@@ -426,12 +426,60 @@ return `401`. Authentication failures include `Cache-Control: no-store`.
 
 - 初期値: **180日**（`created_at`基準）。
 - 個別削除は上記`DELETE /v1/inquiries/{id}`で可能。
-- 180日超過分の**自動削除は未実装**。Supabaseの実プランで`pg_cron`拡張が
-  利用可能かどうかを確認できていないため、推測でスケジュール削除を
-  有効化していない。確認でき次第、`pg_cron`によるDB内スケジュール削除、
-  またはVercel Cron経由の削除エンドポイントのいずれかを別PRで追加する
-  （`supabase/schema.sql`の該当箇所にコメントで詳細を記載）。それまでは
-  手動運用（個別削除、または`created_at < now() - interval '180 days'`を
-  条件とした手動SQL実行）を前提とする。
+- 180日超過分の自動削除は、下記「問い合わせPIIの180日自動削除」に記載の
+  `GET /api/internal/inquiries/cleanup`（Vercel Cron専用エンドポイント）で行う。
+  `pg_cron`拡張は使わず、Vercel Cronからの呼び出しのみでスケジュール削除する
+  設計を採用した。ただし後述のとおり、Production環境で`CRON_SECRET`を設定し
+  Cronを有効化するまでは自動削除は起きず、手動運用（個別削除、または
+  `created_at < now() - interval '180 days'`を条件とした手動SQL実行）が前提となる。
 - 削除権限（`DELETE`）はDB上`service_role`にのみ付与している。公開エンドポイント
   （`POST /api/public/inquiries`）のコード経路には削除処理を一切実装していない。
+
+## 問い合わせPIIの180日自動削除
+
+`GET /api/internal/inquiries/cleanup` は、上記「予約・問い合わせ受付」で保存される
+`neumos_site_inquiries`のうち `created_at` が180日を超えた行だけを物理削除する、
+Vercel Cron専用のエンドポイント。180日未満の行には触れない。
+
+- **スケジュール**: `vercel.json` で1日1回（`0 18 * * *` = UTC 18:00 = JST 3:00）
+  Vercelがこのパスを呼び出す。**Vercel Cronはこのスケジュール実行を
+  Productionデプロイに対してのみ自動起動する（Preview環境では自動実行されない。
+  Preview上での動作確認は下記の手動`curl`で行う）。**
+- **認証**: `Authorization: Bearer <CRON_SECRET>`のみを受け付ける（クエリ文字列や
+  リクエストボディ経由の値は一切見ない）。`CRON_SECRET`という環境変数名は
+  固定（Vercelがこの名前の変数を検出した場合のみ、Cron実行時のリクエストへ自動で
+  同ヘッダーを付与する仕様のため）。未設定・空文字なら常に`404`（ルートの存在
+  自体を隠す、fail-closed）。ヘッダー欠落・`Bearer`形式が不正・空・トークン
+  不一致は`401`。**`NEUMOS_API_KEY`・`INQUIRY_HASH_SALT`と同じ値を設定した場合は
+  fail-closedで`503`**（別の認証境界の使い回しを検知した扱い）。認証失敗の
+  応答にはいずれも`Cache-Control: no-store`を付与し、認証が成立するまで
+  Supabaseへの問い合わせ・削除処理は一切呼び出さない。
+- **冪等性**: 削除条件は`created_at`のみ。同じ期間に対して複数回実行しても、
+  2回目以降は削除対象が無いため`{ deleted: 0 }`を返すだけで副作用は増えない。
+- **PIIをログに残さない**: 削除条件の判定・応答・ログのいずれも氏名・メール・
+  電話・本文等のPIIカラムを一切読み書きしない（削除件数とカットオフ時刻のみ）。
+  `CRON_SECRET`自体もレスポンス・ログ・テスト出力に出さない。
+- **失敗の検知**: Supabase未設定・テーブル未作成（Postgres `42P01`。通常の運用では
+  発生しない想定だが、安全側の防御として）はいずれも`503`、想定外のDBエラーは
+  `500`で返す（いずれもVercel側のCron実行ログ・関数エラーレートで検知できる
+  非2xxレスポンス）。テーブル未作成を成功扱いにする特別扱いは行わない
+  （`{ deleted: 0, skipped: true }`のような成功レスポンスは返さない）。
+  失敗応答にはDBのエラーメッセージ・スキーマ名・PII・秘密値のいずれも含めない。
+- **削除件数の取得**: Supabaseの`delete({ count: "exact" })`が返す正確な件数を
+  そのまま使う。削除された行のIDや内容は取得・保持しない
+  （件数取得のために行データを読み出すことはしない）。
+
+### Production Enable前の必須作業
+
+まだVercel Production環境に`CRON_SECRET`を設定しておらず、Cronも実行していない。
+有効化する際は以下を順に行う。
+
+1. Vercel（neumos-ai Production）に `CRON_SECRET` を設定する
+   （`NEUMOS_API_KEY`・`INQUIRY_HASH_SALT`とは異なる値にすること）。
+2. `neumos-ai/supabase/schema.sql`（`neumos_site_inquiries`テーブル定義を含む）を
+   実Production DBへ適用済みであることを確認する。
+3. Vercel Cron Jobsが有効なプラン・設定になっていることを確認する。
+4. 手動で1回 `curl -H "Authorization: Bearer $CRON_SECRET" https://<neumos-ai-domain>/api/internal/inquiries/cleanup`
+   を実行し、`{ "ok": true, ... }` が返ることを確認する。
+5. 上記が揃った状態で初めて、Vercelの自動Cronスケジュール実行（Production
+   デプロイに対してのみ）が有効になる。

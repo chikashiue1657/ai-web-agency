@@ -1,0 +1,167 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+
+const mocks = vi.hoisted(() => ({ cleanupExpiredInquiries: vi.fn() }));
+vi.mock("@/lib/inquiry-cleanup", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/inquiry-cleanup")>()),
+  cleanupExpiredInquiries: mocks.cleanupExpiredInquiries,
+}));
+
+import { GET } from "@/app/api/internal/inquiries/cleanup/route";
+import {
+  InquiryDeleteCountUnavailableError,
+  InquiryStorageUnavailableError,
+  InquiryTableUnavailableError,
+} from "@/lib/inquiry-cleanup";
+
+function request(authorization?: string) {
+  return new NextRequest("http://localhost/api/internal/inquiries/cleanup", {
+    headers: authorization ? { authorization } : {},
+  });
+}
+
+describe("GET /api/internal/inquiries/cleanup", () => {
+  beforeEach(() => {
+    process.env.CRON_SECRET = "cron-secret-value";
+    delete process.env.NEUMOS_API_KEY;
+    delete process.env.INQUIRY_HASH_SALT;
+    mocks.cleanupExpiredInquiries.mockReset();
+  });
+  afterEach(() => {
+    delete process.env.CRON_SECRET;
+    delete process.env.NEUMOS_API_KEY;
+    delete process.env.INQUIRY_HASH_SALT;
+  });
+
+  it("fails closed with 404 when CRON_SECRET is unset", async () => {
+    delete process.env.CRON_SECRET;
+    const response = await GET(request("Bearer x"));
+    expect(response.status).toBe(404);
+    expect(mocks.cleanupExpiredInquiries).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 for a missing or wrong bearer token", async () => {
+    const missing = await GET(request());
+    expect(missing.status).toBe(401);
+    const wrong = await GET(request("Bearer wrong"));
+    expect(wrong.status).toBe(401);
+    expect(mocks.cleanupExpiredInquiries).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 without running cleanup when CRON_SECRET reuses another secret", async () => {
+    process.env.NEUMOS_API_KEY = "cron-secret-value";
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(503);
+    expect(mocks.cleanupExpiredInquiries).not.toHaveBeenCalled();
+  });
+
+  it("runs cleanup and returns a PII-free summary on success", async () => {
+    mocks.cleanupExpiredInquiries.mockResolvedValue({ deleted: 3, cutoff: "2026-02-10T00:00:00.000Z" });
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toEqual({ ok: true, deleted: 3, cutoff: "2026-02-10T00:00:00.000Z" });
+  });
+
+  it("returns 200 with deleted: 0 when a confirmed exact count of zero is reported", async () => {
+    mocks.cleanupExpiredInquiries.mockResolvedValue({ deleted: 0, cutoff: "2026-02-10T00:00:00.000Z" });
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toEqual({ ok: true, deleted: 0, cutoff: "2026-02-10T00:00:00.000Z" });
+  });
+
+  it("returns 200 with the exact large deleted count reported (e.g. 1001), not capped", async () => {
+    mocks.cleanupExpiredInquiries.mockResolvedValue({ deleted: 1001, cutoff: "2026-02-10T00:00:00.000Z" });
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toEqual({ ok: true, deleted: 1001, cutoff: "2026-02-10T00:00:00.000Z" });
+  });
+
+  it("returns 503 with no-store and no leaked ok/deleted when the delete count is unavailable (null/negative/non-integer)", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryDeleteCountUnavailableError());
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(body.deleted).toBeUndefined();
+  });
+
+  it("returns 503 with no-store and no leaked details when the table is not provisioned (42P01)", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryTableUnavailableError());
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("relation");
+    expect(JSON.stringify(body)).not.toContain("42P01");
+    expect(JSON.stringify(body)).not.toContain("neumos_site_inquiries");
+  });
+
+  it("does not report a successful deleted/skipped result when the table is not provisioned", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryTableUnavailableError());
+    const response = await GET(request("Bearer cron-secret-value"));
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.deleted).toBeUndefined();
+    expect(body.skipped).toBeUndefined();
+  });
+
+  it("returns 503 when inquiry storage is not configured", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new InquiryStorageUnavailableError());
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("returns 500 with no-store and without leaking error details on unexpected failure", async () => {
+    mocks.cleanupExpiredInquiries.mockRejectedValue(new Error("boom with sensitive detail"));
+    const response = await GET(request("Bearer cron-secret-value"));
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(JSON.stringify(body)).not.toContain("sensitive detail");
+    expect(Object.keys(body).sort()).toEqual(["error", "ok"]);
+  });
+
+  it("running cleanup twice in a row is safe (idempotent, no duplicate-deletion errors)", async () => {
+    mocks.cleanupExpiredInquiries.mockResolvedValueOnce({ deleted: 3, cutoff: "2026-02-10T00:00:00.000Z" });
+    mocks.cleanupExpiredInquiries.mockResolvedValueOnce({ deleted: 0, cutoff: "2026-02-10T00:00:00.000Z" });
+    const first = await GET(request("Bearer cron-secret-value"));
+    const second = await GET(request("Bearer cron-secret-value"));
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+  });
+
+  it("rejects a secret placed in the query string with no Authorization header, and never calls cleanup", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/internal/inquiries/cleanup?secret=cron-secret-value&cron_secret=cron-secret-value",
+      { headers: {} }
+    );
+    const response = await GET(req);
+    expect(response.status).toBe(401);
+    expect(mocks.cleanupExpiredInquiries).not.toHaveBeenCalled();
+  });
+
+  it("never exposes CRON_SECRET in the response body on any auth failure path", async () => {
+    const secret = process.env.CRON_SECRET as string;
+
+    delete process.env.CRON_SECRET;
+    const unset = await GET(request("Bearer x"));
+    process.env.CRON_SECRET = secret;
+
+    const wrong = await GET(request("Bearer wrong-token"));
+
+    process.env.NEUMOS_API_KEY = secret;
+    const reused = await GET(request(`Bearer ${secret}`));
+    delete process.env.NEUMOS_API_KEY;
+
+    for (const response of [unset, wrong, reused]) {
+      const bodyText = await response.text();
+      expect(bodyText).not.toContain(secret);
+    }
+  });
+});
